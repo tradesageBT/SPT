@@ -31,11 +31,30 @@ async def _sync_league(league_id: str, force: bool = False):
     if not league_info:
         raise HTTPException(status_code=404, detail="League not found")
 
+    # Dynasty leagues roll over to a NEW league_id every season, and each
+    # league's /transactions endpoint only holds THAT season's trades. To get
+    # the full trade history of a pick (which may have been dealt years ago),
+    # walk the previous_league_id chain and fetch transactions from every
+    # season this league has existed.
+    league_chain = [league_id]
+    seen_ids = {league_id}
+    prev_id = league_info.get("previous_league_id")
+    while prev_id and prev_id != "0" and prev_id not in seen_ids:
+        league_chain.append(prev_id)
+        seen_ids.add(prev_id)
+        prev_info = await sleeper_client.get_league(prev_id)
+        prev_id = prev_info.get("previous_league_id") if prev_info else None
+
+    txn_tasks = [
+        sleeper_client.get_transactions(lid, leg)
+        for lid in league_chain
+        for leg in range(0, 23)
+    ]
     rosters, users, traded_picks, *txn_results = await asyncio.gather(
         sleeper_client.get_rosters(league_id),
         sleeper_client.get_users(league_id),
         sleeper_client.get_traded_picks(league_id),
-        *[sleeper_client.get_transactions(league_id, leg) for leg in range(0, 23)],
+        *txn_tasks,
     )
     all_transactions = [t for leg_txns in txn_results for t in leg_txns
                         if t.get("type") == "trade" and t.get("status") == "complete"]
