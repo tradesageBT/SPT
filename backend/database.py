@@ -52,7 +52,7 @@ class _Conn:
 
 @contextmanager
 def db():
-    conn = psycopg2.connect(DATABASE_URL, sslmode="require")
+    conn = psycopg2.connect(DATABASE_URL)
     wrapped = _Conn(conn)
     try:
         yield wrapped

@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from database import init_db
+from database import init_db, db
 from routers import leagues, teams, trades
 
 app = FastAPI(title="Smash Pass Trash", version="0.1.0")
@@ -27,7 +27,12 @@ async def startup():
 
 @app.get("/api/health")
 async def health():
-    return {"status": "ok"}
+    try:
+        with db() as conn:
+            conn.execute("SELECT 1")
+        return {"status": "ok", "db": "connected"}
+    except Exception as e:
+        return {"status": "error", "db": str(e)}
 
 
 # Serve built React app in production
