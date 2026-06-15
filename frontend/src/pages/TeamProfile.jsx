@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { api } from '../api/client'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -11,69 +11,81 @@ const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0)
 
 const ROUND_LABEL = { 1: '1st', 2: '2nd', 3: '3rd', 4: '4th' }
 
-function PickPill({ p, ownerName }) {
-  const [open, setOpen] = useState(false)
-  const ref = useRef(null)
-
+function TradeModal({ p, ownerName, onClose }) {
   useEffect(() => {
-    if (!open) return
-    function handler(e) { if (!ref.current?.contains(e.target)) setOpen(false) }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [open])
+    function handler(e) { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [onClose])
 
-  const canExpand = !p.own_pick
+  const label = `${p.season} ${ROUND_LABEL[p.round] ?? `Rd ${p.round}`}`
 
   return (
-    <div className="pick-pill-wrap" ref={ref}>
-      <div
-        className={`pick-pill ${p.own_pick ? 'pick-own' : 'pick-traded'} ${canExpand ? 'pick-clickable' : ''}`}
-        onClick={() => canExpand && setOpen((v) => !v)}
-      >
-        <span className="pick-pill-round">{ROUND_LABEL[p.round] ?? `Rd ${p.round}`}</span>
-        {p.projected_slot && <span className="pick-pill-slot">~{p.projected_slot}</span>}
-        <span className="pick-pill-val">{fmt(p.fc_value)}</span>
-        {!p.own_pick && (
-          <span className="pick-pill-from" title={`Original owner: ${p.original_owner_name}`}>
-            {p.original_owner_name}
-          </span>
-        )}
-      </div>
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-sheet" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <div>
+            <div className="modal-title">{label} Round Pick</div>
+            <div className="modal-subtitle">Originally owned by {p.original_owner_name}</div>
+          </div>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
 
-      {open && (
-        <div className="pick-chain-popover">
-          <div className="pick-chain-title">Trade History</div>
-          {(p.trade_history?.length > 0 ? p.trade_history : []).map((hop, i) => (
+        <div className="modal-body">
+          {p.trade_history?.length > 0 ? p.trade_history.map((hop, i) => (
             <div key={i} className="pick-hop">
               <div className="pick-hop-header">
-                <span className="pick-chain-past">{hop.from}</span>
-                <span className="pick-chain-arrow"> → </span>
-                <span className="pick-chain-current">{hop.to}</span>
+                <div className="pick-hop-teams">
+                  <span className="pick-chain-past">{hop.from}</span>
+                  <span className="pick-chain-arrow">→</span>
+                  <span className="pick-chain-current">{hop.to}</span>
+                </div>
                 {hop.date && <span className="pick-hop-date">{hop.date}</span>}
               </div>
               {hop.cost?.length > 0 && (
                 <div className="pick-chain-section">
-                  <span className="pick-chain-section-label">{hop.to} gave</span>
-                  {hop.cost.map((item, j) => <div key={j} className="pick-chain-item pick-chain-gave">{item}</div>)}
+                  <span className="pick-chain-section-label">{hop.to} gave up</span>
+                  {hop.cost.map((item, j) => <div key={j} className="pick-chain-item pick-chain-gave">• {item}</div>)}
                 </div>
               )}
               {hop.bonus?.length > 0 && (
                 <div className="pick-chain-section">
                   <span className="pick-chain-section-label">{hop.to} also received</span>
-                  {hop.bonus.map((item, j) => <div key={j} className="pick-chain-item pick-chain-got">{item}</div>)}
+                  {hop.bonus.map((item, j) => <div key={j} className="pick-chain-item pick-chain-got">• {item}</div>)}
                 </div>
               )}
               {!hop.cost?.length && !hop.bonus?.length && (
-                <div className="pick-chain-item pick-chain-gave" style={{fontStyle:'italic',opacity:0.6}}>No exchange details available</div>
+                <div className="pick-chain-item" style={{fontStyle:'italic',opacity:0.5}}>No exchange details on record</div>
               )}
             </div>
-          ))}
-          {!p.trade_history?.length && (
-            <div className="pick-chain-item" style={{color:'var(--text-muted)',fontStyle:'italic'}}>No transaction data found</div>
+          )) : (
+            <div style={{color:'var(--text-muted)',fontStyle:'italic',padding:'12px 0'}}>No transaction data found for this pick.</div>
           )}
         </div>
-      )}
+      </div>
     </div>
+  )
+}
+
+function PickPill({ p, ownerName }) {
+  const [open, setOpen] = useState(false)
+  const canExpand = !p.own_pick
+
+  return (
+    <>
+      <div
+        className={`pick-pill ${p.own_pick ? 'pick-own' : 'pick-traded'} ${canExpand ? 'pick-clickable' : ''}`}
+        onClick={() => canExpand && setOpen(true)}
+      >
+        <span className="pick-pill-round">{ROUND_LABEL[p.round] ?? `Rd ${p.round}`}</span>
+        {p.projected_slot && <span className="pick-pill-slot">~{p.projected_slot}</span>}
+        <span className="pick-pill-val">{fmt(p.fc_value)}</span>
+        {!p.own_pick && (
+          <span className="pick-pill-from">{p.original_owner_name}</span>
+        )}
+      </div>
+      {open && <TradeModal p={p} ownerName={ownerName} onClose={() => setOpen(false)} />}
+    </>
   )
 }
 
