@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { api } from '../api/client'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -11,7 +11,53 @@ const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0)
 
 const ROUND_LABEL = { 1: '1st', 2: '2nd', 3: '3rd', 4: '4th' }
 
-function PicksByYear({ picks }) {
+function PickPill({ p, ownerName }) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handler(e) { if (!ref.current?.contains(e.target)) setOpen(false) }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  const canExpand = !p.own_pick
+
+  return (
+    <div className="pick-pill-wrap" ref={ref}>
+      <div
+        className={`pick-pill ${p.own_pick ? 'pick-own' : 'pick-traded'} ${canExpand ? 'pick-clickable' : ''}`}
+        onClick={() => canExpand && setOpen((v) => !v)}
+      >
+        <span className="pick-pill-round">{ROUND_LABEL[p.round] ?? `Rd ${p.round}`}</span>
+        {p.projected_slot && <span className="pick-pill-slot">~{p.projected_slot}</span>}
+        <span className="pick-pill-val">{fmt(p.fc_value)}</span>
+        {!p.own_pick && (
+          <span className="pick-pill-from" title={`Original owner: ${p.original_owner_name}`}>
+            {p.original_owner_name}
+          </span>
+        )}
+      </div>
+
+      {open && (
+        <div className="pick-chain-popover">
+          <div className="pick-chain-title">Trade history</div>
+          <div className="pick-chain-steps">
+            {[...p.trade_chain, ownerName].map((name, i, arr) => (
+              <span key={i} className="pick-chain-step">
+                <span className={i === arr.length - 1 ? 'pick-chain-current' : 'pick-chain-past'}>{name}</span>
+                {i < arr.length - 1 && <span className="pick-chain-arrow"> → </span>}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PicksByYear({ picks, ownerName }) {
   // Group by season, sort rounds within each year
   const byYear = {}
   for (const p of picks) {
@@ -39,20 +85,11 @@ function PicksByYear({ picks }) {
           return (
             <div key={yr} className="picks-year-row">
               <span className="picks-year-label">{yr}</span>
-
               <div className="picks-year-chips">
                 {yearPicks.map((p, i) => (
-                  <div key={i} className={`pick-pill ${p.own_pick ? 'pick-own' : 'pick-traded'}`}>
-                    <span className="pick-pill-round">{ROUND_LABEL[p.round] ?? `Rd ${p.round}`}</span>
-                    {p.projected_slot && (
-                      <span className="pick-pill-slot">~{p.projected_slot}</span>
-                    )}
-                    <span className="pick-pill-val">{fmt(p.fc_value)}</span>
-                    {!p.own_pick && <span className="pick-traded-dot" title="Received in trade">↑</span>}
-                  </div>
+                  <PickPill key={i} p={p} ownerName={ownerName} />
                 ))}
               </div>
-
               <span className="picks-year-total">{fmt(yearTotal)}</span>
             </div>
           )
@@ -184,7 +221,7 @@ export default function TeamProfile() {
 
       {/* Draft picks by year */}
       {roster_data.picks?.length > 0 && (
-        <PicksByYear picks={roster_data.picks} />
+        <PicksByYear picks={roster_data.picks} ownerName={data.display_name} />
       )}
     </div>
   )

@@ -24,6 +24,7 @@ def build_picks_by_roster(
     current_season: int,
     draft_rounds: int = 4,
     future_years: int = 3,
+    roster_display_map: dict | None = None,
 ) -> dict[int, list[dict]]:
     """
     Build a complete map of {roster_id: [picks_owned]} by combining:
@@ -34,18 +35,23 @@ def build_picks_by_roster(
     the current season is typically done once the league is in-season).
     """
     future_seasons = [str(current_season + i) for i in range(1, future_years + 1)]
+    rmap = roster_display_map or {}
 
     # traded_picks tells us the CURRENT owner of every pick that changed hands.
     # roster_id = original team slot, owner_id = who holds it now.
-    traded_map: dict[tuple, int] = {}
+    # Build a list of entries per pick key to capture multi-hop trades.
+    traded_map: dict[tuple, dict] = {}
     for tp in traded_picks:
         key = (str(tp["season"]), int(tp["round"]), int(tp["roster_id"]))
-        traded_map[key] = int(tp["owner_id"])
+        traded_map[key] = {
+            "owner_id": int(tp["owner_id"]),
+            "previous_owner_id": tp.get("previous_owner_id"),
+        }
 
     # Also find picks that have been traded AWAY from their original owner
     # (they appear in traded_map with owner_id != roster_id)
     traded_away: set[tuple] = {
-        key for key, owner in traded_map.items() if owner != key[2]
+        key for key, info in traded_map.items() if info["owner_id"] != key[2]
     }
 
     by_roster: dict[int, list[dict]] = {i: [] for i in range(1, num_teams + 1)}
@@ -55,20 +61,28 @@ def build_picks_by_roster(
             for orig_roster in range(1, num_teams + 1):
                 key = (season, rnd, orig_roster)
                 if key in traded_map:
-                    # Pick was traded — assign to current owner
-                    current_owner = traded_map[key]
+                    info = traded_map[key]
+                    current_owner = info["owner_id"]
+                    prev_id = info.get("previous_owner_id")
+                    # Build trade chain: original → (previous holders) → current
+                    chain = [rmap.get(orig_roster, f"Team {orig_roster}")]
+                    if prev_id and int(prev_id) != orig_roster and int(prev_id) != current_owner:
+                        chain.append(rmap.get(int(prev_id), f"Team {prev_id}"))
                     by_roster[current_owner].append({
                         "season": season,
                         "round": rnd,
                         "original_roster_id": orig_roster,
+                        "original_owner_name": rmap.get(orig_roster, f"Team {orig_roster}"),
+                        "trade_chain": chain,
                         "own_pick": False,
                     })
                 else:
-                    # Never traded — original team still owns it
                     by_roster[orig_roster].append({
                         "season": season,
                         "round": rnd,
                         "original_roster_id": orig_roster,
+                        "original_owner_name": rmap.get(orig_roster, f"Team {orig_roster}"),
+                        "trade_chain": [],
                         "own_pick": True,
                     })
 
@@ -150,6 +164,8 @@ def compute_team_profile(
             "season": season,
             "round": rnd,
             "original_roster_id": pick.get("original_roster_id"),
+            "original_owner_name": pick.get("original_owner_name", ""),
+            "trade_chain": pick.get("trade_chain", []),
             "own_pick": pick.get("own_pick", True),
             "fc_value": pv,
         })

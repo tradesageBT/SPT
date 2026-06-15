@@ -62,11 +62,17 @@ async def _sync_league(league_id: str, force: bool = False):
     draft_rounds = league_info.get("settings", {}).get("draft_rounds", 4)
     num_teams = len(rosters)
 
+    roster_display_map = {
+        r["roster_id"]: users_map.get(r.get("owner_id", ""), {}).get("display_name", f"Team {r['roster_id']}")
+        for r in rosters
+    }
+
     picks_by_roster = build_picks_by_roster(
         traded_picks,
         num_teams=num_teams,
         current_season=current_season,
         draft_rounds=draft_rounds,
+        roster_display_map=roster_display_map,
     )
 
     profiles = compute_league_profiles(
