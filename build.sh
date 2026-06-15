@@ -7,5 +7,5 @@ pip install -r requirements.txt
 # Build React frontend
 cd frontend
 npm install
-npm run build
+npx vite build
 cd ..
