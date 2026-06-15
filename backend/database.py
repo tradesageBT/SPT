@@ -91,6 +91,9 @@ def init_db():
                 last_updated    TEXT
             );
 
+            ALTER TABLE players_cache ADD COLUMN IF NOT EXISTS ppr REAL DEFAULT 1.0;
+            ALTER TABLE players_cache ADD COLUMN IF NOT EXISTS num_qbs INTEGER DEFAULT 1;
+
             CREATE TABLE IF NOT EXISTS picks_cache (
                 pick_key        TEXT PRIMARY KEY,
                 season          INTEGER,
@@ -111,6 +114,9 @@ def init_db():
                 tep                 REAL DEFAULT 0.0,
                 last_synced_at      TEXT
             );
+
+            ALTER TABLE leagues ADD COLUMN IF NOT EXISTS ppr REAL DEFAULT 1.0;
+            ALTER TABLE leagues ADD COLUMN IF NOT EXISTS tep REAL DEFAULT 0.0;
 
             CREATE TABLE IF NOT EXISTS teams (
                 id                      SERIAL PRIMARY KEY,
