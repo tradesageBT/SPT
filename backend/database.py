@@ -1,22 +1,61 @@
-import sqlite3
 import os
 from contextlib import contextmanager
+import psycopg2
+import psycopg2.extras
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "..", "spt.db")
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
 
-def get_connection():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    return conn
+class _Result:
+    """Thin wrapper so callers can do .fetchall() / .fetchone() like sqlite3."""
+    def __init__(self, cur):
+        self._cur = cur
+
+    def fetchall(self):
+        rows = self._cur.fetchall()
+        return [dict(r) for r in rows] if rows else []
+
+    def fetchone(self):
+        row = self._cur.fetchone()
+        return dict(row) if row else None
+
+
+class _Conn:
+    """Makes psycopg2 look like sqlite3 so router code needs zero changes."""
+    def __init__(self, conn):
+        self._conn = conn
+
+    def execute(self, sql, params=()):
+        # sqlite3 uses ? placeholders; postgres uses %s
+        sql = sql.replace("?", "%s")
+        cur = self._conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        cur.execute(sql, params)
+        return _Result(cur)
+
+    def executescript(self, sql):
+        # Used only in init_db — split on ; and run each statement
+        cur = self._conn.cursor()
+        for stmt in sql.split(";"):
+            stmt = stmt.strip()
+            if stmt:
+                cur.execute(stmt)
+
+    def commit(self):
+        self._conn.commit()
+
+    def rollback(self):
+        self._conn.rollback()
+
+    def close(self):
+        self._conn.close()
 
 
 @contextmanager
 def db():
-    conn = get_connection()
+    conn = psycopg2.connect(DATABASE_URL)
+    wrapped = _Conn(conn)
     try:
-        yield conn
+        yield wrapped
         conn.commit()
     except Exception:
         conn.rollback()
@@ -59,7 +98,7 @@ def init_db():
             );
 
             CREATE TABLE IF NOT EXISTS teams (
-                id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+                id                      SERIAL PRIMARY KEY,
                 sleeper_league_id       TEXT NOT NULL,
                 roster_id               INTEGER NOT NULL,
                 owner_id                TEXT,
@@ -76,5 +115,5 @@ def init_db():
                 roster_data             TEXT,
                 computed_at             TEXT,
                 UNIQUE(sleeper_league_id, roster_id)
-            );
+            )
         """)
