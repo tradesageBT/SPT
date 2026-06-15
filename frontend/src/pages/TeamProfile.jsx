@@ -42,30 +42,34 @@ function PickPill({ p, ownerName }) {
 
       {open && (
         <div className="pick-chain-popover">
-          <div className="pick-chain-title">Trade history{p.transaction?.date ? ` · ${p.transaction.date}` : ''}</div>
-          <div className="pick-chain-steps">
-            {[...p.trade_chain, ownerName].map((name, i, arr) => (
-              <span key={i} className="pick-chain-step">
-                <span className={i === arr.length - 1 ? 'pick-chain-current' : 'pick-chain-past'}>{name}</span>
-                {i < arr.length - 1 && <span className="pick-chain-arrow"> → </span>}
-              </span>
-            ))}
-          </div>
-          {p.transaction?.gave?.length > 0 && (
-            <div className="pick-chain-section">
-              <span className="pick-chain-section-label">Gave up</span>
-              {p.transaction.gave.map((item, i) => (
-                <div key={i} className="pick-chain-item pick-chain-gave">{item}</div>
-              ))}
+          <div className="pick-chain-title">Trade History</div>
+          {(p.trade_history?.length > 0 ? p.trade_history : []).map((hop, i) => (
+            <div key={i} className="pick-hop">
+              <div className="pick-hop-header">
+                <span className="pick-chain-past">{hop.from}</span>
+                <span className="pick-chain-arrow"> → </span>
+                <span className="pick-chain-current">{hop.to}</span>
+                {hop.date && <span className="pick-hop-date">{hop.date}</span>}
+              </div>
+              {hop.cost?.length > 0 && (
+                <div className="pick-chain-section">
+                  <span className="pick-chain-section-label">{hop.to} gave</span>
+                  {hop.cost.map((item, j) => <div key={j} className="pick-chain-item pick-chain-gave">{item}</div>)}
+                </div>
+              )}
+              {hop.bonus?.length > 0 && (
+                <div className="pick-chain-section">
+                  <span className="pick-chain-section-label">{hop.to} also received</span>
+                  {hop.bonus.map((item, j) => <div key={j} className="pick-chain-item pick-chain-got">{item}</div>)}
+                </div>
+              )}
+              {!hop.cost?.length && !hop.bonus?.length && (
+                <div className="pick-chain-item pick-chain-gave" style={{fontStyle:'italic',opacity:0.6}}>No exchange details available</div>
+              )}
             </div>
-          )}
-          {p.transaction?.also_got?.length > 0 && (
-            <div className="pick-chain-section">
-              <span className="pick-chain-section-label">Also received</span>
-              {p.transaction.also_got.map((item, i) => (
-                <div key={i} className="pick-chain-item pick-chain-got">{item}</div>
-              ))}
-            </div>
+          ))}
+          {!p.trade_history?.length && (
+            <div className="pick-chain-item" style={{color:'var(--text-muted)',fontStyle:'italic'}}>No transaction data found</div>
           )}
         </div>
       )}

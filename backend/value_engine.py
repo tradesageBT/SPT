@@ -21,68 +21,81 @@ def _player_entry(pid: str, players_cache: dict) -> dict:
 _ROUND_LABEL = {1: "1st", 2: "2nd", 3: "3rd", 4: "4th"}
 
 
-def _pick_label(dp: dict, roster_display_map: dict) -> str:
+def _pick_label(dp: dict, rmap: dict, ref_roster: int) -> str:
     orig = int(dp.get("roster_id", 0))
     rnd = int(dp.get("round", 0))
     season = dp.get("season", "")
-    owner = dp.get("owner_id") and int(dp["owner_id"])
     label = f"{season} {_ROUND_LABEL.get(rnd, f'Rd {rnd}')}"
-    orig_name = roster_display_map.get(orig, f"Team {orig}")
-    return f"{label} ({orig_name}'s)" if orig != owner else f"{label} (own)"
+    return f"{label} (own pick)" if orig == ref_roster else f"{label} ({rmap.get(orig, f'Team {orig}')})"
 
 
-def _trade_details(key: tuple, current_owner: int, txn_list: list,
-                   players_cache: dict, roster_display_map: dict) -> dict | None:
+def _build_trade_chain(key: tuple, txn_list: list,
+                       players_cache: dict, rmap: dict) -> list:
+    """Return one entry per trade hop, sorted chronologically."""
+    from datetime import datetime, timezone
     target_season, target_round, target_orig = str(key[0]), int(key[1]), int(key[2])
-    # Find the transaction where this pick moved to current_owner
-    txn = next(
-        (t for t in reversed(txn_list)
-         if any(int(dp.get("owner_id", 0)) == current_owner
-                and str(dp.get("season", "")) == target_season
-                and int(dp.get("round", 0)) == target_round
-                and int(dp.get("roster_id", 0)) == target_orig
-                for dp in (t.get("draft_picks") or []))),
-        None,
-    )
-    if not txn:
-        return None
+    hops = []
 
-    gave, also_got = [], []
-    adds = txn.get("adds") or {}
-    drops = txn.get("drops") or {}
+    for txn in sorted(txn_list, key=lambda t: t.get("created") or 0):
+        pick_entry = next(
+            (dp for dp in (txn.get("draft_picks") or [])
+             if str(dp.get("season", "")) == target_season
+             and int(dp.get("round", 0)) == target_round
+             and int(dp.get("roster_id", 0)) == target_orig),
+            None,
+        )
+        if not pick_entry:
+            continue
 
-    for pid, prev in drops.items():
-        if int(prev) == current_owner:
-            p = players_cache.get(str(pid), {})
-            name = p.get("name") or f"Player {pid}"
-            pos = p.get("position", "")
-            gave.append(f"{name} ({pos})" if pos else name)
+        from_id = pick_entry.get("previous_owner_id")
+        to_id = int(pick_entry.get("owner_id", 0))
+        if not from_id:
+            continue
+        from_id = int(from_id)
 
-    for dp in (txn.get("draft_picks") or []):
-        if int(dp.get("previous_owner_id", -1)) == current_owner:
-            gave.append(_pick_label(dp, roster_display_map))
+        adds = txn.get("adds") or {}
+        drops = txn.get("drops") or {}
 
-    for pid, new_owner in adds.items():
-        if int(new_owner) == current_owner:
-            p = players_cache.get(str(pid), {})
-            name = p.get("name") or f"Player {pid}"
-            pos = p.get("position", "")
-            also_got.append(f"{name} ({pos})" if pos else name)
+        # What the acquirer (to_id) paid
+        cost = []
+        for pid, prev in drops.items():
+            if int(prev) == to_id:
+                p = players_cache.get(str(pid), {})
+                name = p.get("name") or f"Player {pid}"
+                pos = p.get("position", "")
+                cost.append(f"{name} ({pos})" if pos else name)
+        for dp in (txn.get("draft_picks") or []):
+            if int(dp.get("previous_owner_id", -1)) == to_id:
+                cost.append(_pick_label(dp, rmap, to_id))
 
-    for dp in (txn.get("draft_picks") or []):
-        if (int(dp.get("owner_id", 0)) == current_owner
-                and not (str(dp.get("season", "")) == target_season
-                         and int(dp.get("round", 0)) == target_round
-                         and int(dp.get("roster_id", 0)) == target_orig)):
-            also_got.append(_pick_label(dp, roster_display_map))
+        # What else the acquirer received in the same deal
+        bonus = []
+        for pid, new_owner in adds.items():
+            if int(new_owner) == to_id:
+                p = players_cache.get(str(pid), {})
+                name = p.get("name") or f"Player {pid}"
+                pos = p.get("position", "")
+                bonus.append(f"{name} ({pos})" if pos else name)
+        for dp in (txn.get("draft_picks") or []):
+            if (int(dp.get("owner_id", 0)) == to_id
+                    and not (str(dp.get("season", "")) == target_season
+                             and int(dp.get("round", 0)) == target_round
+                             and int(dp.get("roster_id", 0)) == target_orig)):
+                bonus.append(_pick_label(dp, rmap, to_id))
 
-    created = txn.get("created")
-    date = None
-    if created:
-        from datetime import datetime, timezone
-        date = datetime.fromtimestamp(created / 1000, tz=timezone.utc).strftime("%b %d, %Y")
+        created = txn.get("created")
+        date = (datetime.fromtimestamp(created / 1000, tz=timezone.utc).strftime("%b %d, %Y")
+                if created else None)
 
-    return {"gave": gave, "also_got": also_got, "date": date}
+        hops.append({
+            "from": rmap.get(from_id, f"Team {from_id}"),
+            "to": rmap.get(to_id, f"Team {to_id}"),
+            "date": date,
+            "cost": cost,
+            "bonus": bonus,
+        })
+
+    return hops
 
 
 def build_picks_by_roster(
@@ -136,18 +149,18 @@ def build_picks_by_roster(
                     chain = [rmap.get(orig_roster, f"Team {orig_roster}")]
                     if prev_id and int(prev_id) != orig_roster and int(prev_id) != current_owner:
                         chain.append(rmap.get(int(prev_id), f"Team {prev_id}"))
-                    txn_details = None
+                    trade_history = []
                     if transaction_map and players_cache:
-                        txn_list = transaction_map.get(key, [])
-                        txn_details = _trade_details(key, current_owner, txn_list,
-                                                     players_cache, rmap)
+                        trade_history = _build_trade_chain(
+                            key, transaction_map.get(key, []), players_cache, rmap
+                        )
                     by_roster[current_owner].append({
                         "season": season,
                         "round": rnd,
                         "original_roster_id": orig_roster,
                         "original_owner_name": rmap.get(orig_roster, f"Team {orig_roster}"),
                         "trade_chain": chain,
-                        "transaction": txn_details,
+                        "trade_history": trade_history,
                         "own_pick": False,
                     })
                 else:
@@ -240,7 +253,7 @@ def compute_team_profile(
             "original_roster_id": pick.get("original_roster_id"),
             "original_owner_name": pick.get("original_owner_name", ""),
             "trade_chain": pick.get("trade_chain", []),
-            "transaction": pick.get("transaction"),
+            "trade_history": pick.get("trade_history", []),
             "own_pick": pick.get("own_pick", True),
             "fc_value": pv,
         })
