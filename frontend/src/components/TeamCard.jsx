@@ -1,0 +1,69 @@
+import { Link } from 'react-router-dom'
+
+const fmt = (n) => n?.toLocaleString() ?? '—'
+
+function SurplusTag({ pos, pct }) {
+  const positive = pct >= 0
+  return (
+    <span className={`surplus-tag ${positive ? 'surplus-pos' : 'surplus-neg'}`}>
+      {pos} {positive ? '+' : ''}{pct}%
+    </span>
+  )
+}
+
+function ConventionBadge({ score }) {
+  if (score < 0.35) return <span className="contention-badge rebuild">Rebuilding</span>
+  if (score > 0.65) return <span className="contention-badge winnow">Win-Now</span>
+  return <span className="contention-badge mixed">Contending</span>
+}
+
+export default function TeamCard({ team, rank, maxValue, leagueId }) {
+  const barPct = maxValue ? Math.round((team.total_value / maxValue) * 100) : 0
+  const playerPct = team.total_value
+    ? Math.round((team.player_value / team.total_value) * 100)
+    : 0
+  const pickPct = 100 - playerPct
+
+  const surplus = team.positional_surplus || {}
+
+  return (
+    <Link to={`/league/${leagueId}/team/${team.roster_id}`} className="team-card">
+      <div className="team-card-rank">#{rank}</div>
+
+      <div className="team-card-info">
+        {team.avatar && (
+          <img
+            className="team-avatar-sm"
+            src={`https://sleepercdn.com/avatars/thumbs/${team.avatar}`}
+            alt={team.display_name}
+          />
+        )}
+        <div>
+          <div className="team-name">{team.display_name}</div>
+          <ConventionBadge score={team.contention_score} />
+        </div>
+      </div>
+
+      <div className="team-card-value">
+        <div className="value-total">{fmt(team.total_value)}</div>
+        <div className="value-bar-wrap">
+          <div className="value-bar">
+            <div className="value-bar-fill" style={{ width: `${barPct}%` }} />
+          </div>
+        </div>
+        <div className="value-split">
+          <span className="split-current">{playerPct}% Players</span>
+          <span className="split-future">{pickPct}% Picks</span>
+        </div>
+      </div>
+
+      <div className="team-card-positions">
+        {Object.entries(surplus)
+          .sort(([, a], [, b]) => Math.abs(b) - Math.abs(a))
+          .map(([pos, pct]) => (
+            <SurplusTag key={pos} pos={pos} pct={pct} />
+          ))}
+      </div>
+    </Link>
+  )
+}

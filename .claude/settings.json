@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s \"https://api.sleeper.app/v1/league/1312113980805742592\")",
+      "Bash(python -m json.tool)",
+      "Bash(curl -s -v \"https://api.sleeper.app/v1/league/1312113980805742592\")",
+      "Bash(curl -sk \"https://api.sleeper.app/v1/league/1312113980805742592\")",
+      "Bash(curl -sk \"https://api.sleeper.app/v1/league/1312113980805742592/rosters\")",
+      "Bash(python -c ' *)",
+      "Bash(curl -sk \"https://api.fantasycalc.com/values/current?isDynasty=true&numQbs=2&ppr=1&superflex=true\")",
+      "Bash(curl -sk \"https://api.fantasycalc.com/values/current?isDynasty=true&numQbs=2&ppr=1&superflex=true&picks=true\")",
+      "PowerShell(cd c:\\\\Repos\\\\SPT\\\\backend; Start-Process powershell -ArgumentList \"-NoExit\", \"-Command\", \"cd 'c:\\\\Repos\\\\SPT\\\\backend'; python -W ignore -m uvicorn main:app --reload --port 8000\" -PassThru | Select-Object Id; Start-Sleep -Seconds 3; Write-Host \"Server started\")",
+      "PowerShell(curl -s \"http://localhost:8000/api/health\")",
+      "PowerShell(Start-Sleep -Seconds 3; \\(Invoke-WebRequest -Uri \"http://localhost:8000/api/health\" -UseBasicParsing\\).Content)",
+      "PowerShell($resp = \\(Invoke-WebRequest -Uri \"http://localhost:8000/api/leagues/1312113980805742592\" -UseBasicParsing -TimeoutSec 90\\); $data = $resp.Content | ConvertFrom-Json; Write-Host \"League:\" $data.league_name; Write-Host \"Teams:\"; $data.teams | ForEach-Object { Write-Host \\(\"  \" + $_.display_name + \" total=\" + $_.total_value\\) })",
+      "PowerShell($resp = \\(Invoke-WebRequest -Uri \"http://localhost:8000/api/leagues/1312113980805742592/teams/9\" -UseBasicParsing\\); $data = $resp.Content | ConvertFrom-Json; Write-Host \"Team:\" $data.display_name; Write-Host \"Total:\" $data.total_value; Write-Host \"Contention:\" $data.contention_score; Write-Host \"Smash:\"; $data.categorized.smash | ForEach-Object { Write-Host \\(\"  \" + $_.name + \" \" + $_.position + \" \" + $_.fc_value\\) })",
+      "PowerShell($resp = \\(Invoke-WebRequest -Uri \"http://localhost:8000/api/leagues/1312113980805742592/trades?roster_id=9\" -UseBasicParsing\\); $data = $resp.Content | ConvertFrom-Json; Write-Host \"Trade ideas for AAlsup:\" $data.Count; $data | Select-Object -First 3 | ForEach-Object { Write-Host \\(\"  \" + $_.team_a.display_name + \" gives: \" + \\($_.a_gives | ForEach-Object { $_.name }\\) + \" <-> \" + $_.team_b.display_name + \" gives: \" + \\($_.b_gives | ForEach-Object { $_.name }\\) + \" delta=\" + $_.value_delta\\) })",
+      "PowerShell($resp = \\(Invoke-WebRequest -Uri \"http://localhost:8000/api/leagues/1312113980805742592/trades?roster_id=9\" -UseBasicParsing\\); $data = $resp.Content | ConvertFrom-Json; Write-Host \"Trade ideas for AAlsup:\" $data.Count; $data | Select-Object -First 5 | ForEach-Object { $aGives = \\($_.a_gives | ForEach-Object { \"$\\($_.name\\)\\($\\($_.fc_value\\)\\)\" }\\) -join \", \"; $bGives = \\($_.b_gives | ForEach-Object { \"$\\($_.name\\)\\($\\($_.fc_value\\)\\)\" }\\) -join \", \"; Write-Host \"  [$\\($_.team_a.display_name\\)] $aGives <-> [$\\($_.team_b.display_name\\)] $bGives  delta=$\\($_.value_delta\\)\" })",
+      "PowerShell(Start-Process powershell -ArgumentList \"-NoExit\", \"-Command\", \"cd 'c:\\\\Repos\\\\SPT\\\\frontend'; npm run dev\" -PassThru | Select-Object Id; Write-Host \"Frontend starting...\")",
+      "Bash(python3 -c ' *)",
+      "PowerShell($resp = Invoke-WebRequest -Uri \"https://api.sleeper.app/v1/league/1312113980805742592/rosters\" -UseBasicParsing -SkipCertificateCheck; $data = $resp.Content | ConvertFrom-Json; foreach \\($r in $data\\) { Write-Host \"roster=$\\($r.roster_id\\) picks=$\\($r.picks | ConvertTo-Json -Compress\\)\" })",
+      "PowerShell($resp = \\(Invoke-WebRequest -Uri \"http://localhost:8000/api/leagues/1312113980805742592/sync\" -Method POST -UseBasicParsing -TimeoutSec 60\\); $resp.Content | ConvertFrom-Json | Select-Object ok, league_name, teams_synced)",
+      "PowerShell($resp = \\(Invoke-WebRequest -Uri \"http://localhost:8000/api/leagues/1312113980805742592\" -UseBasicParsing\\); $data = $resp.Content | ConvertFrom-Json; $data.teams | Select-Object display_name, total_value, player_value, pick_value | Format-Table)",
+      "PowerShell(Get-Process -Name python -ErrorAction SilentlyContinue)",
+      "PowerShell(Stop-Process -Force)",
+      "PowerShell(Start-Process powershell -ArgumentList \"-NoExit\", \"-Command\", \"cd 'c:\\\\Repos\\\\SPT\\\\backend'; python -W ignore -m uvicorn main:app --reload --port 8000\" -PassThru | Select-Object Id; Start-Sleep -Seconds 4; Write-Host \"Backend started\")",
+      "PowerShell(Start-Sleep -Seconds 2; $sync = \\(Invoke-WebRequest -Uri \"http://localhost:8000/api/leagues/1312113980805742592/sync\" -Method POST -UseBasicParsing -TimeoutSec 60\\); $resp = \\(Invoke-WebRequest -Uri \"http://localhost:8000/api/leagues/1312113980805742592\" -UseBasicParsing -TimeoutSec 30\\); $data = $resp.Content | ConvertFrom-Json; $data.teams | Select-Object display_name, total_value, player_value, pick_value | Format-Table)",
+      "PowerShell(Start-Process powershell -ArgumentList \"-NoExit\", \"-Command\", \"cd 'c:\\\\Repos\\\\SPT\\\\frontend'; npm run dev\" -PassThru | Select-Object Id; Start-Sleep -Seconds 4; Write-Host \"Frontend starting...\")",
+      "PowerShell(Start-Sleep -Seconds 3; \\(Invoke-WebRequest -Uri \"http://localhost:5173\" -UseBasicParsing\\).StatusCode)",
+      "PowerShell(\\(Invoke-WebRequest -Uri \"http://localhost:5173\" -UseBasicParsing\\).StatusCode)",
+      "PowerShell($resp = \\(Invoke-WebRequest -Uri \"http://localhost:8000/api/leagues/1312113980805742592/sync\" -Method POST -UseBasicParsing -TimeoutSec 60\\); $resp.Content)",
+      "PowerShell($resp = \\(Invoke-WebRequest -Uri \"http://localhost:8000/api/leagues/1312113980805742592/trades?roster_id=9\" -UseBasicParsing\\); $data = $resp.Content | ConvertFrom-Json; $data | Select-Object -First 4 | ForEach-Object { $aGives = \\($_.a_gives | ForEach-Object { $_.name }\\) -join \", \"; $bGives = \\($_.b_gives | ForEach-Object { $_.name }\\) -join \", \"; Write-Host \"$\\($_.team_a.display_name\\) gives [$aGives] \\(lineup_delta=$\\($_.lineup_delta_a\\)\\)\"; Write-Host \"$\\($_.team_b.display_name\\) gives [$bGives] \\(lineup_delta=$\\($_.lineup_delta_b\\)\\)\"; Write-Host \"---\" })"
+    ]
+  }
+}
