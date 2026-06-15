@@ -1,4 +1,5 @@
 import os
+import re
 from contextlib import contextmanager
 import psycopg2
 import psycopg2.extras
@@ -25,25 +26,30 @@ class _Conn:
     def __init__(self, conn):
         self._conn = conn
 
-    def execute(self, sql, params=()):
+    @staticmethod
+    def _adapt(sql):
+        # sqlite3 positional: ? → %s
+        # sqlite3 named:      :foo → %(foo)s
+        sql = re.sub(r':(\w+)', r'%(\1)s', sql)
         sql = sql.replace("?", "%s")
+        return sql
+
+    def execute(self, sql, params=()):
         cur = self._conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-        cur.execute(sql, params)
+        cur.execute(self._adapt(sql), params)
         return _Result(cur)
 
     def executemany(self, sql, params_seq):
-        sql = sql.replace("?", "%s")
         cur = self._conn.cursor()
-        cur.executemany(sql, params_seq)
+        cur.executemany(self._adapt(sql), params_seq)
         return _Result(cur)
 
     def executescript(self, sql):
-        # Used only in init_db — split on ; and run each statement
         cur = self._conn.cursor()
         for stmt in sql.split(";"):
             stmt = stmt.strip()
             if stmt:
-                cur.execute(stmt)
+                cur.execute(stmt)  # schema SQL — no param substitution needed
 
     def commit(self):
         self._conn.commit()
