@@ -7,5 +7,5 @@ pip install -r requirements.txt
 # Build React frontend
 cd frontend
 npm install
-npx vite build
+node ./node_modules/vite/bin/vite.js build
 cd ..
