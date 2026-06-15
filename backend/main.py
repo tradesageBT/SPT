@@ -1,10 +1,12 @@
 import os
-from fastapi import FastAPI
+import time
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from database import init_db, db
 from routers import leagues, teams, trades
+import logger
 
 app = FastAPI(title="Smash Pass Trash", version="0.1.0")
 
@@ -23,6 +25,28 @@ app.include_router(trades.router)
 @app.on_event("startup")
 async def startup():
     init_db()
+    logger.init_events_table()
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = time.time()
+    response = await call_next(request)
+    ms = round((time.time() - start) * 1000)
+
+    path = request.url.path
+    # Only log API calls — skip static assets and SPA html
+    if path.startswith("/api/") and path != "/api/health":
+        ip = request.headers.get("x-forwarded-for", request.client.host if request.client else None)
+        logger.log("request", {
+            "method": request.method,
+            "path": path,
+            "status": response.status_code,
+            "ms": ms,
+            "query": str(request.query_params) or None,
+        }, ip=ip)
+
+    return response
 
 
 @app.get("/api/health")
@@ -33,6 +57,59 @@ async def health():
         return {"status": "ok", "db": "connected"}
     except Exception as e:
         return {"status": "error", "db": str(e)}
+
+
+@app.get("/api/admin/events")
+async def get_events(limit: int = 200, event: str | None = None):
+    with db() as conn:
+        if event:
+            rows = conn.execute(
+                "SELECT * FROM events WHERE event = ? ORDER BY created_at DESC LIMIT ?",
+                (event, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM events ORDER BY created_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+    return rows
+
+
+@app.get("/api/admin/summary")
+async def get_summary():
+    with db() as conn:
+        leagues_viewed = conn.execute(
+            "SELECT data->>'path' as path, COUNT(*) as views FROM events "
+            "WHERE event='request' AND data->>'path' LIKE '/api/leagues/%' "
+            "AND data->>'method'='GET' AND data->>'path' NOT LIKE '%/trades%' "
+            "AND data->>'path' NOT LIKE '%/teams/%' "
+            "GROUP BY path ORDER BY views DESC LIMIT 20"
+        ).fetchall()
+
+        top_teams = conn.execute(
+            "SELECT data->>'path' as path, COUNT(*) as views FROM events "
+            "WHERE event='request' AND data->>'path' LIKE '%/teams/%' "
+            "GROUP BY path ORDER BY views DESC LIMIT 20"
+        ).fetchall()
+
+        trade_searches = conn.execute(
+            "SELECT data->>'data' as info, COUNT(*) as count FROM events "
+            "WHERE event='trade_search' "
+            "GROUP BY info ORDER BY count DESC LIMIT 20"
+        ).fetchall()
+
+        daily = conn.execute(
+            "SELECT DATE(created_at) as day, COUNT(*) as requests, COUNT(DISTINCT ip) as unique_ips "
+            "FROM events WHERE event='request' "
+            "GROUP BY day ORDER BY day DESC LIMIT 30"
+        ).fetchall()
+
+    return {
+        "leagues_viewed": leagues_viewed,
+        "top_teams": top_teams,
+        "trade_searches": trade_searches,
+        "daily_traffic": daily,
+    }
 
 
 # Serve built React app in production

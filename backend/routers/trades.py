@@ -1,7 +1,8 @@
 import json
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from database import db
 from trade_engine import generate_all_trades, generate_trades_between, categorize_players
+import logger
 
 router = APIRouter(prefix="/api/leagues", tags=["trades"])
 
@@ -53,6 +54,7 @@ async def get_league_players(league_id: str):
 
 @router.get("/{league_id}/trades")
 async def get_all_trade_ideas(
+    request: Request,
     league_id: str,
     roster_id: int | None = Query(None),
     include_smash: bool = Query(False),
@@ -72,6 +74,16 @@ async def get_all_trade_ideas(
                 force_profile = p
                 force_player = match
                 break
+
+    ip = request.headers.get("x-forwarded-for", request.client.host if request.client else None)
+    if force_player_id and force_player:
+        logger.log("trade_search", {
+            "league_id": league_id,
+            "player_id": force_player_id,
+            "player_name": force_player.get("name"),
+            "include_smash": include_smash,
+            "include_picks": include_picks,
+        }, ip=ip)
 
     force_mode = force_player_id is not None
 
