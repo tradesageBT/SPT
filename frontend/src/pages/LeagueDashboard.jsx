@@ -66,7 +66,16 @@ export default function LeagueDashboard() {
       <div className="dashboard-header">
         <div>
           <h1 className="page-title">{data.league_name}</h1>
-          <p className="page-sub">{data.season} Season · {data.teams.length} Teams</p>
+          <div className="league-meta">
+            <span className="page-sub">{data.season} Season · {data.teams.length} Teams</span>
+            <div className="scoring-badges">
+              {data.superflex && <span className="scoring-badge">Superflex</span>}
+              {data.ppr === 1 && <span className="scoring-badge">Full PPR</span>}
+              {data.ppr === 0.5 && <span className="scoring-badge">Half PPR</span>}
+              {data.ppr === 0 && <span className="scoring-badge">Standard</span>}
+              {data.tep > 0 && <span className="scoring-badge">TEP +{data.tep}</span>}
+            </div>
+          </div>
         </div>
         <div className="dashboard-actions">
           <Link to={`/league/${leagueId}/trades`} className="btn btn-accent">

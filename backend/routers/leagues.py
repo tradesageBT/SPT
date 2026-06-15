@@ -44,9 +44,16 @@ async def _sync_league(league_id: str, force: bool = False):
     has_superflex = "SUPER_FLEX" in roster_positions
     num_qbs = 2 if has_superflex else max(1, sum(1 for p in roster_positions if p == "QB"))
 
-    # Refresh player cache with correct QB count
-    if cache_manager.players_cache_is_stale():
-        await cache_manager.refresh_cache(num_qbs=num_qbs)
+    # Read scoring settings: PPR (rec), TEP (bonus_rec_te)
+    scoring = league_info.get("scoring_settings", {})
+    ppr = float(scoring.get("rec", 1.0))          # 0, 0.5, or 1.0
+    tep = float(scoring.get("bonus_rec_te", 0.0)) # TE premium (0, 0.25, 0.5, 1.0)
+    # FantasyCalc doesn't have a TEP param, but ppr already captures most of the
+    # TE value signal. We store tep so we can show it in the UI.
+
+    # Refresh player cache if scoring settings changed or TTL expired
+    if cache_manager.players_cache_is_stale(ppr=ppr, num_qbs=num_qbs):
+        await cache_manager.refresh_cache(num_qbs=num_qbs, ppr=ppr)
 
     players_cache = cache_manager.get_cached_players()
     picks_cache = cache_manager.get_cached_picks()
@@ -72,13 +79,14 @@ async def _sync_league(league_id: str, force: bool = False):
         conn.execute(
             """
             INSERT INTO leagues (sleeper_league_id, league_name, season, scoring_settings,
-                                 roster_positions, num_qbs, last_synced_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+                                 roster_positions, num_qbs, ppr, tep, last_synced_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(sleeper_league_id) DO UPDATE SET
                 league_name=excluded.league_name, season=excluded.season,
                 scoring_settings=excluded.scoring_settings,
                 roster_positions=excluded.roster_positions,
-                num_qbs=excluded.num_qbs, last_synced_at=excluded.last_synced_at
+                num_qbs=excluded.num_qbs, ppr=excluded.ppr, tep=excluded.tep,
+                last_synced_at=excluded.last_synced_at
             """,
             (
                 league_id,
@@ -87,6 +95,8 @@ async def _sync_league(league_id: str, force: bool = False):
                 json.dumps(league_info.get("scoring_settings", {})),
                 json.dumps(roster_positions),
                 num_qbs,
+                ppr,
+                tep,
                 now,
             ),
         )
@@ -153,17 +163,26 @@ async def get_league(league_id: str):
             "league_name": row["league_name"],
             "season": row["season"],
             "num_qbs": row["num_qbs"],
+            "ppr": row.get("ppr", 1.0),
+            "tep": row.get("tep", 0.0),
+            "superflex": row["num_qbs"] >= 2,
             "last_synced_at": row["last_synced_at"],
             "teams": [_team_row_to_dict(t) for t in teams],
         }
 
     # Need to sync
     league_info, profiles = await _sync_league(league_id)
+    scoring = league_info.get("scoring_settings", {})
+    roster_positions = league_info.get("roster_positions", [])
+    nqbs = max(1, sum(1 for p in roster_positions if p in ("QB", "SUPER_FLEX")))
     return {
         "league_id": league_id,
         "league_name": league_info.get("name", ""),
         "season": league_info.get("season", ""),
-        "num_qbs": max(1, sum(1 for p in league_info.get("roster_positions", []) if p == "QB")),
+        "num_qbs": nqbs,
+        "ppr": float(scoring.get("rec", 1.0)),
+        "tep": float(scoring.get("bonus_rec_te", 0.0)),
+        "superflex": "SUPER_FLEX" in roster_positions,
         "last_synced_at": _now_iso(),
         "teams": profiles,
     }

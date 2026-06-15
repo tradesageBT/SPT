@@ -41,15 +41,20 @@ def get_cached_picks() -> dict:
     return {r["pick_key"]: dict(r) for r in rows}
 
 
-def players_cache_is_stale() -> bool:
+def players_cache_is_stale(ppr: float = 1.0, num_qbs: int = 1) -> bool:
     with db() as conn:
         row = conn.execute(
-            "SELECT last_updated FROM players_cache LIMIT 1"
+            "SELECT last_updated, ppr, num_qbs FROM players_cache LIMIT 1"
         ).fetchone()
-    return _is_stale(row["last_updated"] if row else None)
+    if not row:
+        return True
+    # Refresh if scoring settings changed or TTL expired
+    if row.get("ppr") != ppr or row.get("num_qbs") != num_qbs:
+        return True
+    return _is_stale(row["last_updated"])
 
 
-async def refresh_cache(num_qbs: int = 1):
+async def refresh_cache(num_qbs: int = 1, ppr: float = 1.0):
     """
     Fetch fresh data from Sleeper (player metadata) + FantasyCalc (values),
     merge, and upsert into SQLite.
@@ -57,7 +62,7 @@ async def refresh_cache(num_qbs: int = 1):
     now = _now_iso()
 
     # --- FantasyCalc values ---
-    fc_data = await fantasycalc_client.get_values(num_qbs=num_qbs)
+    fc_data = await fantasycalc_client.get_values(num_qbs=num_qbs, ppr=ppr)
 
     fc_player_map: dict[str, int] = {}   # sleeper_id -> value
     picks_rows: list[dict] = []
@@ -103,6 +108,8 @@ async def refresh_cache(num_qbs: int = 1):
             "age": p.get("age"),
             "years_exp": p.get("years_exp"),
             "fc_value": fc_player_map.get(str(sid), 0),
+            "ppr": ppr,
+            "num_qbs": num_qbs,
             "last_updated": now,
         })
 
@@ -110,13 +117,13 @@ async def refresh_cache(num_qbs: int = 1):
         conn.executemany(
             """
             INSERT INTO players_cache
-                (sleeper_id, name, position, nfl_team, age, years_exp, fc_value, last_updated)
+                (sleeper_id, name, position, nfl_team, age, years_exp, fc_value, ppr, num_qbs, last_updated)
             VALUES
-                (:sleeper_id, :name, :position, :nfl_team, :age, :years_exp, :fc_value, :last_updated)
+                (:sleeper_id, :name, :position, :nfl_team, :age, :years_exp, :fc_value, :ppr, :num_qbs, :last_updated)
             ON CONFLICT(sleeper_id) DO UPDATE SET
                 name=excluded.name, position=excluded.position, nfl_team=excluded.nfl_team,
                 age=excluded.age, years_exp=excluded.years_exp, fc_value=excluded.fc_value,
-                last_updated=excluded.last_updated
+                ppr=excluded.ppr, num_qbs=excluded.num_qbs, last_updated=excluded.last_updated
             """,
             player_rows,
         )

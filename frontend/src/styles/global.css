@@ -145,6 +145,19 @@ img { display: block; }
 .back-link:hover { color: var(--accent); }
 
 /* ── Dashboard ───────────────────────────────────────────────────────────── */
+.league-meta { display: flex; flex-direction: column; gap: 6px; }
+.scoring-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+.scoring-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 20px;
+  background: rgba(1,217,172,0.12);
+  color: var(--accent);
+  border: 1px solid rgba(1,217,172,0.25);
+  letter-spacing: 0.03em;
+}
+
 .dashboard-header {
   display: flex;
   align-items: flex-start;

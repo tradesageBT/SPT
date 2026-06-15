@@ -86,6 +86,8 @@ def init_db():
                 age             REAL,
                 years_exp       INTEGER,
                 fc_value        INTEGER DEFAULT 0,
+                ppr             REAL DEFAULT 1.0,
+                num_qbs         INTEGER DEFAULT 1,
                 last_updated    TEXT
             );
 
@@ -105,6 +107,8 @@ def init_db():
                 scoring_settings    TEXT,
                 roster_positions    TEXT,
                 num_qbs             INTEGER DEFAULT 1,
+                ppr                 REAL DEFAULT 1.0,
+                tep                 REAL DEFAULT 0.0,
                 last_synced_at      TEXT
             );
 
