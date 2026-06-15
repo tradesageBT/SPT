@@ -368,10 +368,15 @@ img { display: block; }
   box-shadow: 0 8px 24px rgba(0,0,0,0.4);
 }
 .pick-chain-title { font-size: 0.7rem; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
-.pick-chain-steps { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; font-size: 0.78rem; }
+.pick-chain-steps { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; font-size: 0.78rem; margin-bottom: 4px; }
 .pick-chain-past { color: var(--text-muted); }
 .pick-chain-current { color: var(--accent); font-weight: 600; }
 .pick-chain-arrow { color: var(--text-muted); }
+.pick-chain-section { margin-top: 8px; }
+.pick-chain-section-label { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 3px; }
+.pick-chain-item { font-size: 0.76rem; padding: 1px 0; }
+.pick-chain-gave { color: #e05c5c; }
+.pick-chain-got  { color: var(--accent); }
 
 /* ── Trade Ideas ─────────────────────────────────────────────────────────── */
 .trades-page { max-width: 860px; }

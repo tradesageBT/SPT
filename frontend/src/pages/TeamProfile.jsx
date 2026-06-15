@@ -42,7 +42,7 @@ function PickPill({ p, ownerName }) {
 
       {open && (
         <div className="pick-chain-popover">
-          <div className="pick-chain-title">Trade history</div>
+          <div className="pick-chain-title">Trade history{p.transaction?.date ? ` · ${p.transaction.date}` : ''}</div>
           <div className="pick-chain-steps">
             {[...p.trade_chain, ownerName].map((name, i, arr) => (
               <span key={i} className="pick-chain-step">
@@ -51,6 +51,22 @@ function PickPill({ p, ownerName }) {
               </span>
             ))}
           </div>
+          {p.transaction?.gave?.length > 0 && (
+            <div className="pick-chain-section">
+              <span className="pick-chain-section-label">Gave up</span>
+              {p.transaction.gave.map((item, i) => (
+                <div key={i} className="pick-chain-item pick-chain-gave">{item}</div>
+              ))}
+            </div>
+          )}
+          {p.transaction?.also_got?.length > 0 && (
+            <div className="pick-chain-section">
+              <span className="pick-chain-section-label">Also received</span>
+              {p.transaction.also_got.map((item, i) => (
+                <div key={i} className="pick-chain-item pick-chain-got">{item}</div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

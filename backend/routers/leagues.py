@@ -31,11 +31,20 @@ async def _sync_league(league_id: str, force: bool = False):
     if not league_info:
         raise HTTPException(status_code=404, detail="League not found")
 
-    rosters, users, traded_picks = await asyncio.gather(
+    rosters, users, traded_picks, *txn_results = await asyncio.gather(
         sleeper_client.get_rosters(league_id),
         sleeper_client.get_users(league_id),
         sleeper_client.get_traded_picks(league_id),
+        *[sleeper_client.get_transactions(league_id, leg) for leg in range(1, 19)],
     )
+    all_transactions = [t for leg_txns in txn_results for t in leg_txns
+                        if t.get("type") == "trade" and t.get("status") == "complete"]
+    # Map (season, round, original_roster_id) → list of transactions involving that pick
+    transaction_map: dict[tuple, list] = {}
+    for txn in all_transactions:
+        for dp in (txn.get("draft_picks") or []):
+            key = (str(dp["season"]), int(dp["round"]), int(dp["roster_id"]))
+            transaction_map.setdefault(key, []).append(txn)
 
     users_map = {u["user_id"]: u for u in users}
 
@@ -73,6 +82,8 @@ async def _sync_league(league_id: str, force: bool = False):
         current_season=current_season,
         draft_rounds=draft_rounds,
         roster_display_map=roster_display_map,
+        transaction_map=transaction_map,
+        players_cache=players_cache,
     )
 
     profiles = compute_league_profiles(

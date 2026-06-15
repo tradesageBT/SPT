@@ -31,6 +31,13 @@ async def get_traded_picks(league_id: str) -> list:
     return await _get(f"/league/{league_id}/traded_picks") or []
 
 
+async def get_transactions(league_id: str, leg: int) -> list:
+    try:
+        return await _get(f"/league/{league_id}/transactions/{leg}") or []
+    except Exception:
+        return []
+
+
 async def get_all_players() -> dict:
     """Returns giant map of sleeper_id -> player object. Cache daily."""
     return await _get("/players/nfl") or {}
