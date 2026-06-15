@@ -3,7 +3,7 @@ from contextlib import contextmanager
 import psycopg2
 import psycopg2.extras
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
+DATABASE_URL = os.environ.get("DATABASE_URL", "").replace("postgres://", "postgresql://", 1)
 
 
 class _Result:
@@ -52,7 +52,7 @@ class _Conn:
 
 @contextmanager
 def db():
-    conn = psycopg2.connect(DATABASE_URL)
+    conn = psycopg2.connect(DATABASE_URL, sslmode="require")
     wrapped = _Conn(conn)
     try:
         yield wrapped
