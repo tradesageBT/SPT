@@ -26,10 +26,15 @@ class _Conn:
         self._conn = conn
 
     def execute(self, sql, params=()):
-        # sqlite3 uses ? placeholders; postgres uses %s
         sql = sql.replace("?", "%s")
         cur = self._conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cur.execute(sql, params)
+        return _Result(cur)
+
+    def executemany(self, sql, params_seq):
+        sql = sql.replace("?", "%s")
+        cur = self._conn.cursor()
+        cur.executemany(sql, params_seq)
         return _Result(cur)
 
     def executescript(self, sql):
