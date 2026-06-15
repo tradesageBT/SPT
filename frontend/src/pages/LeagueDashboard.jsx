@@ -20,7 +20,20 @@ export default function LeagueDashboard() {
         setData(d)
         saveRecentLeague({ id: leagueId, name: d.league_name, season: d.season })
       })
-      .catch((e) => setError(e.message))
+      .catch(async () => {
+        // League not in DB (e.g. after a server restart) — auto-sync then load
+        try {
+          setSyncing(true)
+          await api.syncLeague(leagueId)
+          const d = await api.getLeague(leagueId)
+          setData(d)
+          saveRecentLeague({ id: leagueId, name: d.league_name, season: d.season })
+        } catch (e2) {
+          setError(e2.message)
+        } finally {
+          setSyncing(false)
+        }
+      })
       .finally(() => setLoading(false))
   }, [leagueId])
 
@@ -37,7 +50,7 @@ export default function LeagueDashboard() {
     }
   }
 
-  if (loading) return <LoadingSpinner message="Fetching league data…" />
+  if (loading) return <LoadingSpinner message={syncing ? 'Syncing league data…' : 'Fetching league data…'} />
   if (error) return (
     <div className="error-state">
       <p>❌ {error}</p>

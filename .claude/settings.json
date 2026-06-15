@@ -29,7 +29,11 @@
       "PowerShell(Start-Sleep -Seconds 3; \\(Invoke-WebRequest -Uri \"http://localhost:5173\" -UseBasicParsing\\).StatusCode)",
       "PowerShell(\\(Invoke-WebRequest -Uri \"http://localhost:5173\" -UseBasicParsing\\).StatusCode)",
       "PowerShell($resp = \\(Invoke-WebRequest -Uri \"http://localhost:8000/api/leagues/1312113980805742592/sync\" -Method POST -UseBasicParsing -TimeoutSec 60\\); $resp.Content)",
-      "PowerShell($resp = \\(Invoke-WebRequest -Uri \"http://localhost:8000/api/leagues/1312113980805742592/trades?roster_id=9\" -UseBasicParsing\\); $data = $resp.Content | ConvertFrom-Json; $data | Select-Object -First 4 | ForEach-Object { $aGives = \\($_.a_gives | ForEach-Object { $_.name }\\) -join \", \"; $bGives = \\($_.b_gives | ForEach-Object { $_.name }\\) -join \", \"; Write-Host \"$\\($_.team_a.display_name\\) gives [$aGives] \\(lineup_delta=$\\($_.lineup_delta_a\\)\\)\"; Write-Host \"$\\($_.team_b.display_name\\) gives [$bGives] \\(lineup_delta=$\\($_.lineup_delta_b\\)\\)\"; Write-Host \"---\" })"
+      "PowerShell($resp = \\(Invoke-WebRequest -Uri \"http://localhost:8000/api/leagues/1312113980805742592/trades?roster_id=9\" -UseBasicParsing\\); $data = $resp.Content | ConvertFrom-Json; $data | Select-Object -First 4 | ForEach-Object { $aGives = \\($_.a_gives | ForEach-Object { $_.name }\\) -join \", \"; $bGives = \\($_.b_gives | ForEach-Object { $_.name }\\) -join \", \"; Write-Host \"$\\($_.team_a.display_name\\) gives [$aGives] \\(lineup_delta=$\\($_.lineup_delta_a\\)\\)\"; Write-Host \"$\\($_.team_b.display_name\\) gives [$bGives] \\(lineup_delta=$\\($_.lineup_delta_b\\)\\)\"; Write-Host \"---\" })",
+      "Bash(git add *)",
+      "Bash(git update-index *)",
+      "Bash(git commit *)",
+      "Bash(git push *)"
     ]
   }
 }
