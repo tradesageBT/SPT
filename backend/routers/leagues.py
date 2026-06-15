@@ -35,7 +35,7 @@ async def _sync_league(league_id: str, force: bool = False):
         sleeper_client.get_rosters(league_id),
         sleeper_client.get_users(league_id),
         sleeper_client.get_traded_picks(league_id),
-        *[sleeper_client.get_transactions(league_id, leg) for leg in range(1, 19)],
+        *[sleeper_client.get_transactions(league_id, leg) for leg in range(0, 23)],
     )
     all_transactions = [t for leg_txns in txn_results for t in leg_txns
                         if t.get("type") == "trade" and t.get("status") == "complete"]

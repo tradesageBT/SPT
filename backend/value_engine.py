@@ -47,11 +47,12 @@ def _build_trade_chain(key: tuple, txn_list: list,
         if not pick_entry:
             continue
 
-        from_id = pick_entry.get("previous_owner_id")
         to_id = int(pick_entry.get("owner_id", 0))
-        if not from_id:
+        # Fall back to roster_id (original owner) if previous_owner_id not set
+        raw_from = pick_entry.get("previous_owner_id") or pick_entry.get("roster_id")
+        if not raw_from:
             continue
-        from_id = int(from_id)
+        from_id = int(raw_from)
 
         adds = txn.get("adds") or {}
         drops = txn.get("drops") or {}
