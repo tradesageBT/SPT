@@ -11,7 +11,13 @@ function SurplusTag({ pos, pct }) {
   )
 }
 
-function ConventionBadge({ score }) {
+const CUSTOM_BADGES = {
+  mchakiry: { label: 'Ass until 2027 Rookie Draft', cls: 'winnow' },
+}
+
+function ConventionBadge({ score, username }) {
+  const custom = CUSTOM_BADGES[username?.toLowerCase()]
+  if (custom) return <span className={`contention-badge ${custom.cls}`}>{custom.label}</span>
   if (score < 0.35) return <span className="contention-badge rebuild">Rebuilding</span>
   if (score > 0.65) return <span className="contention-badge winnow">Win-Now</span>
   return <span className="contention-badge mixed">Contending</span>
@@ -40,7 +46,7 @@ export default function TeamCard({ team, rank, maxValue, leagueId }) {
         )}
         <div>
           <div className="team-name">{team.display_name}</div>
-          <ConventionBadge score={team.contention_score} />
+          <ConventionBadge score={team.contention_score} username={team.display_name} />
         </div>
       </div>
 
