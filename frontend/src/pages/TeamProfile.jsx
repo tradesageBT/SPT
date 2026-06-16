@@ -231,7 +231,7 @@ export default function TeamProfile() {
             <span className="spt-count">{categorized.smash?.length ?? 0}</span>
           </h2>
           <p className="spt-desc">Core keepers — don't trade without elite return</p>
-          <PlayerTable players={categorized.smash || []} />
+          <PlayerTable players={categorized.smash || []} leagueId={leagueId} />
         </div>
         <div className="spt-col pass-col">
           <h2 className="spt-heading pass-heading">
@@ -239,7 +239,7 @@ export default function TeamProfile() {
             <span className="spt-count">{categorized.pass?.length ?? 0}</span>
           </h2>
           <p className="spt-desc">Tradeable pieces — moveable without gutting the roster</p>
-          <PlayerTable players={categorized.pass || []} />
+          <PlayerTable players={categorized.pass || []} leagueId={leagueId} />
         </div>
         <div className="spt-col trash-col">
           <h2 className="spt-heading trash-heading">
@@ -247,7 +247,7 @@ export default function TeamProfile() {
             <span className="spt-count">{categorized.trash?.length ?? 0}</span>
           </h2>
           <p className="spt-desc">Low-value — cut candidates</p>
-          <PlayerTable players={categorized.trash || []} />
+          <PlayerTable players={categorized.trash || []} leagueId={leagueId} />
         </div>
       </div>
 

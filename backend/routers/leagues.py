@@ -241,3 +241,170 @@ def _team_row_to_dict(row) -> dict:
         if d.get(field):
             d[field] = json.loads(d[field])
     return d
+
+
+async def _build_league_chain(league_id: str) -> list[str]:
+    """Walk previous_league_id links and return all league IDs oldest→newest."""
+    chain = [league_id]
+    seen = {league_id}
+    info = await sleeper_client.get_league(league_id)
+    prev_id = info.get("previous_league_id") if info else None
+    while prev_id and prev_id != "0" and prev_id not in seen:
+        chain.append(prev_id)
+        seen.add(prev_id)
+        prev_info = await sleeper_client.get_league(prev_id)
+        prev_id = prev_info.get("previous_league_id") if prev_info else None
+    return chain
+
+
+async def _build_drafted_picks_map(league_chain: list[str]) -> dict:
+    """
+    Returns {(season, round, orig_roster_id): {slot_in_round, player_name}}
+    for every pick that has actually been drafted across all seasons.
+    """
+    draft_lists = await asyncio.gather(*[sleeper_client.get_league_drafts(lid) for lid in league_chain])
+    complete_drafts = [
+        d for dl in draft_lists for d in dl
+        if d.get("status") == "complete" and d.get("slot_to_roster_id")
+    ]
+    if not complete_drafts:
+        return {}
+
+    detail_results = await asyncio.gather(*[
+        asyncio.gather(
+            sleeper_client.get_draft(d["draft_id"]),
+            sleeper_client.get_draft_picks(d["draft_id"]),
+        )
+        for d in complete_drafts
+    ])
+
+    drafted_map = {}
+    for draft_info, draft_picks in detail_results:
+        slot_to_roster = {int(k): int(v) for k, v in (draft_info.get("slot_to_roster_id") or {}).items()}
+        if not slot_to_roster:
+            continue
+        num_teams = draft_info.get("settings", {}).get("teams", len(slot_to_roster))
+        season = str(draft_info.get("season", ""))
+        for pick in draft_picks:
+            draft_slot = pick.get("draft_slot")
+            if draft_slot is None:
+                continue
+            roster_id = slot_to_roster.get(int(draft_slot))
+            if roster_id is None:
+                continue
+            rnd = pick.get("round", 0)
+            pick_no = pick.get("pick_no", 0)
+            slot_in_round = pick_no - (rnd - 1) * num_teams
+            meta = pick.get("metadata", {})
+            pname = f"{meta.get('first_name', '')} {meta.get('last_name', '')}".strip() or pick.get("player_id", "")
+            drafted_map[(season, rnd, roster_id)] = {
+                "round": rnd,
+                "slot_in_round": slot_in_round,
+                "player_name": pname,
+            }
+    return drafted_map
+
+
+_ROUND_LABEL = {1: "1st", 2: "2nd", 3: "3rd", 4: "4th"}
+
+
+@router.get("/{league_id}/player/{player_id}/history")
+async def get_player_history(league_id: str, player_id: str):
+    """Full trade history for a player across all dynasty seasons."""
+    from datetime import datetime, timezone
+
+    league_chain = await _build_league_chain(league_id)
+
+    rosters, users = await asyncio.gather(
+        sleeper_client.get_rosters(league_id),
+        sleeper_client.get_users(league_id),
+    )
+    users_map = {u["user_id"]: u for u in users}
+    rmap = {
+        r["roster_id"]: users_map.get(r.get("owner_id", ""), {}).get("display_name", f"Team {r['roster_id']}")
+        for r in rosters
+    }
+
+    # All transactions across all seasons + drafted picks map in parallel
+    txn_tasks = [
+        sleeper_client.get_transactions(lid, leg)
+        for lid in league_chain
+        for leg in range(0, 23)
+    ]
+    txn_results, drafted_map = await asyncio.gather(
+        asyncio.gather(*txn_tasks),
+        _build_drafted_picks_map(league_chain),
+    )
+
+    all_transactions = [
+        t for leg_txns in txn_results for t in leg_txns
+        if t.get("type") == "trade" and t.get("status") == "complete"
+        and (player_id in (t.get("adds") or {}) or player_id in (t.get("drops") or {}))
+    ]
+
+    players_cache = cache_manager.get_cached_players()
+
+    def _rname(rid):
+        return rmap.get(int(rid), f"Team {rid}") if rid is not None else "Unknown"
+
+    def _pick_str(dp):
+        season = str(dp.get("season", ""))
+        rnd = int(dp.get("round", 1))
+        orig_rid = int(dp.get("roster_id", 0))
+        rl = _ROUND_LABEL.get(rnd, f"Rd {rnd}")
+        drafted = drafted_map.get((season, rnd, orig_rid))
+        if drafted:
+            slot = drafted["slot_in_round"]
+            pname = drafted["player_name"]
+            return f"{season} {rl} ({rnd}.{slot:02d} – {pname})"
+        return f"{season} {rl} (originally {_rname(orig_rid)})"
+
+    def _pstr(pid):
+        p = players_cache.get(str(pid), {})
+        name = p.get("name", f"Player {pid}")
+        pos = p.get("position", "")
+        return f"{name} ({pos})" if pos else name
+
+    trades = []
+    for txn in sorted(all_transactions, key=lambda t: t.get("created") or 0):
+        adds = txn.get("adds") or {}
+        drops = txn.get("drops") or {}
+        new_rid = int(adds[player_id]) if player_id in adds else None
+        old_rid = int(drops[player_id]) if player_id in drops else None
+
+        created = txn.get("created")
+        date_str = (datetime.fromtimestamp(created / 1000, tz=timezone.utc).strftime("%b %d, %Y")
+                    if created else None)
+
+        gave_up, also_received = [], []
+        if new_rid is not None:
+            for pid, prev_rid in drops.items():
+                if str(pid) != player_id and int(prev_rid) == new_rid:
+                    gave_up.append(_pstr(pid))
+            for dp in (txn.get("draft_picks") or []):
+                if int(dp.get("previous_owner_id", -1)) == new_rid:
+                    gave_up.append(_pick_str(dp))
+            for pid, nr in adds.items():
+                if str(pid) != player_id and int(nr) == new_rid:
+                    also_received.append(_pstr(pid))
+            for dp in (txn.get("draft_picks") or []):
+                if (int(dp.get("owner_id", -1)) == new_rid
+                        and int(dp.get("previous_owner_id", -1)) != new_rid):
+                    also_received.append(_pick_str(dp))
+
+        trades.append({
+            "date": date_str,
+            "from": _rname(old_rid),
+            "to": _rname(new_rid),
+            "gave_up": gave_up,
+            "also_received": also_received,
+        })
+
+    p_info = players_cache.get(str(player_id), {})
+    return {
+        "player_id": player_id,
+        "player_name": p_info.get("name", player_id),
+        "position": p_info.get("position", ""),
+        "nfl_team": p_info.get("nfl_team", ""),
+        "trades": trades,
+    }

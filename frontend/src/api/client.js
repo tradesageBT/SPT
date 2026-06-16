@@ -30,4 +30,5 @@ export const api = {
     return request(`/leagues/${leagueId}/trades${qs ? `?${qs}` : ''}`)
   },
   getLeaguePlayers: (leagueId) => request(`/leagues/${leagueId}/players`),
+  getPlayerHistory: (leagueId, playerId) => request(`/leagues/${leagueId}/player/${playerId}/history`),
 }

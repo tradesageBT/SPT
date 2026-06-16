@@ -281,6 +281,8 @@ img { display: block; }
 .player-table { display: flex; flex-direction: column; gap: 4px; }
 .player-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 0.82rem; }
 .player-row:last-child { border-bottom: none; }
+.player-row-clickable { cursor: pointer; border-radius: 6px; padding-left: 4px; padding-right: 4px; margin: 0 -4px; transition: background 0.12s; }
+.player-row-clickable:hover { background: rgba(255,255,255,0.05); }
 .player-pos-badge { padding: 1px 5px; border-radius: 3px; font-size: 0.68rem; font-weight: 700; color: #0d1018; flex-shrink: 0; }
 .player-name  { flex: 1; font-weight: 500; }
 .player-team  { color: var(--text-muted); font-size: 0.75rem; }
