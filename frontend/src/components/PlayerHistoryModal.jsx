@@ -41,9 +41,11 @@ export default function PlayerHistoryModal({ leagueId, player, onClose }) {
           )}
           {data && data.drafted_as && (
             <div className="player-draft-entry">
-              <span className="pick-chain-section-label">Entered league via rookie draft</span>
+              <span className="pick-chain-section-label">
+                {data.drafted_as.is_startup ? 'Entered league via startup draft' : 'Entered league via rookie draft'}
+              </span>
               <div className="player-draft-slot">
-                {data.drafted_as.season} Rookie Draft &mdash; Pick {data.drafted_as.round}.{String(data.drafted_as.slot_in_round).padStart(2, '0')}
+                {data.drafted_as.season} {data.drafted_as.is_startup ? 'Startup Draft' : 'Rookie Draft'} &mdash; Pick {data.drafted_as.round}.{String(data.drafted_as.slot_in_round).padStart(2, '0')}
               </div>
             </div>
           )}

@@ -293,6 +293,8 @@ async def _build_drafted_picks_map(league_chain: list[str]) -> tuple[dict, dict]
         if not slot_to_roster:
             continue
         num_teams = draft_info.get("settings", {}).get("teams", len(slot_to_roster))
+        total_rounds = draft_info.get("settings", {}).get("rounds", 4)
+        is_startup = total_rounds >= 8
         season = str(draft_info.get("season", ""))
         for pick in draft_picks:
             draft_slot = pick.get("draft_slot")
@@ -310,10 +312,16 @@ async def _build_drafted_picks_map(league_chain: list[str]) -> tuple[dict, dict]
                 "round": rnd,
                 "slot_in_round": slot_in_round,
                 "player_name": pname,
+                "is_startup": is_startup,
             }
             pid = pick.get("player_id", "")
             if pid:
-                player_draft[str(pid)] = {"season": season, "round": rnd, "slot_in_round": slot_in_round}
+                player_draft[str(pid)] = {
+                    "season": season,
+                    "round": rnd,
+                    "slot_in_round": slot_in_round,
+                    "is_startup": is_startup,
+                }
     return drafted_map, player_draft
 
 
