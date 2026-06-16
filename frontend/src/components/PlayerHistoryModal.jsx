@@ -39,9 +39,17 @@ export default function PlayerHistoryModal({ leagueId, player, onClose }) {
           {error && (
             <div style={{ color: '#e05c5c', padding: '12px 0' }}>Error: {error}</div>
           )}
+          {data && data.drafted_as && (
+            <div className="player-draft-entry">
+              <span className="pick-chain-section-label">Entered league via rookie draft</span>
+              <div className="player-draft-slot">
+                {data.drafted_as.season} Rookie Draft &mdash; Pick {data.drafted_as.round}.{String(data.drafted_as.slot_in_round).padStart(2, '0')}
+              </div>
+            </div>
+          )}
           {data && data.trades.length === 0 && (
-            <div style={{ color: 'var(--text-muted)', fontStyle: 'italic', padding: '12px 0' }}>
-              No trade history found — player may have been on the same roster since league inception.
+            <div style={{ color: 'var(--text-muted)', fontStyle: 'italic', padding: data.drafted_as ? '4px 0' : '12px 0' }}>
+              {data.drafted_as ? 'No subsequent trades.' : 'No trade or draft history found for this player.'}
             </div>
           )}
           {data && data.trades.map((t, i) => (

@@ -402,6 +402,8 @@ img { display: block; }
 }
 .modal-close:hover { color: var(--text); background: rgba(255,255,255,0.08); }
 .modal-body { padding: 16px 20px 20px; }
+.player-draft-entry { padding: 10px 12px; background: rgba(255,255,255,0.04); border-radius: 8px; margin-bottom: 12px; }
+.player-draft-slot { font-size: 0.9rem; font-weight: 600; color: var(--accent); margin-top: 3px; }
 .pick-hop-teams { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 0.85rem; font-weight: 600; }
 .pick-chain-title { font-size: 0.7rem; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
 .pick-chain-steps { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; font-size: 0.78rem; margin-bottom: 4px; }
