@@ -20,22 +20,17 @@ SKILL_POS       = {"QB", "RB", "WR", "TE"}
 def categorize_players(profile: dict) -> dict:
     smash, passable, trash = [], [], []
 
-    starter_set = {p["sleeper_id"] for p in profile["players"] if p.get("is_starter")}
     players = profile["players"]  # include taxi and IR
 
-    sorted_by_value = sorted(
-        [p for p in players if not p.get("on_ir") and not p.get("on_taxi")],
-        key=lambda x: x["fc_value"], reverse=True,
-    )
+    sorted_by_value = sorted(players, key=lambda x: x["fc_value"], reverse=True)
     top_two_ids = {p["sleeper_id"] for p in sorted_by_value[:2]}
 
     for p in players:
         v = p["fc_value"]
-        is_starter = p["sleeper_id"] in starter_set
         is_top = p["sleeper_id"] in top_two_ids
         entry = {**p, "is_top": is_top}
 
-        if is_top or (v >= SMASH_VALUE and is_starter):
+        if is_top or v >= SMASH_VALUE:
             smash.append(entry)
         elif v >= PASS_VALUE:
             passable.append(entry)
