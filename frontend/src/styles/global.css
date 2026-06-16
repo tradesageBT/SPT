@@ -218,6 +218,7 @@ img { display: block; }
 .contention-badge.winnow  { background: rgba(224,92,92,0.2);  color: var(--danger); }
 .contention-badge.mixed   { background: rgba(1,217,172,0.2);  color: var(--accent); }
 .contention-badge.neutral { background: rgba(139,144,176,0.2); color: var(--text-muted); }
+.contention-badge.urgent { background: rgba(224,164,92,0.2); color: var(--warn); }
 
 /* ── Team Profile ────────────────────────────────────────────────────────── */
 .profile-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }

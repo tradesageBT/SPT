@@ -16,16 +16,29 @@ def _percentile(sorted_vals: list[int], pct: float) -> float:
     return sorted_vals[lo] + (sorted_vals[hi] - sorted_vals[lo]) * (idx - lo)
 
 
-def _classify_contention(score: float, pick_ratio: float, top_third: bool) -> str:
-    if score >= 0.7:
-        return "All-In" if pick_ratio < 0.5 else "Championship Window"
+def _classify_contention(score: float, pick_ratio: float, strength_tier: str) -> str:
+    """
+    strength_tier (total-value rank vs. league) drives the category since a young,
+    loaded roster is a great spot to be in — not a rebuild. Age/pick capital only
+    shade the label within a strength tier.
+    """
+    if strength_tier == "top":
+        if score >= 0.55:
+            return "Championship Window"
+        if score >= 0.4:
+            return "Sustainable Contender"
+        return "Ascending"
+    if strength_tier == "mid":
+        if score >= 0.55:
+            return "Win-Now Push"
+        if score >= 0.4:
+            return "Treading Water"
+        return "Ascending" if pick_ratio >= 1.0 else "Retooling"
     if score >= 0.55:
-        return "Sustainable Contender"
-    if score >= 0.45:
-        return "Treading Water"
-    if score >= 0.35:
-        return "Ascending" if pick_ratio >= 1.0 or top_third else "Retooling"
-    return "Full Rebuild" if pick_ratio >= 1.0 else "Retooling"
+        return "Fire Sale"
+    if score >= 0.4:
+        return "Retooling"
+    return "Full Rebuild" if pick_ratio >= 0.8 else "Treading Water"
 
 
 def _player_entry(pid: str, players_cache: dict) -> dict:
@@ -387,9 +400,14 @@ def compute_league_profiles(
             profile["pick_value"] / league_avg_pick_value if league_avg_pick_value > 0 else 1.0
         )
         rank = value_rank[profile["roster_id"]]
-        top_third = rank <= top_cut
+        if rank <= top_cut:
+            strength_tier = "top"
+        elif rank > n - top_cut:
+            strength_tier = "bottom"
+        else:
+            strength_tier = "mid"
         profile["contention_category"] = _classify_contention(
-            profile["contention_score"], pick_ratio, top_third
+            profile["contention_score"], pick_ratio, strength_tier
         )
 
     # Estimate projected pick slot using current player value as standings proxy.
