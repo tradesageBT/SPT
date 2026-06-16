@@ -413,8 +413,9 @@ img { display: block; }
 .pick-chain-section { margin-top: 6px; }
 .pick-chain-section-label { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 3px; }
 .pick-chain-item { font-size: 0.76rem; padding: 1px 0; }
-.pick-chain-gave { color: #e05c5c; }
-.pick-chain-got  { color: var(--accent); }
+.pick-chain-gave  { color: #e05c5c; }
+.pick-chain-got   { color: var(--accent); }
+.pick-chain-focal { color: var(--accent); font-weight: 700; }
 .pick-hop { padding: 8px 0; border-top: 1px solid var(--border); }
 .pick-hop:first-child { border-top: none; padding-top: 0; }
 .pick-hop-header { display: flex; align-items: center; gap: 2px; font-size: 0.8rem; flex-wrap: wrap; }
