@@ -42,16 +42,16 @@ function TradeModal({ p, ownerName, onClose }) {
                 </div>
                 {hop.date && <span className="pick-hop-date">{hop.date}</span>}
               </div>
-              {hop.cost?.length > 0 && (
-                <div className="pick-chain-section">
-                  <span className="pick-chain-section-label">{hop.to} gave up</span>
-                  {hop.cost.map((item, j) => <div key={j} className="pick-chain-item pick-chain-gave">• {item}</div>)}
-                </div>
-              )}
               {hop.bonus?.length > 0 && (
                 <div className="pick-chain-section">
-                  <span className="pick-chain-section-label">{hop.to} also received</span>
+                  <span className="pick-chain-section-label">{hop.to} received</span>
                   {hop.bonus.map((item, j) => <div key={j} className="pick-chain-item pick-chain-got">• {item}</div>)}
+                </div>
+              )}
+              {hop.cost?.length > 0 && (
+                <div className="pick-chain-section">
+                  <span className="pick-chain-section-label">{hop.from} received</span>
+                  {hop.cost.map((item, j) => <div key={j} className="pick-chain-item pick-chain-gave">• {item}</div>)}
                 </div>
               )}
               {!hop.cost?.length && !hop.bonus?.length && (

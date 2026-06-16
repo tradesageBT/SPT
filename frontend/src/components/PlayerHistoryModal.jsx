@@ -65,9 +65,7 @@ export default function PlayerHistoryModal({ leagueId, player, onClose }) {
               {t.to !== 'Unknown' && (
                 <div className="pick-chain-section">
                   <span className="pick-chain-section-label">{t.to} received</span>
-                  <div className="pick-chain-item pick-chain-focal">
-                    • {data.player_name}{data.position ? ` (${data.position})` : ''}
-                  </div>
+                  <div className="pick-chain-item pick-chain-focal">• {data.player_name}{data.position ? ` (${data.position})` : ''}</div>
                   {t.also_received.map((item, j) => (
                     <div key={j} className="pick-chain-item pick-chain-got">• {item}</div>
                   ))}
@@ -75,7 +73,7 @@ export default function PlayerHistoryModal({ leagueId, player, onClose }) {
               )}
               {t.gave_up.length > 0 && (
                 <div className="pick-chain-section">
-                  <span className="pick-chain-section-label">{t.to} gave up</span>
+                  <span className="pick-chain-section-label">{t.from} received</span>
                   {t.gave_up.map((item, j) => (
                     <div key={j} className="pick-chain-item pick-chain-gave">• {item}</div>
                   ))}
