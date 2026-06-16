@@ -250,6 +250,8 @@ def compute_team_profile(
         entry = _player_entry(pid, players_cache)
         value = entry["fc_value"]
         pos = entry["position"]
+        if pos not in SKILL_POSITIONS:
+            continue
         age = entry.get("age") or 25.0
 
         player_value += value
