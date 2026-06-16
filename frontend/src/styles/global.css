@@ -287,6 +287,9 @@ img { display: block; }
 .player-name  { flex: 1; font-weight: 500; }
 .player-team  { color: var(--text-muted); font-size: 0.75rem; }
 .player-age   { color: var(--text-muted); font-size: 0.75rem; }
+.player-status-badge { font-size: 0.6rem; font-weight: 700; padding: 1px 4px; border-radius: 3px; letter-spacing: 0.04em; flex-shrink: 0; }
+.status-taxi { background: rgba(224, 164, 92, 0.2); color: #e0a45c; border: 1px solid rgba(224,164,92,0.4); }
+.status-ir   { background: rgba(224, 92, 92, 0.15); color: #e05c5c; border: 1px solid rgba(224,92,92,0.35); }
 .player-value { color: var(--accent); font-weight: 600; min-width: 52px; text-align: right; }
 .empty-players { color: var(--text-muted); font-size: 0.82rem; padding: 8px 0; }
 

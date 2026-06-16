@@ -24,6 +24,8 @@ export default function PlayerTable({ players = [], leagueId }) {
               {p.position || '?'}
             </span>
             <span className="player-name">{p.name}</span>
+            {p.on_taxi && <span className="player-status-badge status-taxi">TAXI</span>}
+            {p.on_ir && <span className="player-status-badge status-ir">IR</span>}
             <span className="player-team">{p.nfl_team}</span>
             {p.age && <span className="player-age">{p.age}y</span>}
             <span className="player-value">{fmt(p.fc_value)}</span>
