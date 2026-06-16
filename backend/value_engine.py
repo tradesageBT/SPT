@@ -189,16 +189,17 @@ def compute_team_profile(
     display_name = user.get("display_name", f"Team {roster['roster_id']}")
     avatar = user.get("avatar")
 
-    player_ids: list[str] = [
-        pid for pid in (roster.get("players") or [])
-        if pid and pid != "0"
-    ]
+    taxi_ids: set[str] = set(p for p in (roster.get("taxi") or []) if p and p != "0")
+    reserve_ids: set[str] = set(p for p in (roster.get("reserve") or []) if p and p != "0")
+
+    # Sleeper keeps taxi/IR in separate arrays that may not appear in roster["players"]
+    base_ids = set(pid for pid in (roster.get("players") or []) if pid and pid != "0")
+    player_ids: list[str] = list(base_ids | taxi_ids | reserve_ids)
+
     starter_ids: set[str] = set(
         pid for pid in (roster.get("starters") or [])
         if pid and pid != "0"
     )
-    taxi_ids: set[str] = set(roster.get("taxi") or [])
-    reserve_ids: set[str] = set(roster.get("reserve") or [])
     picks: list[dict] = roster_picks or []
 
     player_value = 0
