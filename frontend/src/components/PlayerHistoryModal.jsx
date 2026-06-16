@@ -62,6 +62,17 @@ export default function PlayerHistoryModal({ leagueId, player, onClose }) {
                 </div>
                 {t.date && <span className="pick-hop-date">{t.date}</span>}
               </div>
+              {t.to !== 'Unknown' && (
+                <div className="pick-chain-section">
+                  <span className="pick-chain-section-label">{t.to} received</span>
+                  <div className="pick-chain-item pick-chain-focal">
+                    • {data.player_name}{data.position ? ` (${data.position})` : ''}
+                  </div>
+                  {t.also_received.map((item, j) => (
+                    <div key={j} className="pick-chain-item pick-chain-got">• {item}</div>
+                  ))}
+                </div>
+              )}
               {t.gave_up.length > 0 && (
                 <div className="pick-chain-section">
                   <span className="pick-chain-section-label">{t.to} gave up</span>
@@ -70,15 +81,7 @@ export default function PlayerHistoryModal({ leagueId, player, onClose }) {
                   ))}
                 </div>
               )}
-              {t.also_received.length > 0 && (
-                <div className="pick-chain-section">
-                  <span className="pick-chain-section-label">{t.to} also received</span>
-                  {t.also_received.map((item, j) => (
-                    <div key={j} className="pick-chain-item pick-chain-got">• {item}</div>
-                  ))}
-                </div>
-              )}
-              {t.gave_up.length === 0 && t.also_received.length === 0 && (
+              {t.to === 'Unknown' && t.gave_up.length === 0 && t.also_received.length === 0 && (
                 <div className="pick-chain-item" style={{ fontStyle: 'italic', opacity: 0.5 }}>
                   No exchange details on record
                 </div>
