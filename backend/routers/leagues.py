@@ -257,18 +257,21 @@ async def _build_league_chain(league_id: str) -> list[str]:
     return chain
 
 
-async def _build_drafted_picks_map(league_chain: list[str]) -> dict:
+async def _build_drafted_picks_map(league_chain: list[str]) -> tuple[dict, dict]:
     """
-    Returns {(season, round, orig_roster_id): {slot_in_round, player_name}}
+    Returns:
+      drafted_map:     {(season, round, orig_roster_id): {slot_in_round, player_name}}
+      player_draft:    {player_id: {season, round, slot_in_round}}
     for every pick that has actually been drafted across all seasons.
     """
     draft_lists = await asyncio.gather(*[sleeper_client.get_league_drafts(lid) for lid in league_chain])
+    # slot_to_roster_id is NOT in the list response; only filter on status
     complete_drafts = [
         d for dl in draft_lists for d in dl
-        if d.get("status") == "complete" and d.get("slot_to_roster_id")
+        if d.get("status") == "complete"
     ]
     if not complete_drafts:
-        return {}
+        return {}, {}
 
     detail_results = await asyncio.gather(*[
         asyncio.gather(
@@ -279,6 +282,7 @@ async def _build_drafted_picks_map(league_chain: list[str]) -> dict:
     ])
 
     drafted_map = {}
+    player_draft = {}
     for draft_info, draft_picks in detail_results:
         slot_to_roster = {int(k): int(v) for k, v in (draft_info.get("slot_to_roster_id") or {}).items()}
         if not slot_to_roster:
@@ -302,7 +306,10 @@ async def _build_drafted_picks_map(league_chain: list[str]) -> dict:
                 "slot_in_round": slot_in_round,
                 "player_name": pname,
             }
-    return drafted_map
+            pid = pick.get("player_id", "")
+            if pid:
+                player_draft[str(pid)] = {"season": season, "round": rnd, "slot_in_round": slot_in_round}
+    return drafted_map, player_draft
 
 
 _ROUND_LABEL = {1: "1st", 2: "2nd", 3: "3rd", 4: "4th"}
@@ -331,7 +338,7 @@ async def get_player_history(league_id: str, player_id: str):
         for lid in league_chain
         for leg in range(0, 23)
     ]
-    txn_results, drafted_map = await asyncio.gather(
+    txn_results, (drafted_map, player_draft) = await asyncio.gather(
         asyncio.gather(*txn_tasks),
         _build_drafted_picks_map(league_chain),
     )
@@ -406,5 +413,6 @@ async def get_player_history(league_id: str, player_id: str):
         "player_name": p_info.get("name", player_id),
         "position": p_info.get("position", ""),
         "nfl_team": p_info.get("nfl_team", ""),
+        "drafted_as": player_draft.get(str(player_id)),
         "trades": trades,
     }
