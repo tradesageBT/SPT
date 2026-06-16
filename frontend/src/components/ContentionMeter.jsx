@@ -1,9 +1,8 @@
-export default function ContentionMeter({ score = 0.5 }) {
+import { contentionClass, CONTENTION_COLOR } from '../utils/contention'
+
+export default function ContentionMeter({ score = 0.5, category = 'Treading Water' }) {
   const pct = Math.round(score * 100)
-  let label, color
-  if (score < 0.35) { label = 'Rebuilding'; color = '#5cb8e0' }
-  else if (score > 0.65) { label = 'Win-Now'; color = '#e05c5c' }
-  else { label = 'Contending'; color = '#01d9ac' }
+  const color = CONTENTION_COLOR[contentionClass(category)]
 
   return (
     <div className="contention-meter">
@@ -13,7 +12,7 @@ export default function ContentionMeter({ score = 0.5 }) {
       </div>
       <div className="contention-labels">
         <span>Rebuild</span>
-        <span style={{ color }} className="contention-label-center">{label}</span>
+        <span style={{ color }} className="contention-label-center">{category}</span>
         <span>Win-Now</span>
       </div>
     </div>
