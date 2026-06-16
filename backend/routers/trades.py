@@ -19,7 +19,7 @@ def _load_profiles(league_id: str) -> list[dict]:
     profiles = []
     for row in rows:
         d = dict(row)
-        for f in ("positional_breakdown", "positional_surplus"):
+        for f in ("positional_breakdown", "positional_surplus", "positional_need"):
             d[f] = json.loads(d[f]) if d.get(f) else {}
         roster_data = json.loads(d.get("roster_data") or "{}")
         d["players"] = roster_data.get("players", [])

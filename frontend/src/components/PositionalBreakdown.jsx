@@ -1,5 +1,6 @@
 const POSITIONS = ['QB', 'RB', 'WR', 'TE']
 const POS_COLOR = { QB: '#e05c5c', RB: '#5cb8e0', WR: '#01d9ac', TE: '#e0a45c' }
+const NEED_COLOR = { Need: 'var(--danger)', Adequate: 'var(--text-muted)', Strength: 'var(--accent)' }
 
 function SurplusBar({ pct }) {
   const clamped = Math.max(-100, Math.min(100, pct))
@@ -27,16 +28,17 @@ function SurplusBar({ pct }) {
   )
 }
 
-export default function PositionalBreakdown({ breakdown, surplus }) {
+export default function PositionalBreakdown({ breakdown, surplus, need = {} }) {
   const maxVal = Math.max(...POSITIONS.map((p) => breakdown[p] || 0), 1)
 
   return (
     <div className="positional-section">
-      <h2 className="section-title">Positional Breakdown vs League Avg</h2>
+      <h2 className="section-title">Starting Lineup Strength vs League Avg</h2>
       <div className="positional-grid">
         {POSITIONS.map((pos) => {
           const val = breakdown[pos] || 0
           const sp = surplus[pos] ?? 0
+          const needLevel = need[pos]
           const barW = Math.round((val / maxVal) * 100)
           return (
             <div key={pos} className="pos-card">
@@ -51,6 +53,11 @@ export default function PositionalBreakdown({ breakdown, surplus }) {
                 />
               </div>
               <SurplusBar pct={sp} />
+              {needLevel && (
+                <span className="pos-need-tag" style={{ color: NEED_COLOR[needLevel] }}>
+                  {needLevel}
+                </span>
+              )}
             </div>
           )
         })}

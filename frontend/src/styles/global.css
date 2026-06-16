@@ -217,6 +217,7 @@ img { display: block; }
 .contention-badge.rebuild { background: rgba(92,184,224,0.2); color: var(--info); }
 .contention-badge.winnow  { background: rgba(224,92,92,0.2);  color: var(--danger); }
 .contention-badge.mixed   { background: rgba(1,217,172,0.2);  color: var(--accent); }
+.contention-badge.neutral { background: rgba(139,144,176,0.2); color: var(--text-muted); }
 
 /* ── Team Profile ────────────────────────────────────────────────────────── */
 .profile-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
@@ -266,6 +267,7 @@ img { display: block; }
 .pos-bar-label { font-size: 0.72rem; font-weight: 600; min-width: 40px; text-align: right; }
 .label-pos { color: var(--accent); }
 .label-neg { color: var(--danger); }
+.pos-need-tag { display: inline-block; margin-top: 8px; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
 
 /* ── SPT Section ─────────────────────────────────────────────────────────── */
 .spt-section { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 32px; }

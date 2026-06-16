@@ -1,9 +1,31 @@
 """
 Computes per-team value profiles from Sleeper roster data + cached FC values.
 """
+import math
 from cache_manager import resolve_pick_value
 
 SKILL_POSITIONS = ["QB", "RB", "WR", "TE"]
+
+
+def _percentile(sorted_vals: list[int], pct: float) -> float:
+    if not sorted_vals:
+        return 0.0
+    idx = pct * (len(sorted_vals) - 1)
+    lo = int(idx)
+    hi = min(lo + 1, len(sorted_vals) - 1)
+    return sorted_vals[lo] + (sorted_vals[hi] - sorted_vals[lo]) * (idx - lo)
+
+
+def _classify_contention(score: float, pick_ratio: float, top_third: bool) -> str:
+    if score >= 0.7:
+        return "All-In" if pick_ratio < 0.5 else "Championship Window"
+    if score >= 0.55:
+        return "Sustainable Contender"
+    if score >= 0.45:
+        return "Treading Water"
+    if score >= 0.35:
+        return "Ascending" if pick_ratio >= 1.0 or top_third else "Retooling"
+    return "Full Rebuild" if pick_ratio >= 1.0 else "Retooling"
 
 
 def _player_entry(pid: str, players_cache: dict) -> dict:
@@ -206,6 +228,7 @@ def compute_team_profile(
     starter_value = 0
     bench_value = 0
     positional: dict[str, int] = {p: 0 for p in SKILL_POSITIONS}
+    positional_starters: dict[str, list[int]] = {p: [] for p in SKILL_POSITIONS}
     age_weighted_sum = 0.0
     age_weight_total = 0.0
     enriched_players: list[dict] = []
@@ -228,6 +251,8 @@ def compute_team_profile(
 
         if pos in positional:
             positional[pos] += value
+            if is_starter:
+                positional_starters[pos].append(value)
 
         if value > 0:
             age_w = max(0.0, min(1.0, (age - 22.0) / 10.0))
@@ -279,8 +304,12 @@ def compute_team_profile(
         "starter_value": starter_value,
         "bench_value": bench_value,
         "positional_breakdown": positional,
-        "positional_surplus": {},  # filled after league-wide pass
+        "positional_starter_value": {pos: sum(vals) for pos, vals in positional_starters.items()},
+        "positional_starters": positional_starters,  # raw per-slot values, stripped before persisting
+        "positional_surplus": {},   # filled after league-wide pass
+        "positional_need": {},      # filled after league-wide pass
         "contention_score": round(contention_score, 3),
+        "contention_category": "Treading Water",  # filled after league-wide pass
         "players": enriched_players,
         "picks": enriched_picks,
     }
@@ -304,25 +333,64 @@ def compute_league_profiles(
         for r in rosters
     ]
 
-    # League-average positional values
-    league_avg: dict[str, float] = {p: 0.0 for p in SKILL_POSITIONS}
+    # Starter-value comparison: only value that actually plays each week counts,
+    # so bench depth doesn't mask a thin starting lineup (or vice versa).
     n = len(profiles)
+    league_avg_starters: dict[str, float] = {p: 0.0 for p in SKILL_POSITIONS}
     if n:
         for pos in SKILL_POSITIONS:
-            league_avg[pos] = sum(
-                t["positional_breakdown"].get(pos, 0) for t in profiles
+            league_avg_starters[pos] = sum(
+                t["positional_starter_value"].get(pos, 0) for t in profiles
             ) / n
+
+    # Slot-based need: where does a team's starter at this position rank against
+    # every other starter league-wide at the same position?
+    all_starters_by_pos: dict[str, list[int]] = {p: [] for p in SKILL_POSITIONS}
+    for t in profiles:
+        for pos in SKILL_POSITIONS:
+            all_starters_by_pos[pos].extend(t["positional_starters"].get(pos, []))
+    p25 = {pos: _percentile(sorted(vals), 0.25) for pos, vals in all_starters_by_pos.items()}
+    p75 = {pos: _percentile(sorted(vals), 0.75) for pos, vals in all_starters_by_pos.items()}
 
     for profile in profiles:
         surplus: dict[str, float] = {}
+        need: dict[str, str] = {}
         for pos in SKILL_POSITIONS:
-            avg = league_avg[pos]
-            team_val = profile["positional_breakdown"].get(pos, 0)
-            if avg > 0:
-                surplus[pos] = round((team_val - avg) / avg * 100, 1)
+            avg = league_avg_starters[pos]
+            team_val = profile["positional_starter_value"].get(pos, 0)
+            surplus[pos] = round((team_val - avg) / avg * 100, 1) if avg > 0 else 0.0
+
+            starters_at_pos = profile["positional_starters"].get(pos, [])
+            if not starters_at_pos:
+                need[pos] = "Need"
+            elif min(starters_at_pos) < p25[pos]:
+                need[pos] = "Need"
+            elif max(starters_at_pos) > p75[pos]:
+                need[pos] = "Strength"
             else:
-                surplus[pos] = 0.0
+                need[pos] = "Adequate"
         profile["positional_surplus"] = surplus
+        profile["positional_need"] = need
+        del profile["positional_starters"]
+
+    # Tailored contention categories — blend roster age (contention_score) with
+    # future draft capital and overall roster strength rather than a flat 3-way split.
+    league_avg_pick_value = sum(p["pick_value"] for p in profiles) / n if n else 0
+    by_total_value = sorted(profiles, key=lambda t: t["total_value"], reverse=True)
+    value_rank: dict[int, int] = {
+        p["roster_id"]: rank for rank, p in enumerate(by_total_value, start=1)
+    }
+    top_cut = math.ceil(n / 3) if n else 0
+
+    for profile in profiles:
+        pick_ratio = (
+            profile["pick_value"] / league_avg_pick_value if league_avg_pick_value > 0 else 1.0
+        )
+        rank = value_rank[profile["roster_id"]]
+        top_third = rank <= top_cut
+        profile["contention_category"] = _classify_contention(
+            profile["contention_score"], pick_ratio, top_third
+        )
 
     # Estimate projected pick slot using current player value as standings proxy.
     # Worst player value → picks first (slot 1). ±1 pick gives the range.

@@ -136,5 +136,8 @@ def init_db():
                 roster_data             TEXT,
                 computed_at             TEXT,
                 UNIQUE(sleeper_league_id, roster_id)
-            )
+            );
+
+            ALTER TABLE teams ADD COLUMN IF NOT EXISTS positional_need TEXT;
+            ALTER TABLE teams ADD COLUMN IF NOT EXISTS contention_category TEXT;
         """)

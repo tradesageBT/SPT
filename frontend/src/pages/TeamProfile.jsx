@@ -213,7 +213,7 @@ export default function TeamProfile() {
 
         <div className="stat-card">
           <h3>Contention Window</h3>
-          <ContentionMeter score={data.contention_score} />
+          <ContentionMeter score={data.contention_score} category={data.contention_category} />
         </div>
       </div>
 
@@ -221,6 +221,7 @@ export default function TeamProfile() {
       <PositionalBreakdown
         breakdown={data.positional_breakdown || {}}
         surplus={data.positional_surplus || {}}
+        need={data.positional_need || {}}
       />
 
       {/* SPT categorization */}
