@@ -66,17 +66,26 @@ async def _sync_league(league_id: str, force: bool = False):
             key = (str(dp["season"]), int(dp["round"]), int(dp["roster_id"]))
             transaction_map.setdefault(key, []).append(txn)
 
-    # Build player acquisition map: how did each player land on their current team?
-    # Sorted by created so the most recent event wins per (player, roster) pair.
-    player_acquisition: dict[tuple, dict] = {}
+    # Build acquisition maps split by type.
+    # Season-rollover free_agent transactions (created when Sleeper imports rosters to a new
+    # season) look identical to real FA adds and would incorrectly overwrite draft/trade history.
+    # We resolve this with a priority: trade > drafted-by-this-roster > FA/waiver.
+    player_trade_acq: dict[tuple, dict] = {}   # most recent trade per (player, roster)
+    player_fa_acq: dict[tuple, dict] = {}      # most recent FA/waiver per (player, roster)
     for txn in sorted(all_transactions_raw, key=lambda t: t.get("created") or 0):
         txn_type = txn.get("type", "")
         if txn_type not in ("trade", "free_agent", "waiver"):
             continue
         faab = txn.get("settings", {}).get("waiver_bid") if txn_type == "waiver" else None
         for pid, rid in (txn.get("adds") or {}).items():
-            acq = "traded" if txn_type == "trade" else "claimed"
-            player_acquisition[(str(pid), int(rid))] = {"type": acq, "faab": faab}
+            key = (str(pid), int(rid))
+            if txn_type == "trade":
+                player_trade_acq[key] = {"type": "traded", "faab": None}
+            else:
+                player_fa_acq[key] = {"type": "claimed", "faab": faab}
+
+    # Get drafted players so season-rollover FAs don't mask "homegrown" status
+    _, player_draft = await _build_drafted_picks_map(league_chain)
 
     users_map = {u["user_id"]: u for u in users}
 
@@ -124,10 +133,25 @@ async def _sync_league(league_id: str, force: bool = False):
 
     for profile in profiles:
         for player in profile["players"]:
-            key = (player["sleeper_id"], profile["roster_id"])
-            info = player_acquisition.get(key)
-            player["acquisition_type"] = info["type"] if info else "homegrown"
-            player["faab_bid"] = info["faab"] if info and info["type"] == "claimed" else None
+            pid = player["sleeper_id"]
+            roster_id = profile["roster_id"]
+            key = (pid, roster_id)
+            draft_info = player_draft.get(pid)
+            if key in player_trade_acq:
+                # Most recent trade to this roster wins unconditionally
+                player["acquisition_type"] = "traded"
+                player["faab_bid"] = None
+            elif draft_info and draft_info.get("roster_id") == roster_id:
+                # Player was drafted by this roster — rollover FAs don't override this
+                player["acquisition_type"] = "homegrown"
+                player["faab_bid"] = None
+            elif key in player_fa_acq:
+                info = player_fa_acq[key]
+                player["acquisition_type"] = info["type"]
+                player["faab_bid"] = info["faab"]
+            else:
+                player["acquisition_type"] = "homegrown"
+                player["faab_bid"] = None
 
     now = _now_iso()
 
@@ -344,6 +368,7 @@ async def _build_drafted_picks_map(league_chain: list[str]) -> tuple[dict, dict]
                     "round": rnd,
                     "slot_in_round": slot_in_round,
                     "is_startup": is_startup,
+                    "roster_id": roster_id,
                 }
     return drafted_map, player_draft
 
