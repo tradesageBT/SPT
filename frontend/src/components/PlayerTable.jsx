@@ -5,9 +5,13 @@ const POS_COLOR = { QB: '#e05c5c', RB: '#5cb8e0', WR: '#01d9ac', TE: '#e0a45c' }
 const fmt = (n) => n?.toLocaleString() ?? '—'
 
 const DraftIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-    <path d="M2 9.5 L5.5 6 L7 7.5 L9.5 2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-    <path d="M1.5 11.5 Q3.5 10.5 5.5 11.5 Q7.5 12.5 9.5 11.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" fill="none"/>
+  <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+    {/* Pen body — straight diagonal shaft */}
+    <path d="M3.5 2.5 L10.5 9.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+    {/* Filled nib at the tip */}
+    <path d="M10.5 9.5 L12.5 13 L9 11.5 Z" fill="currentColor"/>
+    {/* Signature squiggle below */}
+    <path d="M0.5 13 Q2.5 11.5 4.5 13 Q6.5 14.5 8.5 13" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" fill="none"/>
   </svg>
 )
 
