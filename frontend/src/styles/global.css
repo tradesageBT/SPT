@@ -295,6 +295,11 @@ img { display: block; }
 .status-ir   { background: rgba(224, 92, 92, 0.15); color: #e05c5c; border: 1px solid rgba(224,92,92,0.35); }
 .player-value { color: var(--accent); font-weight: 600; min-width: 52px; text-align: right; }
 .empty-players { color: var(--text-muted); font-size: 0.82rem; padding: 8px 0; }
+.acq-icon    { display: inline-flex; align-items: center; gap: 2px; margin-left: 4px; vertical-align: middle; flex-shrink: 0; }
+.acq-drafted { color: #4ade80; }
+.acq-traded  { color: var(--info); }
+.acq-claimed { color: #f0b429; }
+.acq-faab    { font-size: 0.6rem; font-weight: 700; }
 
 /* ── Picks ───────────────────────────────────────────────────────────────── */
 .picks-section { margin-bottom: 32px; }

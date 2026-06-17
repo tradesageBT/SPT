@@ -56,7 +56,8 @@ async def _sync_league(league_id: str, force: bool = False):
         sleeper_client.get_traded_picks(league_id),
         *txn_tasks,
     )
-    all_transactions = [t for leg_txns in txn_results for t in leg_txns
+    all_transactions_raw = [t for leg_txns in txn_results for t in leg_txns]
+    all_transactions = [t for t in all_transactions_raw
                         if t.get("type") == "trade" and t.get("status") == "complete"]
     # Map (season, round, original_roster_id) → list of transactions involving that pick
     transaction_map: dict[tuple, list] = {}
@@ -64,6 +65,18 @@ async def _sync_league(league_id: str, force: bool = False):
         for dp in (txn.get("draft_picks") or []):
             key = (str(dp["season"]), int(dp["round"]), int(dp["roster_id"]))
             transaction_map.setdefault(key, []).append(txn)
+
+    # Build player acquisition map: how did each player land on their current team?
+    # Sorted by created so the most recent event wins per (player, roster) pair.
+    player_acquisition: dict[tuple, dict] = {}
+    for txn in sorted(all_transactions_raw, key=lambda t: t.get("created") or 0):
+        txn_type = txn.get("type", "")
+        if txn_type not in ("trade", "free_agent", "waiver"):
+            continue
+        faab = txn.get("settings", {}).get("waiver_bid") if txn_type == "waiver" else None
+        for pid, rid in (txn.get("adds") or {}).items():
+            acq = "traded" if txn_type == "trade" else "claimed"
+            player_acquisition[(str(pid), int(rid))] = {"type": acq, "faab": faab}
 
     users_map = {u["user_id"]: u for u in users}
 
@@ -108,6 +121,13 @@ async def _sync_league(league_id: str, force: bool = False):
     profiles = compute_league_profiles(
         rosters, users_map, players_cache, picks_cache, picks_by_roster
     )
+
+    for profile in profiles:
+        for player in profile["players"]:
+            key = (player["sleeper_id"], profile["roster_id"])
+            info = player_acquisition.get(key)
+            player["acquisition_type"] = info["type"] if info else "homegrown"
+            player["faab_bid"] = info["faab"] if info and info["type"] == "claimed" else None
 
     now = _now_iso()
 
