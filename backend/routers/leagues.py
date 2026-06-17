@@ -164,10 +164,11 @@ async def _sync_league(league_id: str, force: bool = False):
                     sleeper_league_id, roster_id, owner_id, display_name, avatar,
                     total_value, player_value, pick_value, starter_value, bench_value,
                     positional_breakdown, positional_surplus, positional_need,
+                    positional_rank,
                     contention_score, contention_category,
                     roster_data, computed_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(sleeper_league_id, roster_id) DO UPDATE SET
                     owner_id=excluded.owner_id, display_name=excluded.display_name,
                     avatar=excluded.avatar, total_value=excluded.total_value,
@@ -176,6 +177,7 @@ async def _sync_league(league_id: str, force: bool = False):
                     positional_breakdown=excluded.positional_breakdown,
                     positional_surplus=excluded.positional_surplus,
                     positional_need=excluded.positional_need,
+                    positional_rank=excluded.positional_rank,
                     contention_score=excluded.contention_score,
                     contention_category=excluded.contention_category,
                     roster_data=excluded.roster_data, computed_at=excluded.computed_at
@@ -194,6 +196,7 @@ async def _sync_league(league_id: str, force: bool = False):
                     json.dumps(p["positional_breakdown"]),
                     json.dumps(p["positional_surplus"]),
                     json.dumps(p["positional_need"]),
+                    json.dumps(p.get("positional_rank", {})),
                     p["contention_score"],
                     p["contention_category"],
                     json.dumps({"players": p["players"], "picks": p["picks"]}),

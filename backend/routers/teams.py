@@ -9,7 +9,7 @@ router = APIRouter(prefix="/api/leagues", tags=["teams"])
 
 def _team_row_to_dict(row) -> dict:
     d = dict(row)
-    for field in ("positional_breakdown", "positional_surplus", "positional_need", "roster_data"):
+    for field in ("positional_breakdown", "positional_surplus", "positional_need", "positional_rank", "roster_data"):
         if d.get(field):
             d[field] = json.loads(d[field])
     return d

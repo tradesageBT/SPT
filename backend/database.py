@@ -139,5 +139,6 @@ def init_db():
             );
 
             ALTER TABLE teams ADD COLUMN IF NOT EXISTS positional_need TEXT;
+            ALTER TABLE teams ADD COLUMN IF NOT EXISTS positional_rank TEXT;
             ALTER TABLE teams ADD COLUMN IF NOT EXISTS contention_category TEXT;
         """)

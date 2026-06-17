@@ -388,6 +388,19 @@ def compute_league_profiles(
         profile["positional_need"] = need
         del profile["positional_starters"]
 
+    # Positional rank: where does each team's starter value at each position rank
+    # among all teams in the league? Rank 1 = best. "n" carries the league size.
+    for profile in profiles:
+        profile["positional_rank"] = {"n": n}
+    for pos in SKILL_POSITIONS:
+        sorted_by_pos = sorted(
+            profiles,
+            key=lambda p: p["positional_starter_value"].get(pos, 0),
+            reverse=True,
+        )
+        for rank, profile in enumerate(sorted_by_pos, start=1):
+            profile["positional_rank"][pos] = rank
+
     # Tailored contention categories — blend roster age (contention_score) with
     # future draft capital and overall roster strength rather than a flat 3-way split.
     league_avg_pick_value = sum(p["pick_value"] for p in profiles) / n if n else 0

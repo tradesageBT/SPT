@@ -257,18 +257,10 @@ img { display: block; }
 .pos-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 .pos-badge { padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700; color: #0d1018; }
 .pos-value { font-size: 1rem; font-weight: 700; }
-.pos-internal-bar { background: var(--border); border-radius: 99px; height: 5px; overflow: hidden; margin-bottom: 8px; }
+.pos-internal-bar { background: var(--border); border-radius: 99px; height: 5px; overflow: hidden; margin-bottom: 10px; }
 .pos-internal-fill { height: 100%; border-radius: 99px; }
-.pos-bar-wrap { display: flex; align-items: center; gap: 8px; }
-.pos-bar-track { position: relative; flex: 1; height: 5px; background: var(--border); border-radius: 99px; }
-.pos-bar-center { position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: var(--text-muted); }
-.pos-bar-fill { position: absolute; top: 0; height: 100%; }
-.pos-bar-pos { background: var(--accent); border-radius: 0 99px 99px 0; }
-.pos-bar-neg { background: var(--danger); border-radius: 99px 0 0 99px; }
-.pos-bar-label { font-size: 0.72rem; font-weight: 600; min-width: 40px; text-align: right; }
-.label-pos { color: var(--accent); }
-.label-neg { color: var(--danger); }
-.pos-need-tag { display: inline-block; margin-top: 8px; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+.pos-rank { font-size: 1.05rem; font-weight: 700; }
+.pos-rank-of { font-size: 0.75rem; font-weight: 400; color: var(--text-muted); }
 
 /* ── SPT Section ─────────────────────────────────────────────────────────── */
 .spt-section { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 32px; }

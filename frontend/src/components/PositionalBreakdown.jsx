@@ -1,44 +1,25 @@
 const POSITIONS = ['QB', 'RB', 'WR', 'TE']
 const POS_COLOR = { QB: '#e05c5c', RB: '#5cb8e0', WR: '#01d9ac', TE: '#e0a45c' }
-const NEED_COLOR = { Need: 'var(--danger)', Adequate: 'var(--text-muted)', Strength: 'var(--accent)' }
 
-function SurplusBar({ pct }) {
-  const clamped = Math.max(-100, Math.min(100, pct))
-  const isPos = clamped >= 0
-  return (
-    <div className="pos-bar-wrap">
-      <div className="pos-bar-track">
-        <div className="pos-bar-center" />
-        {isPos ? (
-          <div
-            className="pos-bar-fill pos-bar-pos"
-            style={{ left: '50%', width: `${clamped / 2}%` }}
-          />
-        ) : (
-          <div
-            className="pos-bar-fill pos-bar-neg"
-            style={{ right: '50%', width: `${Math.abs(clamped) / 2}%` }}
-          />
-        )}
-      </div>
-      <span className={`pos-bar-label ${isPos ? 'label-pos' : 'label-neg'}`}>
-        {isPos ? '+' : ''}{pct}%
-      </span>
-    </div>
-  )
+function rankColor(rank, n) {
+  if (!n) return 'var(--text-muted)'
+  const third = Math.ceil(n / 3)
+  if (rank <= third) return '#4ade80'
+  if (rank > n - third) return 'var(--danger)'
+  return 'var(--text-muted)'
 }
 
-export default function PositionalBreakdown({ breakdown, surplus, need = {} }) {
+export default function PositionalBreakdown({ breakdown, rank = {} }) {
+  const n = rank.n || 0
   const maxVal = Math.max(...POSITIONS.map((p) => breakdown[p] || 0), 1)
 
   return (
     <div className="positional-section">
-      <h2 className="section-title">Starting Lineup Strength vs League Avg</h2>
+      <h2 className="section-title">Positional Strength</h2>
       <div className="positional-grid">
         {POSITIONS.map((pos) => {
           const val = breakdown[pos] || 0
-          const sp = surplus[pos] ?? 0
-          const needLevel = need[pos]
+          const r = rank[pos]
           const barW = Math.round((val / maxVal) * 100)
           return (
             <div key={pos} className="pos-card">
@@ -52,11 +33,10 @@ export default function PositionalBreakdown({ breakdown, surplus, need = {} }) {
                   style={{ width: `${barW}%`, background: POS_COLOR[pos] }}
                 />
               </div>
-              <SurplusBar pct={sp} />
-              {needLevel && (
-                <span className="pos-need-tag" style={{ color: NEED_COLOR[needLevel] }}>
-                  {needLevel}
-                </span>
+              {r != null && n > 0 && (
+                <div className="pos-rank" style={{ color: rankColor(r, n) }}>
+                  #{r} <span className="pos-rank-of">of {n}</span>
+                </div>
               )}
             </div>
           )

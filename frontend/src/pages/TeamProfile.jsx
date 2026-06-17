@@ -220,8 +220,8 @@ export default function TeamProfile() {
       {/* Positional breakdown */}
       <PositionalBreakdown
         breakdown={data.positional_breakdown || {}}
-        surplus={data.positional_surplus || {}}
-        need={data.positional_need || {}}
+        rank={data.positional_rank || {}}
+        numTeams={data.num_teams}
       />
 
       {/* SPT categorization */}
