@@ -118,6 +118,14 @@ img { display: block; }
 .recent-league-name { font-size: 0.9rem; font-weight: 500; }
 .recent-league-season { font-size: 0.78rem; color: var(--text-muted); flex-shrink: 0; }
 
+.home-features { }
+.home-features-heading {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin-bottom: 14px;
+}
 .feature-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
 .feature-card {
   background: var(--surface);

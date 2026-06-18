@@ -17,12 +17,13 @@ export default function Home() {
     <div className="home-container">
       <div className="home-hero">
         <h1 className="home-title">
-          Dynasty value.<br />
-          <span className="accent">Instantly.</span>
+          Dynasty analysis.<br />
+          <span className="accent">Your league. Your trades.</span>
         </h1>
         <p className="home-sub">
-          Paste your Sleeper league ID to see team valuations, positional
-          breakdowns, and trade ideas — powered by FantasyCalc dynasty values.
+          Connect your Sleeper dynasty league to rank every roster, surface hidden
+          trade opportunities, and evaluate any deal — powered by live FantasyCalc
+          dynasty values.
         </p>
 
         <form className="league-form" onSubmit={handleSubmit}>
@@ -62,26 +63,71 @@ export default function Home() {
         )}
       </div>
 
-      <div className="feature-grid">
-        <div className="feature-card">
-          <div className="feature-icon">📊</div>
-          <h3>Team Value Profiles</h3>
-          <p>Total value, starter vs bench split, positional breakdown vs league average</p>
-        </div>
-        <div className="feature-card">
-          <div className="feature-icon">🏆</div>
-          <div className="spt-badges">
-            <span className="badge badge-smash">SMASH</span>
-            <span className="badge badge-pass">PASS</span>
-            <span className="badge badge-trash">TRASH</span>
+      <div className="home-features">
+        <div className="home-features-heading">What you get</div>
+
+        <div className="feature-grid">
+          <div className="feature-card">
+            <div className="feature-icon">🏅</div>
+            <h3>Full League Rankings</h3>
+            <p>
+              Every roster ranked by dynasty value with a contention window label —
+              Championship Window, Ascending, Full Rebuild, and more. See exactly where
+              every team stands.
+            </p>
           </div>
-          <h3>Player Categorization</h3>
-          <p>Core keepers, tradeable pieces, and cut candidates for every roster</p>
-        </div>
-        <div className="feature-card">
-          <div className="feature-icon">🔄</div>
-          <h3>Trade Ideas</h3>
-          <p>Value-balanced trade suggestions matched to positional needs</p>
+
+          <div className="feature-card">
+            <div className="spt-badges" style={{ marginBottom: '10px' }}>
+              <span className="badge badge-smash">SMASH</span>
+              <span className="badge badge-pass">PASS</span>
+              <span className="badge badge-trash">TRASH</span>
+            </div>
+            <h3>Player Tiers Per Roster</h3>
+            <p>
+              Every team's players split into untouchables, tradeable pieces, and cut
+              candidates. Know exactly who's available before you make an offer.
+            </p>
+          </div>
+
+          <div className="feature-card">
+            <div className="feature-icon">📊</div>
+            <h3>Positional League Ranks</h3>
+            <p>
+              See every team's league rank at each position — <em>#3 of 12 at WR,
+              #9 at QB</em>. Instantly spot who needs what and who has surplus to deal.
+            </p>
+          </div>
+
+          <div className="feature-card">
+            <div className="feature-icon">💡</div>
+            <h3>Auto Trade Ideas</h3>
+            <p>
+              Value-balanced trades matched to positional needs across every team
+              pairing. Filters for Win-Win deals, position, and lineup impact.
+              Age impact and contention context on every card.
+            </p>
+          </div>
+
+          <div className="feature-card">
+            <div className="feature-icon">⚖️</div>
+            <h3>Manual Trade Evaluator</h3>
+            <p>
+              Build any trade by searching players by name — their team auto-populates.
+              Get instant analysis: asset value, lineup delta, avg age shift, positional
+              need match, and contention window fit.
+            </p>
+          </div>
+
+          <div className="feature-card">
+            <div className="feature-icon">🔗</div>
+            <h3>Picks, History & Acquisition</h3>
+            <p>
+              Every future pick with projected slot and full trade chain. Every player
+              tagged as drafted, traded, or claimed. Click any player for their complete
+              transaction history across all seasons.
+            </p>
+          </div>
         </div>
       </div>
     </div>
