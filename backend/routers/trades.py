@@ -1,7 +1,8 @@
 import json
 from fastapi import APIRouter, HTTPException, Query, Request
+from pydantic import BaseModel
 from database import db
-from trade_engine import generate_all_trades, generate_trades_between, categorize_players
+from trade_engine import generate_all_trades, generate_trades_between, categorize_players, compute_trade_breakdown
 import logger
 
 router = APIRouter(prefix="/api/leagues", tags=["trades"])
@@ -19,7 +20,7 @@ def _load_profiles(league_id: str) -> list[dict]:
     profiles = []
     for row in rows:
         d = dict(row)
-        for f in ("positional_breakdown", "positional_surplus", "positional_need"):
+        for f in ("positional_breakdown", "positional_surplus", "positional_need", "positional_rank"):
             d[f] = json.loads(d[f]) if d.get(f) else {}
         roster_data = json.loads(d.get("roster_data") or "{}")
         d["players"] = roster_data.get("players", [])
@@ -27,6 +28,98 @@ def _load_profiles(league_id: str) -> list[dict]:
         profiles.append(d)
 
     return profiles
+
+
+# ---------------------------------------------------------------------------
+# Manual trade evaluator
+# ---------------------------------------------------------------------------
+
+class TradeAsset(BaseModel):
+    sleeper_id: str
+    name: str
+    position: str
+    fc_value: int = 0
+
+
+class TradeEvalRequest(BaseModel):
+    a_roster_id: int
+    b_roster_id: int
+    a_gives: list[TradeAsset]
+    b_gives: list[TradeAsset]
+
+
+@router.post("/{league_id}/evaluate-trade")
+async def evaluate_trade(league_id: str, body: TradeEvalRequest):
+    profiles = _load_profiles(league_id)
+
+    team_a = next((p for p in profiles if p["roster_id"] == body.a_roster_id), None)
+    team_b = next((p for p in profiles if p["roster_id"] == body.b_roster_id), None)
+    if not team_a or not team_b:
+        raise HTTPException(status_code=404, detail="Roster not found")
+
+    a_gives = [a.model_dump() for a in body.a_gives]
+    b_gives = [b.model_dump() for b in body.b_gives]
+
+    # Enrich with age + is_starter from stored roster data (picks have no age)
+    for item in a_gives:
+        match = next((p for p in team_a["players"] if p.get("sleeper_id") == item["sleeper_id"]), {})
+        item["age"] = match.get("age")
+        item["is_starter"] = match.get("is_starter", False)
+    for item in b_gives:
+        match = next((p for p in team_b["players"] if p.get("sleeper_id") == item["sleeper_id"]), {})
+        item["age"] = match.get("age")
+        item["is_starter"] = match.get("is_starter", False)
+
+    breakdown_a = compute_trade_breakdown(team_a, a_gives, b_gives)
+    breakdown_b = compute_trade_breakdown(team_b, b_gives, a_gives)
+
+    value_a = sum(x["fc_value"] for x in a_gives)
+    value_b = sum(x["fc_value"] for x in b_gives)
+
+    def _avg_age(items):
+        ages = [x["age"] for x in items if x.get("position") != "PK" and x.get("age")]
+        return round(sum(ages) / len(ages), 1) if ages else None
+
+    lineup_delta_a = breakdown_a["lineup_delta"]
+    lineup_delta_b = breakdown_b["lineup_delta"]
+    value_diff = value_a - value_b  # positive = A gives more raw value
+
+    # Winner: lineup delta comparison is primary; raw value delta is tiebreak
+    is_win_win = lineup_delta_a > 0 and lineup_delta_b > 0
+    ld_diff = lineup_delta_a - lineup_delta_b   # positive = A improved more
+    if is_win_win:
+        winner = "even"
+    elif abs(ld_diff) >= 300:
+        winner = "a" if ld_diff > 0 else "b"
+    elif abs(value_diff) > 500:
+        winner = "b" if value_diff > 0 else "a"
+    else:
+        winner = "even"
+
+    pos_rank_a = team_a.get("positional_rank") or {}
+    pos_rank_b = team_b.get("positional_rank") or {}
+    n = pos_rank_a.get("n") or pos_rank_b.get("n") or 0
+
+    return {
+        "value_a_gives": value_a,
+        "value_b_gives": value_b,
+        "value_delta": abs(value_diff),
+        "lineup_delta_a": lineup_delta_a,
+        "lineup_delta_b": lineup_delta_b,
+        "breakdown_a": breakdown_a,
+        "breakdown_b": breakdown_b,
+        "avg_age_a_gives": _avg_age(a_gives),
+        "avg_age_b_gives": _avg_age(b_gives),
+        "team_a_name": team_a["display_name"],
+        "team_b_name": team_b["display_name"],
+        "contention_a": team_a.get("contention_category"),
+        "contention_b": team_b.get("contention_category"),
+        "positional_rank_a": pos_rank_a,
+        "positional_rank_b": pos_rank_b,
+        "num_teams": n,
+        "is_win_win": is_win_win,
+        "winner": winner,
+    }
 
 
 @router.get("/{league_id}/players")

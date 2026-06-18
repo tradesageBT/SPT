@@ -3,6 +3,7 @@ import Home from './pages/Home'
 import LeagueDashboard from './pages/LeagueDashboard'
 import TeamProfile from './pages/TeamProfile'
 import TradeIdeas from './pages/TradeIdeas'
+import TradeEvaluator from './pages/TradeEvaluator'
 
 export default function App() {
   return (
@@ -22,6 +23,7 @@ export default function App() {
           <Route path="/league/:leagueId" element={<LeagueDashboard />} />
           <Route path="/league/:leagueId/team/:rosterId" element={<TeamProfile />} />
           <Route path="/league/:leagueId/trades" element={<TradeIdeas />} />
+          <Route path="/league/:leagueId/evaluate" element={<TradeEvaluator />} />
         </Routes>
       </main>
     </div>

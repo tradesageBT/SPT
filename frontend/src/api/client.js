@@ -31,4 +31,13 @@ export const api = {
   },
   getLeaguePlayers: (leagueId) => request(`/leagues/${leagueId}/players`),
   getPlayerHistory: (leagueId, playerId) => request(`/leagues/${leagueId}/player/${playerId}/history`),
+  evaluateTrade: (leagueId, body) =>
+    fetch(`${BASE}/leagues/${leagueId}/evaluate-trade`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then((res) => {
+      if (!res.ok) return res.json().then((e) => { throw new Error(e.detail || 'Request failed') })
+      return res.json()
+    }),
 }

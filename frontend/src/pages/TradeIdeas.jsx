@@ -80,6 +80,9 @@ export default function TradeIdeas() {
     <div className="trades-page">
       <div className="profile-nav">
         <Link to={`/league/${leagueId}`} className="back-link">← League</Link>
+        <Link to={`/league/${leagueId}/evaluate`} className="btn btn-accent btn-sm">
+          Evaluate a Trade
+        </Link>
       </div>
 
       <div className="trades-header">
