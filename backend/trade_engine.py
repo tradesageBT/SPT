@@ -239,8 +239,8 @@ def generate_trades_between(
         breakdown_b = compute_trade_breakdown(team_b, gives_b, gives_a)
 
         return {
-            "team_a": {"roster_id": team_a["roster_id"], "display_name": team_a["display_name"]},
-            "team_b": {"roster_id": team_b["roster_id"], "display_name": team_b["display_name"]},
+            "team_a": {"roster_id": team_a["roster_id"], "display_name": team_a["display_name"], "contention_category": team_a.get("contention_category")},
+            "team_b": {"roster_id": team_b["roster_id"], "display_name": team_b["display_name"], "contention_category": team_b.get("contention_category")},
             "a_gives": gives_a,
             "b_gives": gives_b,
             "value_a_gives": val_a,

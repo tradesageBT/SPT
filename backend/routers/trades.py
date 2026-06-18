@@ -1,8 +1,12 @@
+import asyncio
 import json
+from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 from database import db
 from trade_engine import generate_all_trades, generate_trades_between, categorize_players, compute_trade_breakdown
+import sleeper_client
+import cache_manager
 import logger
 
 router = APIRouter(prefix="/api/leagues", tags=["trades"])
@@ -232,3 +236,77 @@ def _categorize_with_forced(profile: dict, force_player: dict | None, force_prof
 
 def _trade_has_player(trade: dict, sleeper_id: str) -> bool:
     return any(p.get("sleeper_id") == sleeper_id for p in trade["a_gives"] + trade["b_gives"])
+
+
+_ROUND_LABEL = {1: "1st", 2: "2nd", 3: "3rd", 4: "4th"}
+
+
+@router.get("/{league_id}/recent-transactions")
+async def get_recent_transactions(league_id: str):
+    """Return the 15 most recent completed trades in this league's current season."""
+    profiles = _load_profiles(league_id)
+    roster_names = {p["roster_id"]: p["display_name"] for p in profiles}
+
+    txn_results = await asyncio.gather(*[
+        sleeper_client.get_transactions(league_id, week)
+        for week in range(0, 23)
+    ])
+
+    all_txns = [
+        t for week_txns in txn_results for t in week_txns
+        if t.get("type") == "trade" and t.get("status") == "complete"
+    ]
+    recent = sorted(all_txns, key=lambda t: t.get("created") or 0, reverse=True)[:15]
+
+    players_cache = cache_manager.get_cached_players()
+    result = []
+
+    for txn in recent:
+        adds  = txn.get("adds") or {}
+        drops = txn.get("drops") or {}
+        picks = txn.get("draft_picks") or []
+        created = txn.get("created")
+
+        sides: dict[int, dict] = {}
+
+        for pid, to_rid in adds.items():
+            from_rid = drops.get(str(pid))
+            if from_rid is None:
+                continue
+            from_rid = int(from_rid)
+            sides.setdefault(from_rid, {
+                "team_name": roster_names.get(from_rid, f"Team {from_rid}"),
+                "gave": [],
+            })
+            p = players_cache.get(str(pid), {})
+            sides[from_rid]["gave"].append({
+                "name": p.get("name", str(pid)),
+                "position": p.get("position", ""),
+            })
+
+        for pick in picks:
+            from_rid = pick.get("previous_owner_id")
+            if from_rid is None:
+                continue
+            from_rid = int(from_rid)
+            sides.setdefault(from_rid, {
+                "team_name": roster_names.get(from_rid, f"Team {from_rid}"),
+                "gave": [],
+            })
+            rnd = int(pick.get("round", 1))
+            season = str(pick.get("season", ""))
+            sides[from_rid]["gave"].append({
+                "name": f"{season} {_ROUND_LABEL.get(rnd, f'Rd {rnd}')}",
+                "position": "PK",
+            })
+
+        if len(sides) < 2:
+            continue
+
+        date_str = (
+            datetime.fromtimestamp(created / 1000, tz=timezone.utc).strftime("%b %d, %Y")
+            if created else None
+        )
+        result.append({"date": date_str, "sides": list(sides.values())})
+
+    return result

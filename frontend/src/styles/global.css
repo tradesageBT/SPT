@@ -583,10 +583,12 @@ img { display: block; }
 .fairness-lopsided { background: rgba(224,92,92,0.15);  color: var(--danger); }
 .trade-sides { display: grid; grid-template-columns: 1fr 32px 1fr; gap: 0; }
 .trade-side { padding: 14px 16px; }
-.trade-side-header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.trade-side-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; justify-content: space-between; }
 .trade-arrow { display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: var(--text-muted); }
+.trade-team-block { display: flex; flex-direction: column; gap: 2px; }
 .trade-team-name { display: block; font-weight: 700; font-size: 0.9rem; }
 .trade-team-name:hover { color: var(--accent); }
+.trade-contention-badge { font-size: 0.6rem; padding: 1px 5px; border-radius: 3px; width: fit-content; }
 
 /* Lineup delta tag */
 .lineup-tag {
@@ -602,6 +604,8 @@ img { display: block; }
 .trade-gives-label { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
 .trade-players { display: flex; flex-direction: column; gap: 5px; margin-bottom: 8px; }
 .trade-total   { font-size: 0.78rem; color: var(--text-muted); }
+.trade-age-row { font-size: 0.72rem; color: var(--text-muted); margin-top: 3px; }
+.trade-age-win { color: #4ade80; }
 .player-chip { display: flex; align-items: center; gap: 6px; }
 .chip-pos { padding: 1px 5px; border-radius: 3px; font-size: 0.68rem; font-weight: 700; color: #0d1018; flex-shrink: 0; }
 .chip-name { font-size: 0.82rem; flex: 1; }
@@ -653,6 +657,68 @@ img { display: block; }
   animation: spin 0.7s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Trade filter/sort bar ───────────────────────────────────────────────── */
+.trade-filter-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 8px 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.trade-filter-group  { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.trade-sort-group    { margin-left: auto; }
+.trade-filter-label  { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.trade-filter-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 3px 9px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.trade-filter-btn:hover { border-color: var(--accent); color: var(--text); }
+.trade-filter-btn.active { border-color: var(--accent); color: var(--accent); background: rgba(1,217,172,0.08); }
+
+/* ── Recent Trades ───────────────────────────────────────────────────────── */
+.recent-trades-section  { margin-top: 32px; border-top: 1px solid var(--border); padding-top: 16px; }
+.recent-trades-toggle {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.recent-trades-toggle:hover { color: var(--text); }
+.recent-trades-status { color: var(--text-muted); font-size: 0.85rem; padding: 10px 0; }
+.recent-trades-list  { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
+.recent-trade-item {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+.recent-trade-date  { font-size: 0.7rem; color: var(--text-muted); margin-bottom: 8px; }
+.recent-trade-sides { display: flex; flex-direction: column; gap: 6px; }
+.recent-trade-side  { display: flex; align-items: flex-start; gap: 6px; flex-wrap: wrap; font-size: 0.82rem; }
+.recent-trade-team  { color: var(--text-muted); white-space: nowrap; flex-shrink: 0; }
+.recent-trade-assets{ display: flex; flex-wrap: wrap; gap: 5px; }
+.recent-trade-asset { display: flex; align-items: center; gap: 4px; }
+.recent-trade-pos {
+  font-size: 0.62rem; font-weight: 700;
+  padding: 1px 4px; border-radius: 3px;
+  color: #fff; flex-shrink: 0;
+}
 
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 640px) {

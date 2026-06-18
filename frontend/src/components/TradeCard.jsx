@@ -1,8 +1,25 @@
 import { Link } from 'react-router-dom'
+import { contentionClass } from '../utils/contention'
 
 const fmt = (n) => n?.toLocaleString() ?? '—'
 const fmtDelta = (n) => (n >= 0 ? '+' : '') + n?.toLocaleString()
 const POS_COLOR = { QB: '#e05c5c', RB: '#5cb8e0', WR: '#01d9ac', TE: '#e0a45c', PK: '#888' }
+
+const CONTENTION_SHORT = {
+  'Championship Window': 'Win Now',
+  'Sustainable Contender': 'Contender',
+  'Win-Now Push': 'Win-Now Push',
+  'Ascending': 'Ascending',
+  'Treading Water': 'Neutral',
+  'Full Rebuild': 'Rebuild',
+  'Retooling': 'Retooling',
+  'Fire Sale': 'Fire Sale',
+}
+
+function avgAge(players) {
+  const ages = players.filter((p) => p.position !== 'PK' && p.age).map((p) => p.age)
+  return ages.length ? ages.reduce((s, a) => s + a, 0) / ages.length : null
+}
 
 function PlayerChip({ player, highlighted }) {
   const isStarter = player.is_starter
@@ -37,12 +54,9 @@ function LineupTag({ delta }) {
 function LineupSummary({ breakdown }) {
   if (!breakdown) return null
   const { starters_lost, bench_lost, starters_gained, bench_gained } = breakdown
-
   const starterNet = starters_gained - starters_lost
   const benchNet   = bench_gained - bench_lost
-
   const parts = []
-
   if (Math.abs(starterNet) >= 50) {
     parts.push(
       <span key="s" className="ls-part">
@@ -63,7 +77,6 @@ function LineupSummary({ breakdown }) {
       </span>
     )
   }
-
   if (!parts.length) return null
   return <div className="lineup-summary">{parts}</div>
 }
@@ -72,8 +85,14 @@ export default function TradeCard({ trade, leagueId, highlightId }) {
   const delta = trade.value_delta
   const fairness = delta < 200 ? '✓ Fair' : delta < 500 ? '~ Close' : '⚠ Lopsided'
   const fairnessClass = delta < 200 ? 'fair' : delta < 500 ? 'close' : 'lopsided'
-
   const bothUp = trade.lineup_delta_a > 0 && trade.lineup_delta_b > 0
+
+  const ageA = avgAge(trade.a_gives)
+  const ageB = avgAge(trade.b_gives)
+  const ageDiff = ageA != null && ageB != null ? Math.abs(ageA - ageB) : 0
+  const showAge = ageDiff >= 0.5
+  // Which side receives younger? Side that gives the older players gets younger assets
+  const aGetsYounger = showAge && ageA > ageB  // A gives older → A receives younger
 
   return (
     <div className={`trade-card${bothUp ? ' trade-card-both-up' : ''}`}>
@@ -88,9 +107,16 @@ export default function TradeCard({ trade, leagueId, highlightId }) {
       <div className="trade-sides">
         <div className="trade-side">
           <div className="trade-side-header">
-            <Link to={`/league/${leagueId}/team/${trade.team_a.roster_id}`} className="trade-team-name">
-              {trade.team_a.display_name}
-            </Link>
+            <div className="trade-team-block">
+              <Link to={`/league/${leagueId}/team/${trade.team_a.roster_id}`} className="trade-team-name">
+                {trade.team_a.display_name}
+              </Link>
+              {trade.team_a.contention_category && (
+                <span className={`trade-contention-badge contention-badge ${contentionClass(trade.team_a.contention_category)}`}>
+                  {CONTENTION_SHORT[trade.team_a.contention_category] ?? trade.team_a.contention_category}
+                </span>
+              )}
+            </div>
             <LineupTag delta={trade.lineup_delta_a} />
           </div>
           <div className="trade-gives-label">gives</div>
@@ -100,6 +126,11 @@ export default function TradeCard({ trade, leagueId, highlightId }) {
             ))}
           </div>
           <div className="trade-total">Assets: {fmt(trade.value_a_gives)}</div>
+          {showAge && ageA != null && (
+            <div className={`trade-age-row ${aGetsYounger ? 'trade-age-win' : ''}`}>
+              Avg age given: {ageA.toFixed(1)} yrs{aGetsYounger ? ' · receives younger' : ''}
+            </div>
+          )}
           <LineupSummary breakdown={trade.breakdown_a} />
         </div>
 
@@ -107,9 +138,16 @@ export default function TradeCard({ trade, leagueId, highlightId }) {
 
         <div className="trade-side">
           <div className="trade-side-header">
-            <Link to={`/league/${leagueId}/team/${trade.team_b.roster_id}`} className="trade-team-name">
-              {trade.team_b.display_name}
-            </Link>
+            <div className="trade-team-block">
+              <Link to={`/league/${leagueId}/team/${trade.team_b.roster_id}`} className="trade-team-name">
+                {trade.team_b.display_name}
+              </Link>
+              {trade.team_b.contention_category && (
+                <span className={`trade-contention-badge contention-badge ${contentionClass(trade.team_b.contention_category)}`}>
+                  {CONTENTION_SHORT[trade.team_b.contention_category] ?? trade.team_b.contention_category}
+                </span>
+              )}
+            </div>
             <LineupTag delta={trade.lineup_delta_b} />
           </div>
           <div className="trade-gives-label">gives</div>
@@ -119,6 +157,11 @@ export default function TradeCard({ trade, leagueId, highlightId }) {
             ))}
           </div>
           <div className="trade-total">Assets: {fmt(trade.value_b_gives)}</div>
+          {showAge && ageB != null && (
+            <div className={`trade-age-row ${!aGetsYounger ? 'trade-age-win' : ''}`}>
+              Avg age given: {ageB.toFixed(1)} yrs{!aGetsYounger ? ' · receives younger' : ''}
+            </div>
+          )}
           <LineupSummary breakdown={trade.breakdown_b} />
         </div>
       </div>
