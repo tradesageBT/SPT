@@ -202,6 +202,7 @@ def generate_trades_between(
     include_smash: bool = False,
     include_picks: bool = False,
     force_mode: bool = False,
+    expand_mode: bool = False,
 ) -> list[dict]:
     trades = []
 
@@ -213,19 +214,27 @@ def generate_trades_between(
     tradeable_a = list(cat_a["pass"])
     tradeable_b = list(cat_b["pass"])
 
-    # In force mode always include smash on both sides — needed to match high-value players
-    if include_smash or force_mode:
+    effective_force = force_mode or expand_mode
+
+    # In force/expand mode always include smash on both sides — needed to match high-value players
+    if include_smash or effective_force:
         tradeable_a += cat_a.get("smash", [])
         tradeable_b += cat_b.get("smash", [])
 
     picks_a = [_pick_asset(p) for p in sorted(team_a.get("picks", []), key=lambda x: x["fc_value"], reverse=True)[:4]]
     picks_b = [_pick_asset(p) for p in sorted(team_b.get("picks", []), key=lambda x: x["fc_value"], reverse=True)[:4]]
 
-    if include_picks or force_mode:
+    if include_picks or effective_force:
         tradeable_a += picks_a
         tradeable_b += picks_b
 
-    fairness_pct = FAIRNESS_PCT * (4/3 if force_mode else 1)  # 20% window in force mode
+    # 15% normal, 20% force, 35% expand
+    if expand_mode:
+        fairness_pct = FAIRNESS_PCT * (7/3)
+    elif force_mode:
+        fairness_pct = FAIRNESS_PCT * (4/3)
+    else:
+        fairness_pct = FAIRNESS_PCT
 
     def _build_trade(gives_a, gives_b, reason):
         val_a = _value(gives_a)
@@ -263,8 +272,8 @@ def generate_trades_between(
             is_pick_trade = pos_a == "PK" or pos_b == "PK"
             gives_sense = pos_a in (surplus_a & deficit_b)
             gets_sense  = pos_b in (surplus_b & deficit_a)
-            # In force mode skip positional filter — show all value-matched 1-for-1s
-            if not (force_mode or is_pick_trade or gives_sense or gets_sense):
+            # In force/expand mode skip positional filter — show all value-matched 1-for-1s
+            if not (effective_force or is_pick_trade or gives_sense or gets_sense):
                 continue
             t = _build_trade(
                 [pa], [pb],
@@ -297,7 +306,7 @@ def generate_trades_between(
                 trades.append(t)
 
     # --- Pick for player (rebuilder ↔ win-now; skip when picks already in pool) ---
-    if not include_picks and not force_mode:
+    if not include_picks and not effective_force:
         a_rebuild = team_a.get("contention_score", 0.5) < 0.4
         b_rebuild = team_b.get("contention_score", 0.5) < 0.4
 
@@ -337,7 +346,7 @@ def generate_trades_between(
         combined  = -(ld_a + ld_b)
         return (both_up, one_up, combined, t["value_delta"])
 
-    cap = 25 if force_mode else 10
+    cap = 50 if expand_mode else (25 if force_mode else 10)
     return sorted(unique, key=_sort_key)[:cap]
 
 
@@ -355,6 +364,7 @@ def generate_all_trades(
     include_smash: bool = False,
     include_picks: bool = False,
     force_mode: bool = False,
+    expand_mode: bool = False,
 ) -> list[dict]:
     cats = {p["roster_id"]: categorize_players(p) for p in profiles}
     all_trades = []
@@ -365,6 +375,7 @@ def generate_all_trades(
                 include_smash=include_smash,
                 include_picks=include_picks,
                 force_mode=force_mode,
+                expand_mode=expand_mode,
             )
         )
     return all_trades

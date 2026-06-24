@@ -157,6 +157,7 @@ async def get_all_trade_ideas(
     include_smash: bool = Query(False),
     include_picks: bool = Query(False),
     force_player_id: str | None = Query(None),
+    expand: bool = Query(False),
 ):
     profiles = _load_profiles(league_id)
 
@@ -183,6 +184,7 @@ async def get_all_trade_ideas(
         }, ip=ip)
 
     force_mode = force_player_id is not None
+    expand_mode = expand and force_mode  # expand only makes sense with a forced player
 
     if roster_id is not None:
         focus = next((p for p in profiles if p["roster_id"] == roster_id), None)
@@ -198,6 +200,7 @@ async def get_all_trade_ideas(
                 include_smash=include_smash,
                 include_picks=include_picks,
                 force_mode=force_mode,
+                expand_mode=expand_mode,
             ))
         result = sorted(trades, key=lambda x: x["value_delta"])
     else:
@@ -210,6 +213,7 @@ async def get_all_trade_ideas(
                 include_smash=include_smash,
                 include_picks=include_picks,
                 force_mode=force_mode,
+                expand_mode=expand_mode,
             ))
         result = all_trades
 

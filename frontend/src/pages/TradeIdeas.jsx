@@ -98,6 +98,7 @@ export default function TradeIdeas() {
   const [winWinOnly, setWinWinOnly] = useState(false)
   const [posFilter, setPosFilter] = useState(null)   // null | 'QB' | 'RB' | 'WR' | 'TE'
   const [sortBy, setSortBy] = useState('default')    // 'default' | 'fairness' | 'lineup'
+  const [expanded, setExpanded] = useState(false)
 
   useEffect(() => {
     api.getLeaguePlayers(leagueId).then(setLeaguePlayers).catch(() => {})
@@ -106,7 +107,7 @@ export default function TradeIdeas() {
   useEffect(() => {
     setLoading(true)
     setError(null)
-    const opts = { includeSmash, includePicks, forcePlayerId: selectedPlayer?.sleeper_id ?? null }
+    const opts = { includeSmash, includePicks, forcePlayerId: selectedPlayer?.sleeper_id ?? null, expand: expanded }
     const fetcher = focusRosterId
       ? api.getTradesForTeam(leagueId, focusRosterId, opts)
       : api.getAllTrades(leagueId, opts)
@@ -115,7 +116,7 @@ export default function TradeIdeas() {
       .then(setTrades)
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
-  }, [leagueId, focusRosterId, includeSmash, includePicks, selectedPlayer])
+  }, [leagueId, focusRosterId, includeSmash, includePicks, selectedPlayer, expanded])
 
   const suggestions = useMemo(() => {
     if (!query.trim() || selectedPlayer) return []
@@ -136,11 +137,13 @@ export default function TradeIdeas() {
     setSelectedPlayer(player)
     setQuery(player.name)
     setDropdownOpen(false)
+    setExpanded(false)
   }
 
   function clearFilter() {
     setSelectedPlayer(null)
     setQuery('')
+    setExpanded(false)
     inputRef.current?.focus()
   }
 
@@ -251,6 +254,29 @@ export default function TradeIdeas() {
             <span className="filter-banner-team"> ({selectedPlayer.display_name})</span>
           )}
           <button className="filter-clear-inline" onClick={clearFilter}>clear ✕</button>
+        </div>
+      )}
+
+      {selectedPlayer && !expanded && trades.length < 8 && (
+        <div className="expand-search-banner">
+          <span className="expand-search-note">
+            {trades.length === 0
+              ? `No trade ideas found for ${selectedPlayer.name} at standard fairness.`
+              : `Only ${trades.length} trade idea${trades.length !== 1 ? 's' : ''} found for ${selectedPlayer.name}.`}
+          </span>
+          <button
+            className="btn btn-accent btn-sm expand-search-btn"
+            onClick={() => setExpanded(true)}
+          >
+            Expand Search
+          </button>
+        </div>
+      )}
+
+      {expanded && (
+        <div className="expand-search-active">
+          Expanded search active — showing trades up to ±35% value difference
+          <button className="filter-clear-inline" onClick={() => setExpanded(false)}>reset ✕</button>
         </div>
       )}
 
