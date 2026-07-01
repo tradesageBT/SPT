@@ -78,8 +78,11 @@ export default function LeagueDashboard() {
           </div>
         </div>
         <div className="dashboard-actions">
-          <Link to={`/league/${leagueId}/trades`} className="btn btn-accent">
+          <Link to={`/league/${leagueId}/trades`} className="btn btn-secondary">
             Trade Ideas
+          </Link>
+          <Link to={`/league/${leagueId}/evaluate`} className="btn btn-accent">
+            Evaluate Trade
           </Link>
           <button
             className="btn btn-secondary"
