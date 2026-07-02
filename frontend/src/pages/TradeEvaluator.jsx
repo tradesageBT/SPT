@@ -174,6 +174,39 @@ function posContext(receivedAssets, posRank, teamName, n) {
   })
 }
 
+function SweetenerPanel({ gap, teamName, candidates, onAdd }) {
+  return (
+    <div className="eval-sweetener">
+      <div className="eval-sweetener-header">
+        <span className="eval-sweetener-title">To even this trade, {teamName} could add</span>
+        <span className="eval-sweetener-gap">Gap: {fmt(gap)}</span>
+      </div>
+      <div className="eval-sweetener-list">
+        {candidates.map((c) => {
+          const pct = Math.round((c.fc_value / gap) * 100)
+          const pctLabel = pct >= 80 && pct <= 125 ? '~evens it'
+            : pct < 80 ? `covers ${pct}%`
+            : `${pct - 100}% over`
+          const pctClass = pct >= 80 && pct <= 125 ? 'sug-even'
+            : pct < 80 ? 'sug-under'
+            : 'sug-over'
+          return (
+            <button key={c.sleeper_id} className="eval-sweetener-item" onClick={() => onAdd(c)}>
+              <span className="eval-chip-pos" style={{ background: POS_COLOR[c.position] || '#666' }}>
+                {c.position}
+              </span>
+              <span className="eval-sweetener-name">{c.name}</span>
+              <span className="eval-sweetener-val">{fmt(c.fc_value)}</span>
+              <span className={`eval-sweetener-pct ${pctClass}`}>{pctLabel}</span>
+              <span className="eval-sweetener-add">+ Add</span>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function AnalysisPanel({ analysis, sideA, sideB }) {
   const {
     value_a_gives, value_b_gives, value_delta,
@@ -388,6 +421,36 @@ export default function TradeEvaluator() {
     setAnalysis(null)
   }
 
+  const sweetener = useMemo(() => {
+    if (!analysis || analysis.value_delta < 200) return null
+    const gap = analysis.value_delta
+    // Whoever gave LESS raw value needs to sweeten the deal
+    const behindSide = analysis.value_a_gives < analysis.value_b_gives ? 'a' : 'b'
+    const behindRosterId = behindSide === 'a' ? teamA?.roster_id : teamB?.roster_id
+    const behindName = behindSide === 'a' ? analysis.team_a_name : analysis.team_b_name
+    if (!behindRosterId) return null
+
+    const alreadyIn = new Set([...sideA, ...sideB].map((a) => a.sleeper_id))
+
+    const players = leaguePlayers.filter(
+      (p) => p.roster_id === behindRosterId && !alreadyIn.has(p.sleeper_id) &&
+             p.fc_value >= gap * 0.2 && p.fc_value <= gap * 4
+    )
+
+    const team = teamsData.find((t) => t.roster_id === behindRosterId)
+    const picks = (team?.roster_data?.picks || [])
+      .map(pickAsset)
+      .filter((p) => !alreadyIn.has(p.sleeper_id) && p.fc_value >= gap * 0.2 && p.fc_value <= gap * 4)
+
+    const candidates = [...players, ...picks]
+      .map((c) => ({ ...c, closeness: Math.abs(c.fc_value - gap) }))
+      .sort((a, b) => a.closeness - b.closeness)
+      .slice(0, 5)
+
+    if (!candidates.length) return null
+    return { gap, teamName: behindName, side: behindSide, candidates }
+  }, [analysis, leaguePlayers, teamsData, sideA, sideB, teamA, teamB])
+
   const ready = teamA && teamB && sideA.length > 0 && sideB.length > 0
 
   return (
@@ -435,6 +498,15 @@ export default function TradeEvaluator() {
 
       {!evalLoading && analysis && (
         <AnalysisPanel analysis={analysis} sideA={sideA} sideB={sideB} />
+      )}
+
+      {!evalLoading && sweetener && (
+        <SweetenerPanel
+          gap={sweetener.gap}
+          teamName={sweetener.teamName}
+          candidates={sweetener.candidates}
+          onAdd={(asset) => sweetener.side === 'a' ? handleAddA(asset, null, null) : handleAddB(asset, null, null)}
+        />
       )}
     </div>
   )
