@@ -204,15 +204,21 @@ img { display: block; }
 .split-future   { color: var(--text-muted); }
 .team-card-positions { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
 
-/* ── Surplus tags ────────────────────────────────────────────────────────── */
-.surplus-tag {
+/* ── Positional rank tags (dashboard) ───────────────────────────────────── */
+.rank-tag {
   font-size: 0.72rem;
-  font-weight: 600;
   padding: 2px 6px;
   border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--text-muted);
+  background: var(--surface2);
 }
-.surplus-pos { background: rgba(1,217,172,0.15); color: var(--accent); }
-.surplus-neg { background: rgba(224,92,92,0.15);  color: var(--danger); }
+.rank-tag strong { font-weight: 700; }
+.rank-tag-top { background: rgba(1,217,172,0.12); color: #4ade80; }
+.rank-tag-bot { background: rgba(224,92,92,0.12);  color: var(--danger); }
+.rank-tag-mid { background: var(--surface2); color: var(--text-muted); }
 
 /* ── Contention badge ────────────────────────────────────────────────────── */
 .contention-badge {

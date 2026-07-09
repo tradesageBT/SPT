@@ -3,11 +3,14 @@ import { contentionClass } from '../utils/contention'
 
 const fmt = (n) => n?.toLocaleString() ?? '—'
 
-function SurplusTag({ pos, pct }) {
-  const positive = pct >= 0
+const POSITIONS = ['QB', 'RB', 'WR', 'TE']
+
+function RankTag({ pos, rank, n }) {
+  const third = Math.ceil(n / 3)
+  const cls = rank <= third ? 'rank-tag-top' : rank > n - third ? 'rank-tag-bot' : 'rank-tag-mid'
   return (
-    <span className={`surplus-tag ${positive ? 'surplus-pos' : 'surplus-neg'}`}>
-      {pos} {positive ? '+' : ''}{pct}%
+    <span className={`rank-tag ${cls}`}>
+      {pos} <strong>#{rank}</strong>
     </span>
   )
 }
@@ -29,7 +32,8 @@ export default function TeamCard({ team, rank, maxValue, leagueId }) {
     : 0
   const pickPct = 100 - playerPct
 
-  const surplus = team.positional_surplus || {}
+  const posRank = team.positional_rank || {}
+  const n = posRank.n || 0
 
   return (
     <Link to={`/league/${leagueId}/team/${team.roster_id}`} className="team-card">
@@ -63,11 +67,9 @@ export default function TeamCard({ team, rank, maxValue, leagueId }) {
       </div>
 
       <div className="team-card-positions">
-        {Object.entries(surplus)
-          .sort(([, a], [, b]) => Math.abs(b) - Math.abs(a))
-          .map(([pos, pct]) => (
-            <SurplusTag key={pos} pos={pos} pct={pct} />
-          ))}
+        {n > 0 && POSITIONS.filter((pos) => posRank[pos] != null).map((pos) => (
+          <RankTag key={pos} pos={pos} rank={posRank[pos]} n={n} />
+        ))}
       </div>
     </Link>
   )
