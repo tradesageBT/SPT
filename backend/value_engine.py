@@ -16,29 +16,16 @@ def _percentile(sorted_vals: list[int], pct: float) -> float:
     return sorted_vals[lo] + (sorted_vals[hi] - sorted_vals[lo]) * (idx - lo)
 
 
-def _classify_contention(score: float, pick_ratio: float, strength_tier: str) -> str:
-    """
-    strength_tier (total-value rank vs. league) drives the category since a young,
-    loaded roster is a great spot to be in — not a rebuild. Age/pick capital only
-    shade the label within a strength tier.
-    """
-    if strength_tier == "top":
-        if score >= 0.55:
-            return "Championship Window"
-        if score >= 0.4:
-            return "Sustainable Contender"
-        return "Ascending"
-    if strength_tier == "mid":
-        if score >= 0.55:
-            return "Win-Now Push"
-        if score >= 0.4:
-            return "Treading Water"
-        return "Ascending" if pick_ratio >= 1.0 else "Retooling"
+def _classify_contention(score: float, pick_ratio: float, top_third: bool) -> str:
+    if score >= 0.7:
+        return "All-In" if pick_ratio < 0.5 else "Championship Window"
     if score >= 0.55:
-        return "Fire Sale"
-    if score >= 0.4:
-        return "Retooling"
-    return "Full Rebuild" if pick_ratio >= 0.8 else "Treading Water"
+        return "Sustainable Contender"
+    if score >= 0.45:
+        return "Treading Water"
+    if score >= 0.35:
+        return "Ascending" if pick_ratio >= 1.0 or top_third else "Retooling"
+    return "Full Rebuild" if pick_ratio >= 1.0 else "Retooling"
 
 
 def _player_entry(pid: str, players_cache: dict) -> dict:
@@ -250,8 +237,6 @@ def compute_team_profile(
         entry = _player_entry(pid, players_cache)
         value = entry["fc_value"]
         pos = entry["position"]
-        if pos not in SKILL_POSITIONS:
-            continue
         age = entry.get("age") or 25.0
 
         player_value += value
@@ -388,18 +373,14 @@ def compute_league_profiles(
         profile["positional_need"] = need
         del profile["positional_starters"]
 
-    # Positional rank: where does each team's starter value at each position rank
-    # among all teams in the league? Rank 1 = best. "n" carries the league size.
-    for profile in profiles:
-        profile["positional_rank"] = {"n": n}
+    # Positional league ranks — rank each team at QB/RB/WR/TE by starter value
+    num_teams = len(profiles)
     for pos in SKILL_POSITIONS:
         sorted_by_pos = sorted(
-            profiles,
-            key=lambda p: p["positional_starter_value"].get(pos, 0),
-            reverse=True,
+            profiles, key=lambda p: p["positional_starter_value"].get(pos, 0), reverse=True
         )
         for rank, profile in enumerate(sorted_by_pos, start=1):
-            profile["positional_rank"][pos] = rank
+            profile.setdefault("positional_rank", {"n": num_teams})[pos] = rank
 
     # Tailored contention categories — blend roster age (contention_score) with
     # future draft capital and overall roster strength rather than a flat 3-way split.
@@ -415,14 +396,9 @@ def compute_league_profiles(
             profile["pick_value"] / league_avg_pick_value if league_avg_pick_value > 0 else 1.0
         )
         rank = value_rank[profile["roster_id"]]
-        if rank <= top_cut:
-            strength_tier = "top"
-        elif rank > n - top_cut:
-            strength_tier = "bottom"
-        else:
-            strength_tier = "mid"
+        top_third = rank <= top_cut
         profile["contention_category"] = _classify_contention(
-            profile["contention_score"], pick_ratio, strength_tier
+            profile["contention_score"], pick_ratio, top_third
         )
 
     # Estimate projected pick slot using current player value as standings proxy.
