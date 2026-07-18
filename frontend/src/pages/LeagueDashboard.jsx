@@ -15,13 +15,14 @@ export default function LeagueDashboard() {
 
   useEffect(() => {
     setLoading(true)
+    setError(null)
     api.getLeague(leagueId)
       .then((d) => {
         setData(d)
         saveRecentLeague({ id: leagueId, name: d.league_name, season: d.season })
       })
       .catch(async () => {
-        // League not in DB (e.g. after a server restart) — auto-sync then load
+        // League not in DB — auto-sync then reload
         try {
           setSyncing(true)
           await api.syncLeague(leagueId)
@@ -29,7 +30,10 @@ export default function LeagueDashboard() {
           setData(d)
           saveRecentLeague({ id: leagueId, name: d.league_name, season: d.season })
         } catch (e2) {
-          setError(e2.message)
+          const msg = e2?.message || String(e2)
+          setError(msg.includes('404') || msg.toLowerCase().includes('not found')
+            ? `League ${leagueId} not found. Check the ID and try again.`
+            : `Failed to load league: ${msg}`)
         } finally {
           setSyncing(false)
         }
@@ -44,7 +48,7 @@ export default function LeagueDashboard() {
       const fresh = await api.getLeague(leagueId)
       setData(fresh)
     } catch (e) {
-      setError(e.message)
+      setError(`Sync failed: ${e?.message || e}`)
     } finally {
       setSyncing(false)
     }
@@ -54,7 +58,12 @@ export default function LeagueDashboard() {
   if (error) return (
     <div className="error-state">
       <p>❌ {error}</p>
-      <button className="btn btn-secondary" onClick={() => navigate('/')}>← Back</button>
+      <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+        <button className="btn btn-accent" onClick={() => { setError(null); setLoading(true); handleSync() }}>
+          ↻ Retry
+        </button>
+        <button className="btn btn-secondary" onClick={() => navigate('/')}>← Back</button>
+      </div>
     </div>
   )
   if (!data) return null

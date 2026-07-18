@@ -12,7 +12,10 @@ async function request(path) {
 export const api = {
   getLeague: (leagueId) => request(`/leagues/${leagueId}`),
   syncLeague: (leagueId) =>
-    fetch(`${BASE}/leagues/${leagueId}/sync`, { method: 'POST' }).then((r) => r.json()),
+    fetch(`${BASE}/leagues/${leagueId}/sync`, { method: 'POST' }).then((r) => {
+      if (!r.ok) return r.json().catch(() => ({ detail: r.statusText })).then((e) => { throw new Error(e.detail || 'Sync failed') })
+      return r.json()
+    }),
   getTeam: (leagueId, rosterId) => request(`/leagues/${leagueId}/teams/${rosterId}`),
   getTradesForTeam: (leagueId, rosterId, opts = {}) => {
     const params = new URLSearchParams({ roster_id: rosterId })
