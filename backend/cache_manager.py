@@ -6,7 +6,6 @@ import json
 import re
 from datetime import datetime, timedelta, timezone
 from database import db
-import sleeper_client
 import fantasycalc_client
 
 CACHE_TTL_HOURS = 24
@@ -56,17 +55,20 @@ def players_cache_is_stale(ppr: float = 1.0, num_qbs: int = 1) -> bool:
 
 async def refresh_cache(num_qbs: int = 1, ppr: float = 1.0):
     """
-    Fetch fresh data from Sleeper (player metadata) + FantasyCalc (values),
-    merge, and upsert into SQLite.
+    Fetch player values from FantasyCalc and upsert into the local cache.
+    Player metadata (name, position, age, nfl_team) comes directly from
+    the FC response — this avoids the separate Sleeper /players/nfl call
+    which downloads 10MB+ of data and takes 10-30s, causing request
+    timeouts on Render's free tier.  Players not ranked by FC (depth
+    players, unrostered rookies) are skipped; they fall back to
+    "Player {sleeper_id}" display names in the UI.
     """
     now = _now_iso()
 
-    # --- FantasyCalc values ---
     fc_data = await fantasycalc_client.get_values(num_qbs=num_qbs, ppr=ppr)
 
-    fc_player_map: dict[str, int] = {}   # sleeper_id -> value
+    player_rows: list[dict] = []
     picks_rows: list[dict] = []
-
     _FP_PATTERN = re.compile(r"^FP_(\d{4})_(\d)$")
 
     for entry in fc_data:
@@ -75,8 +77,6 @@ async def refresh_cache(num_qbs: int = 1, ppr: float = 1.0):
         position = player.get("position", "")
         sleeper_id = str(player.get("sleeperId") or "")
 
-        # FantasyCalc returns generic future picks as position="PICK"
-        # with sleeperId like "FP_2026_1"
         if position == "PICK":
             m = _FP_PATTERN.match(sleeper_id)
             if m:
@@ -89,29 +89,19 @@ async def refresh_cache(num_qbs: int = 1, ppr: float = 1.0):
                     "fc_value": value,
                     "last_updated": now,
                 })
-        elif sleeper_id:
-            fc_player_map[sleeper_id] = value
-
-    # --- Sleeper player metadata ---
-    sleeper_players = await sleeper_client.get_all_players()
-
-    player_rows = []
-    for sid, p in sleeper_players.items():
-        pos = p.get("position", "")
-        if pos not in SKILL_POSITIONS:
-            continue
-        player_rows.append({
-            "sleeper_id": str(sid),
-            "name": p.get("full_name") or p.get("last_name", ""),
-            "position": pos,
-            "nfl_team": p.get("team", ""),
-            "age": p.get("age"),
-            "years_exp": p.get("years_exp"),
-            "fc_value": fc_player_map.get(str(sid), 0),
-            "ppr": ppr,
-            "num_qbs": num_qbs,
-            "last_updated": now,
-        })
+        elif sleeper_id and position in SKILL_POSITIONS:
+            player_rows.append({
+                "sleeper_id": sleeper_id,
+                "name": player.get("name", ""),
+                "position": position,
+                "nfl_team": player.get("nflTeamAbbr", ""),
+                "age": player.get("age"),
+                "years_exp": None,
+                "fc_value": value,
+                "ppr": ppr,
+                "num_qbs": num_qbs,
+                "last_updated": now,
+            })
 
     with db() as conn:
         conn.executemany(
