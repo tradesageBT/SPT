@@ -11,6 +11,7 @@ from value_engine import compute_league_profiles, build_picks_by_roster
 router = APIRouter(prefix="/api/leagues", tags=["leagues"])
 
 SYNC_TTL_MINUTES = 60
+MAX_CHAIN_SEASONS = 3  # limit historical seasons fetched to stay within request timeout
 
 
 def _now_iso():
@@ -21,7 +22,7 @@ def _sync_stale(last_synced_at: str | None) -> bool:
     return cache_manager._is_stale(last_synced_at, hours=SYNC_TTL_MINUTES / 60)
 
 
-async def _sync_league(league_id: str, force: bool = False):
+async def _sync_league(league_id: str, force: bool = False, background_tasks: BackgroundTasks | None = None):
     """
     Fetch Sleeper data, compute team profiles, persist to DB.
     Returns the league row.
@@ -35,11 +36,12 @@ async def _sync_league(league_id: str, force: bool = False):
     # league's /transactions endpoint only holds THAT season's trades. To get
     # the full trade history of a pick (which may have been dealt years ago),
     # walk the previous_league_id chain and fetch transactions from every
-    # season this league has existed.
+    # season this league has existed. Capped at MAX_CHAIN_SEASONS to bound
+    # the number of parallel Sleeper API calls and stay within request timeout.
     league_chain = [league_id]
     seen_ids = {league_id}
     prev_id = league_info.get("previous_league_id")
-    while prev_id and prev_id != "0" and prev_id not in seen_ids:
+    while prev_id and prev_id != "0" and prev_id not in seen_ids and len(league_chain) < MAX_CHAIN_SEASONS:
         league_chain.append(prev_id)
         seen_ids.add(prev_id)
         prev_info = await sleeper_client.get_league(prev_id)
@@ -101,12 +103,25 @@ async def _sync_league(league_id: str, force: bool = False):
     # FantasyCalc doesn't have a TEP param, but ppr already captures most of the
     # TE value signal. We store tep so we can show it in the UI.
 
-    # Refresh player cache if scoring settings changed or TTL expired
-    if cache_manager.players_cache_is_stale(ppr=ppr, num_qbs=num_qbs):
-        await cache_manager.refresh_cache(num_qbs=num_qbs, ppr=ppr)
-
+    # Player cache: if stale, only block when the cache is completely empty.
+    # If we have existing data, serve it immediately and refresh in background
+    # to avoid blocking the sync on a 10-30s FantasyCalc+Sleeper fetch cycle
+    # (which can push the total request time past Render's 60s timeout).
     players_cache = cache_manager.get_cached_players()
     picks_cache = cache_manager.get_cached_picks()
+
+    if cache_manager.players_cache_is_stale(ppr=ppr, num_qbs=num_qbs):
+        if not players_cache:
+            # Cache is completely empty — must block and fetch before computing profiles
+            await cache_manager.refresh_cache(num_qbs=num_qbs, ppr=ppr)
+            players_cache = cache_manager.get_cached_players()
+            picks_cache = cache_manager.get_cached_picks()
+        elif background_tasks is not None:
+            background_tasks.add_task(cache_manager.refresh_cache, num_qbs=num_qbs, ppr=ppr)
+        else:
+            await cache_manager.refresh_cache(num_qbs=num_qbs, ppr=ppr)
+            players_cache = cache_manager.get_cached_players()
+            picks_cache = cache_manager.get_cached_picks()
 
     current_season = int(league_info.get("season", 2026))
     draft_rounds = league_info.get("settings", {}).get("draft_rounds", 4)
@@ -232,7 +247,7 @@ async def _sync_league(league_id: str, force: bool = False):
 
 
 @router.get("/{league_id}")
-async def get_league(league_id: str):
+async def get_league(league_id: str, background_tasks: BackgroundTasks):
     init_db()
 
     with db() as conn:
@@ -259,7 +274,7 @@ async def get_league(league_id: str):
         }
 
     # Need to sync
-    league_info, profiles = await _sync_league(league_id)
+    league_info, profiles = await _sync_league(league_id, background_tasks=background_tasks)
     scoring = league_info.get("scoring_settings", {})
     roster_positions = league_info.get("roster_positions", [])
     nqbs = max(1, sum(1 for p in roster_positions if p in ("QB", "SUPER_FLEX")))
@@ -277,9 +292,9 @@ async def get_league(league_id: str):
 
 
 @router.post("/{league_id}/sync")
-async def force_sync(league_id: str):
+async def force_sync(league_id: str, background_tasks: BackgroundTasks):
     init_db()
-    league_info, profiles = await _sync_league(league_id, force=True)
+    league_info, profiles = await _sync_league(league_id, force=True, background_tasks=background_tasks)
     return {
         "ok": True,
         "league_name": league_info.get("name"),
