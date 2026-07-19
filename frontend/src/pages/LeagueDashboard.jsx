@@ -30,10 +30,14 @@ export default function LeagueDashboard() {
           setData(d)
           saveRecentLeague({ id: leagueId, name: d.league_name, season: d.season })
         } catch (e2) {
-          const msg = e2?.message || String(e2)
-          setError(msg.includes('404') || msg.toLowerCase().includes('not found')
-            ? `League ${leagueId} not found. Check the ID and try again.`
-            : `Failed to load league: ${msg}`)
+          if (e2 instanceof DOMException) {
+            setError('Could not reach the server — check your connection and retry.')
+          } else {
+            const msg = e2?.message || String(e2)
+            setError(msg.includes('404') || msg.toLowerCase().includes('not found')
+              ? `League ${leagueId} not found. Check the ID and try again.`
+              : `Failed to load league: ${msg}`)
+          }
         } finally {
           setSyncing(false)
         }

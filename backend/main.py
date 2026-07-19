@@ -1,9 +1,12 @@
 import os
 import time
+import traceback
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from database import init_db, db
 from routers import leagues, teams, trades
 import logger
@@ -16,6 +19,21 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    tb = traceback.format_exc()
+    print(f"[ERROR] {request.method} {request.url.path}: {type(exc).__name__}: {exc}\n{tb}")
+    logger.log("error", {
+        "path": request.url.path,
+        "method": request.method,
+        "exc_type": type(exc).__name__,
+        "exc_msg": str(exc),
+    })
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"{type(exc).__name__}: {exc}"},
+    )
 
 app.include_router(leagues.router)
 app.include_router(teams.router)
