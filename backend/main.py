@@ -43,8 +43,19 @@ app.include_router(trades.router)
 
 @app.on_event("startup")
 async def startup():
-    init_db()
-    logger.init_events_table()
+    import asyncio
+    last_exc = None
+    for attempt in range(6):
+        try:
+            init_db()
+            logger.init_events_table()
+            return
+        except Exception as exc:
+            last_exc = exc
+            wait = 2 ** attempt  # 1s, 2s, 4s, 8s, 16s, 32s
+            print(f"[STARTUP] DB connection attempt {attempt + 1} failed: {exc}. Retrying in {wait}s…")
+            await asyncio.sleep(wait)
+    raise RuntimeError(f"DB unavailable after 6 startup attempts: {last_exc}")
 
 
 @app.middleware("http")
