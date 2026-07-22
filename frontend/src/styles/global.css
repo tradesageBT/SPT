@@ -1241,7 +1241,7 @@ img { display: block; }
 }
 .draft-need-row {
   display: grid;
-  grid-template-columns: 30px 1fr 36px;
+  grid-template-columns: 30px 1fr 36px 30px;
   align-items: center;
   gap: 8px;
 }
@@ -1260,6 +1260,7 @@ img { display: block; }
 }
 .draft-need-count { font-size: 0.72rem; color: var(--accent); font-weight: 700; text-align: right; }
 .draft-need-count.done { color: var(--text-muted); font-weight: 400; }
+.draft-pos-rank { font-size: 0.72rem; font-weight: 700; text-align: right; }
 
 /* My picks list */
 .draft-my-picks {
@@ -1377,6 +1378,55 @@ img { display: block; }
 .draft-team-slot { font-size: 0.72rem; color: var(--text-muted); font-weight: 400; min-width: 24px; }
 
 .draft-empty { font-size: 0.78rem; color: var(--text-muted); font-style: italic; }
+
+/* League positional board */
+.draft-league-board {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 560px;
+  overflow-y: auto;
+}
+.draft-board-header {
+  display: grid;
+  grid-template-columns: 1fr 42px 42px 42px 42px;
+  gap: 8px;
+  padding: 4px 10px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+.draft-board-row {
+  display: grid;
+  grid-template-columns: 1fr 42px 42px 42px 42px;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface2);
+  font-size: 0.85rem;
+  border-left: 2px solid transparent;
+}
+.draft-board-row.mine {
+  border-left-color: var(--accent);
+  background: rgba(1,217,172,0.06);
+}
+.draft-board-team {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+.draft-board-rank {
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: center;
+}
 
 @media (max-width: 768px) {
   .draft-room-body { grid-template-columns: 1fr; }
