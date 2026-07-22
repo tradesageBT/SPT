@@ -91,6 +91,9 @@ export default function LeagueDashboard() {
           </div>
         </div>
         <div className="dashboard-actions">
+          <Link to={`/league/${leagueId}/draft`} className="btn btn-secondary">
+            Draft Room
+          </Link>
           <Link to={`/league/${leagueId}/trades`} className="btn btn-secondary">
             Trade Ideas
           </Link>

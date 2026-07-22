@@ -4,6 +4,7 @@ import LeagueDashboard from './pages/LeagueDashboard'
 import TeamProfile from './pages/TeamProfile'
 import TradeIdeas from './pages/TradeIdeas'
 import TradeEvaluator from './pages/TradeEvaluator'
+import DraftRoom from './pages/DraftRoom'
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export default function App() {
           <Route path="/league/:leagueId/team/:rosterId" element={<TeamProfile />} />
           <Route path="/league/:leagueId/trades" element={<TradeIdeas />} />
           <Route path="/league/:leagueId/evaluate" element={<TradeEvaluator />} />
+          <Route path="/league/:leagueId/draft" element={<DraftRoom />} />
         </Routes>
       </main>
     </div>

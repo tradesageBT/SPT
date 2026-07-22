@@ -37,6 +37,7 @@ export const api = {
   getLeaguePlayers: (leagueId) => request(`/leagues/${leagueId}/players`),
   getPlayerHistory: (leagueId, playerId) => request(`/leagues/${leagueId}/player/${playerId}/history`),
   getRecentTrades: (leagueId) => request(`/leagues/${leagueId}/recent-transactions`),
+  getDraftState: (leagueId) => request(`/leagues/${leagueId}/draft`),
   evaluateTrade: (leagueId, body) =>
     fetch(`${BASE}/leagues/${leagueId}/evaluate-trade`, {
       method: 'POST',

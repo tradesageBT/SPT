@@ -302,6 +302,142 @@ async def force_sync(league_id: str, background_tasks: BackgroundTasks):
     }
 
 
+@router.get("/{league_id}/draft")
+async def get_draft_state(league_id: str):
+    """
+    Return the active (or most recent) startup draft state for this league.
+    Designed for live polling — client calls every ~5 seconds.
+    """
+    drafts = await sleeper_client.get_league_drafts(league_id)
+    if not drafts:
+        raise HTTPException(status_code=404, detail="No drafts found for this league")
+
+    # Prefer an in-progress draft; fall back to most recently created
+    active = next((d for d in drafts if d.get("status") == "drafting"), None)
+    draft = active or sorted(drafts, key=lambda d: d.get("created") or 0, reverse=True)[0]
+    draft_id = draft["draft_id"]
+
+    draft_detail, picks = await asyncio.gather(
+        sleeper_client.get_draft(draft_id),
+        sleeper_client.get_draft_picks(draft_id),
+    )
+
+    players_cache = cache_manager.get_cached_players()
+    picked_ids = {str(p.get("player_id")) for p in picks}
+
+    slot_to_roster = draft_detail.get("slot_to_roster_id") or {}
+    # Sleeper returns string keys; normalise to int→int
+    slot_to_roster_int = {int(k): int(v) for k, v in slot_to_roster.items()}
+    roster_to_slot = {v: k for k, v in slot_to_roster_int.items()}
+
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT roster_id, display_name FROM teams WHERE sleeper_league_id = ?",
+            (league_id,),
+        ).fetchall()
+    team_names = {r["roster_id"]: r["display_name"] for r in rows}
+
+    settings = draft_detail.get("settings") or {}
+    num_teams = int(settings.get("teams", len(slot_to_roster_int) or 12))
+    num_rounds = int(settings.get("rounds", 4))
+    total_picks = num_teams * num_rounds
+    picks_made = len(picks)
+    is_snake = draft_detail.get("type") == "snake"
+
+    def _pick_to_slot(pick_num: int) -> int:
+        rnd = (pick_num - 1) // num_teams          # 0-indexed round
+        pos = (pick_num - 1) % num_teams            # 0-indexed position in round
+        if is_snake and rnd % 2 == 1:
+            return num_teams - pos                  # reverses in even rounds
+        return pos + 1
+
+    on_the_clock_slot = None
+    on_the_clock_roster = None
+    on_the_clock_team = None
+    if picks_made < total_picks:
+        on_the_clock_slot = _pick_to_slot(picks_made + 1)
+        on_the_clock_roster = slot_to_roster_int.get(on_the_clock_slot)
+        on_the_clock_team = team_names.get(on_the_clock_roster, f"Team {on_the_clock_roster}") if on_the_clock_roster else None
+
+    # Available players: from cache, exclude already-picked, sort by value
+    available = [
+        {
+            "sleeper_id": sid,
+            "name": p.get("name", sid),
+            "position": p.get("position", ""),
+            "nfl_team": p.get("nfl_team", ""),
+            "age": p.get("age"),
+            "fc_value": p.get("fc_value", 0),
+        }
+        for sid, p in players_cache.items()
+        if sid not in picked_ids
+    ]
+    available.sort(key=lambda x: x["fc_value"], reverse=True)
+
+    # Recent picks feed (last 20, newest first)
+    recent_picks = []
+    for pick in reversed(picks[-20:]):
+        pid = str(pick.get("player_id", ""))
+        p = players_cache.get(pid, {})
+        roster_id = pick.get("roster_id")
+        recent_picks.append({
+            "overall_pick": pick.get("pick_no"),
+            "round": pick.get("round"),
+            "pick_in_round": pick.get("draft_slot"),
+            "roster_id": roster_id,
+            "team_name": team_names.get(roster_id, f"Team {roster_id}") if roster_id else "",
+            "player_name": p.get("name", pid) if pid else "Unknown",
+            "position": p.get("position", ""),
+            "nfl_team": p.get("nfl_team", ""),
+            "fc_value": p.get("fc_value", 0),
+        })
+
+    # Team builds: aggregate picks by roster, ordered by draft slot
+    team_builds: dict = {}
+    for pick in picks:
+        pid = str(pick.get("player_id", ""))
+        roster_id = pick.get("roster_id")
+        if not roster_id:
+            continue
+        p = players_cache.get(pid, {})
+        team_builds.setdefault(roster_id, []).append({
+            "sleeper_id": pid,
+            "name": p.get("name", pid),
+            "position": p.get("position", ""),
+            "nfl_team": p.get("nfl_team", ""),
+            "fc_value": p.get("fc_value", 0),
+            "overall_pick": pick.get("pick_no"),
+        })
+
+    teams = [
+        {
+            "roster_id": roster_id,
+            "team_name": team_names.get(roster_id, f"Team {roster_id}"),
+            "slot": roster_to_slot.get(roster_id),
+            "players": sorted(drafted, key=lambda x: x["overall_pick"] or 0),
+        }
+        for roster_id, drafted in sorted(
+            team_builds.items(), key=lambda x: roster_to_slot.get(x[0], 999)
+        )
+    ]
+
+    return {
+        "draft_id": draft_id,
+        "status": draft_detail.get("status", "unknown"),
+        "type": draft_detail.get("type", "snake"),
+        "num_teams": num_teams,
+        "num_rounds": num_rounds,
+        "picks_made": picks_made,
+        "total_picks": total_picks,
+        "on_the_clock_slot": on_the_clock_slot,
+        "on_the_clock_roster": on_the_clock_roster,
+        "on_the_clock_team": on_the_clock_team,
+        "available": available[:200],
+        "recent_picks": recent_picks,
+        "teams": teams,
+    }
+
+
 def _team_row_to_dict(row) -> dict:
     d = dict(row)
     for field in ("positional_breakdown", "positional_surplus", "positional_rank", "roster_data"):
