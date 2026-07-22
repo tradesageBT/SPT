@@ -76,19 +76,41 @@ export default function DraftRoom() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [view, setView] = useState('ALL')
+  const [search, setSearch] = useState('')
   const [showPicker, setShowPicker] = useState(false)
   const [expandedTeam, setExpandedTeam] = useState(null)
   const [myRosterId, setMyRosterId] = useState(() => {
     try { return JSON.parse(localStorage.getItem(`draft_me_${leagueId}`)) } catch { return null }
   })
+  const [queue, setQueue] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(`draft_queue_${leagueId}`)) || []) } catch { return new Set() }
+  })
   const intervalRef = useRef(null)
   const gridRef = useRef(null)
+  const wasMyTurnRef = useRef(false)
+
+  // Request notification permission once on mount
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
+  }, [])
 
   function pickTeam(rosterId) {
     setMyRosterId(rosterId)
     localStorage.setItem(`draft_me_${leagueId}`, JSON.stringify(rosterId))
     setShowPicker(false)
     setView('YOU')
+  }
+
+  function toggleQueue(sleeperId) {
+    setQueue(prev => {
+      const next = new Set(prev)
+      if (next.has(sleeperId)) next.delete(sleeperId)
+      else next.add(sleeperId)
+      localStorage.setItem(`draft_queue_${leagueId}`, JSON.stringify([...next]))
+      return next
+    })
   }
 
   async function fetchDraft() {
@@ -132,7 +154,20 @@ export default function DraftRoom() {
     [state?.is_startup, state?.num_qbs])
 
   const posRanks = useMemo(() => state ? computePosRanks(state.teams) : {}, [state?.teams])
-  const isMyTurn = state && myRosterId != null && state.on_the_clock_roster === myRosterId
+  const isMyTurn = !!(state && myRosterId != null && state.on_the_clock_roster === myRosterId)
+
+  // Fire browser notification when OTC flips to the user
+  useEffect(() => {
+    if (isMyTurn && !wasMyTurnRef.current && state?.status === 'drafting') {
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('Your Pick!', {
+          body: `You are on the clock — Pick #${state.picks_made + 1}`,
+          tag: 'draft-otc',
+        })
+      }
+    }
+    wasMyTurnRef.current = isMyTurn
+  }, [isMyTurn])
 
   const nextMyPick = useMemo(() => {
     if (!state || !myTeam?.slot) return null
@@ -141,9 +176,14 @@ export default function DraftRoom() {
 
   const picksUntilMine = nextMyPick != null ? nextMyPick - state.picks_made - 1 : null
 
-  // Available players: filter + need-rank for YOU tab
+  // Available players sorted/filtered per view
   const baseList = useMemo(() => {
     if (!state) return []
+    if (view === 'QUEUE') {
+      return state.available
+        .filter(p => queue.has(p.sleeper_id))
+        .sort((a, b) => b.fc_value - a.fc_value)
+    }
     if (view === 'YOU') {
       return [...state.available]
         .map(p => {
@@ -156,25 +196,33 @@ export default function DraftRoom() {
     }
     const list = view === 'ALL' ? state.available : state.available.filter(p => p.position === view)
     return list.slice(0, 100)
-  }, [state?.available, view, myCounts, targets])
+  }, [state?.available, view, myCounts, targets, queue])
+
+  // Apply search filter
+  const searchFiltered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    if (!q) return baseList
+    return baseList.filter(p => p.name.toLowerCase().includes(q))
+  }, [baseList, search])
 
   // Insert tier breaks
   const tieredList = useMemo(() => {
-    if (!['ALL', 'QB', 'RB', 'WR', 'TE', 'YOU'].includes(view) || !baseList.length) return []
+    const PLAYER_VIEWS_ALL = ['ALL', 'QB', 'RB', 'WR', 'TE', 'YOU', 'QUEUE']
+    if (!PLAYER_VIEWS_ALL.includes(view) || !searchFiltered.length) return []
     const result = []
     let tier = 1, rank = 0
     result.push({ _type: 'tier', label: `Tier ${tier}` })
-    for (let i = 0; i < baseList.length; i++) {
-      result.push({ _type: 'player', _rank: ++rank, ...baseList[i] })
-      if (i < baseList.length - 1) {
-        const drop = baseList[i].fc_value - baseList[i + 1].fc_value
-        if (drop > 250 && drop / Math.max(baseList[i].fc_value, 1) > 0.12) {
+    for (let i = 0; i < searchFiltered.length; i++) {
+      result.push({ _type: 'player', _rank: ++rank, ...searchFiltered[i] })
+      if (i < searchFiltered.length - 1) {
+        const drop = searchFiltered[i].fc_value - searchFiltered[i + 1].fc_value
+        if (drop > 250 && drop / Math.max(searchFiltered[i].fc_value, 1) > 0.12) {
           result.push({ _type: 'tier', label: `Tier ${++tier}` })
         }
       }
     }
     return result
-  }, [baseList, view])
+  }, [searchFiltered, view])
 
   // All picks indexed by pick_no
   const allPicksMap = useMemo(() => {
@@ -250,7 +298,7 @@ export default function DraftRoom() {
   const statusLabel = { drafting: 'Live', complete: 'Complete', pre_draft: 'Pre-Draft' }[state.status] ?? state.status
   const N = state.num_teams
   const PLAYER_VIEWS = ['ALL', 'QB', 'RB', 'WR', 'TE']
-  const isPlayerView = PLAYER_VIEWS.includes(view) || view === 'YOU'
+  const isPlayerView = PLAYER_VIEWS.includes(view) || view === 'YOU' || view === 'QUEUE'
 
   return (
     <div className="draft-room">
@@ -324,6 +372,9 @@ export default function DraftRoom() {
                 ★ You
               </button>
             )}
+            <button className={`trade-filter-btn draft-queue-tab${view === 'QUEUE' ? ' active' : ''}`} onClick={() => setView('QUEUE')}>
+              ☆ Queue{queue.size > 0 && ` (${queue.size})`}
+            </button>
             {PLAYER_VIEWS.map(v => (
               <button key={v} className={`trade-filter-btn${view === v ? ' active' : ''}`} onClick={() => setView(v)}>{v}</button>
             ))}
@@ -333,22 +384,48 @@ export default function DraftRoom() {
             ))}
           </div>
 
+          {/* Search bar for player views */}
+          {isPlayerView && (
+            <div className="draft-search-wrap">
+              <input
+                className="draft-search"
+                type="text"
+                placeholder="Search players…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+              {search && (
+                <button className="draft-search-clear" onClick={() => setSearch('')}>✕</button>
+              )}
+            </div>
+          )}
+
           {/* Available players with tier breaks */}
           {isPlayerView && (
             <div className="draft-player-list">
-              {tieredList.map((item, i) =>
-                item._type === 'tier' ? (
-                  <div key={`t${i}`} className="draft-tier-break"><span>{item.label}</span></div>
-                ) : (
-                  <div key={item.sleeper_id} className="draft-player-row">
-                    {view === 'YOU' && <span className="draft-rank">{item._rank}</span>}
-                    <span className="draft-player-pos" style={{ color: POS_COLOR[item.position] || 'var(--text-muted)' }}>{item.position}</span>
-                    <span className="draft-player-name">{item.name}</span>
-                    <span className="draft-player-nfl">{item.nfl_team}</span>
-                    <span className="draft-player-val">{item.fc_value.toLocaleString()}</span>
-                  </div>
+              {tieredList.length === 0
+                ? <p className="draft-empty">{view === 'QUEUE' ? 'No players queued' : 'No players found'}</p>
+                : tieredList.map((item, i) =>
+                  item._type === 'tier' ? (
+                    <div key={`t${i}`} className="draft-tier-break"><span>{item.label}</span></div>
+                  ) : (
+                    <div key={item.sleeper_id} className="draft-player-row">
+                      {view === 'YOU' && <span className="draft-rank">{item._rank}</span>}
+                      <span className="draft-player-pos" style={{ color: POS_COLOR[item.position] || 'var(--text-muted)' }}>{item.position}</span>
+                      <span className="draft-player-name">{item.name}</span>
+                      <span className="draft-player-nfl">{item.nfl_team}</span>
+                      <span className="draft-player-val">{item.fc_value.toLocaleString()}</span>
+                      <button
+                        className={`draft-queue-btn${queue.has(item.sleeper_id) ? ' queued' : ''}`}
+                        onClick={e => { e.stopPropagation(); toggleQueue(item.sleeper_id) }}
+                        title={queue.has(item.sleeper_id) ? 'Remove from queue' : 'Add to queue'}
+                      >
+                        {queue.has(item.sleeper_id) ? '★' : '☆'}
+                      </button>
+                    </div>
+                  )
                 )
-              )}
+              }
             </div>
           )}
 
