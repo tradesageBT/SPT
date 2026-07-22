@@ -331,11 +331,16 @@ async def get_draft_state(league_id: str):
     roster_to_slot = {v: k for k, v in slot_to_roster_int.items()}
 
     with db() as conn:
-        rows = conn.execute(
+        team_rows = conn.execute(
             "SELECT roster_id, display_name FROM teams WHERE sleeper_league_id = ?",
             (league_id,),
         ).fetchall()
-    team_names = {r["roster_id"]: r["display_name"] for r in rows}
+        league_row = conn.execute(
+            "SELECT num_qbs FROM leagues WHERE sleeper_league_id = ?",
+            (league_id,),
+        ).fetchone()
+    team_names = {r["roster_id"]: r["display_name"] for r in team_rows}
+    num_qbs = league_row["num_qbs"] if league_row else 1
 
     settings = draft_detail.get("settings") or {}
     num_teams = int(settings.get("teams", len(slot_to_roster_int) or 12))
@@ -343,6 +348,7 @@ async def get_draft_state(league_id: str):
     total_picks = num_teams * num_rounds
     picks_made = len(picks)
     is_snake = draft_detail.get("type") == "snake"
+    is_startup = num_rounds >= 10
 
     def _pick_to_slot(pick_num: int) -> int:
         rnd = (pick_num - 1) // num_teams          # 0-indexed round
@@ -392,7 +398,7 @@ async def get_draft_state(league_id: str):
             "fc_value": p.get("fc_value", 0),
         })
 
-    # Team builds: aggregate picks by roster, ordered by draft slot
+    # Team builds: aggregate picks by roster
     team_builds: dict = {}
     for pick in picks:
         pid = str(pick.get("player_id", ""))
@@ -409,17 +415,19 @@ async def get_draft_state(league_id: str):
             "overall_pick": pick.get("pick_no"),
         })
 
-    teams = [
-        {
-            "roster_id": roster_id,
-            "team_name": team_names.get(roster_id, f"Team {roster_id}"),
-            "slot": roster_to_slot.get(roster_id),
-            "players": sorted(drafted, key=lambda x: x["overall_pick"] or 0),
-        }
-        for roster_id, drafted in sorted(
-            team_builds.items(), key=lambda x: roster_to_slot.get(x[0], 999)
-        )
-    ]
+    # Always include every team (even those with 0 picks) so the team picker works
+    all_teams = sorted(
+        [
+            {
+                "roster_id": rid,
+                "team_name": team_names.get(rid, f"Team {rid}"),
+                "slot": roster_to_slot.get(rid),
+                "players": sorted(team_builds.get(rid, []), key=lambda x: x["overall_pick"] or 0),
+            }
+            for rid in team_names
+        ],
+        key=lambda t: t["slot"] or 999,
+    )
 
     return {
         "draft_id": draft_id,
@@ -427,6 +435,8 @@ async def get_draft_state(league_id: str):
         "type": draft_detail.get("type", "snake"),
         "num_teams": num_teams,
         "num_rounds": num_rounds,
+        "num_qbs": num_qbs,
+        "is_startup": is_startup,
         "picks_made": picks_made,
         "total_picks": total_picks,
         "on_the_clock_slot": on_the_clock_slot,
@@ -434,7 +444,7 @@ async def get_draft_state(league_id: str):
         "on_the_clock_team": on_the_clock_team,
         "available": available[:200],
         "recent_picks": recent_picks,
-        "teams": teams,
+        "teams": all_teams,
     }
 
 
