@@ -533,7 +533,7 @@ export default function DraftRoom() {
                           background: done ? 'var(--border)' : POS_COLOR[pos],
                         }} />
                       </div>
-                      <span className={`draft-need-count${done ? ' done' : ''}`}>{count}/{target}</span>
+                      <span className={`draft-need-count${done ? ' done' : ''}`}>{done ? count : `${count}/${target}`}</span>
                       {rank != null && (
                         <span className="draft-pos-rank" style={{ color: rankColor(rank, N) }}>#{rank}</span>
                       )}
