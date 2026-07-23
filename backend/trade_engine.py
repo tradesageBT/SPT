@@ -229,6 +229,7 @@ def generate_trades_between(
     include_picks: bool = False,
     force_mode: bool = False,
     expand_mode: bool = False,
+    force_player_id: str | None = None,
 ) -> list[dict]:
     trades = []
 
@@ -254,9 +255,9 @@ def generate_trades_between(
         tradeable_a += picks_a
         tradeable_b += picks_b
 
-    # 15% normal, 20% force, 35% expand
+    # 15% normal, 20% force, 50% expand
     if expand_mode:
-        fairness_pct = FAIRNESS_PCT * (7/3)
+        fairness_pct = FAIRNESS_PCT * (10/3)
     elif force_mode:
         fairness_pct = FAIRNESS_PCT * (4/3)
     else:
@@ -302,8 +303,9 @@ def generate_trades_between(
             is_pick_trade = pos_a == "PK" or pos_b == "PK"
             gives_sense = pos_a in (surplus_a & deficit_b)
             gets_sense  = pos_b in (surplus_b & deficit_a)
-            # In force/expand mode skip positional filter — show all value-matched 1-for-1s
-            if not (effective_force or is_pick_trade or gives_sense or gets_sense):
+            same_pos    = pos_a == pos_b and pos_a in SKILL_POS
+            # Always show: force/expand mode, picks, positional sense, same-position swap
+            if not (effective_force or is_pick_trade or gives_sense or gets_sense or same_pos):
                 continue
             t = _build_trade(
                 [pa], [pb],
@@ -388,8 +390,11 @@ def generate_trades_between(
         combined  = -(ld_a + ld_b)
         return (both_up, one_up, combined, t["value_delta"])
 
-    cap = 75 if expand_mode else (40 if force_mode else 15)
-    return sorted(unique, key=_sort_key)[:cap]
+    sorted_trades = sorted(unique, key=_sort_key)
+    # In force/expand mode return everything — the route handler filters by player and caps
+    if force_mode or expand_mode:
+        return sorted_trades
+    return sorted_trades[:20]
 
 
 def _pick_asset(pick: dict) -> dict:
