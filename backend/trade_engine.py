@@ -302,13 +302,6 @@ def generate_trades_between(
                 continue
             pos_a = pa.get("position", "")
             pos_b = pb.get("position", "")
-            is_pick_trade = pos_a == "PK" or pos_b == "PK"
-            gives_sense = pos_a in (surplus_a & deficit_b)
-            gets_sense  = pos_b in (surplus_b & deficit_a)
-            same_pos    = pos_a == pos_b and pos_a in SKILL_POS
-            # Always show: force/expand mode, picks, positional sense, same-position swap
-            if not (effective_force or is_pick_trade or gives_sense or gets_sense or same_pos):
-                continue
             t = _build_trade(
                 [pa], [pb],
                 f"1-for-1: {team_a['display_name']} {pos_a} ↔ {team_b['display_name']} {pos_b}",
