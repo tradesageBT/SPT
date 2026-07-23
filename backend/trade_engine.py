@@ -176,10 +176,36 @@ def _value(items: list[dict]) -> int:
     return sum(x.get("fc_value", 0) for x in items)
 
 
-def _is_fair(v_a: int, v_b: int) -> bool:
+# Multiplier applied to each additional player of the same position on one side.
+# First player: 100%, second: 80%, third: 64%, etc.
+_STACK_DISCOUNT = 0.80
+
+
+def _effective_value(items: list[dict]) -> int:
+    """
+    Trade value with a positional-stacking discount.
+    Sending multiple players at the same position earns diminishing returns
+    so that 4 WR3s can't equal a WR1 in value matching.
+    Picks are not discounted — each is independently valuable.
+    """
+    pos_seen: dict[str, int] = {}
+    total = 0
+    for item in sorted(items, key=lambda x: x.get("fc_value", 0), reverse=True):
+        pos = item.get("position", "")
+        val = item.get("fc_value", 0)
+        if pos == "PK" or pos not in SKILL_POS:
+            total += val
+        else:
+            n = pos_seen.get(pos, 0)
+            total += int(val * (_STACK_DISCOUNT ** n))
+            pos_seen[pos] = n + 1
+    return total
+
+
+def _is_fair(v_a: int, v_b: int, pct: float = FAIRNESS_PCT) -> bool:
     if v_a == 0 and v_b == 0:
         return True
-    return abs(v_a - v_b) / max(v_a, v_b, 1) <= FAIRNESS_PCT
+    return abs(v_a - v_b) / max(v_a, v_b, 1) <= pct
 
 
 def _surplus_positions(profile: dict) -> list[str]:
@@ -241,7 +267,11 @@ def generate_trades_between(
         val_b = _value(gives_b)
         if val_a < MIN_SIDE_VALUE or val_b < MIN_SIDE_VALUE:
             return None
-        if abs(val_a - val_b) / max(val_a, val_b, 1) > fairness_pct:
+        # Use effective (stacking-discounted) value for fairness gating so that
+        # multiple same-position players can't stack up to an elite single player.
+        eff_a = _effective_value(gives_a)
+        eff_b = _effective_value(gives_b)
+        if not _is_fair(eff_a, eff_b, fairness_pct):
             return None
 
         breakdown_a = compute_trade_breakdown(team_a, gives_a, gives_b)
@@ -265,7 +295,7 @@ def generate_trades_between(
     # --- 1-for-1 ---
     for pa in tradeable_a:
         for pb in tradeable_b:
-            if not _is_fair(pa["fc_value"], pb["fc_value"]):
+            if not _is_fair(pa["fc_value"], pb["fc_value"], fairness_pct):
                 continue
             pos_a = pa.get("position", "")
             pos_b = pb.get("position", "")
@@ -285,7 +315,7 @@ def generate_trades_between(
     # --- 2-for-1 ---
     for pa1, pa2 in combinations(tradeable_a, 2):
         for pb in tradeable_b:
-            if not _is_fair(_value([pa1, pa2]), pb["fc_value"]):
+            if not _is_fair(_effective_value([pa1, pa2]), pb["fc_value"], fairness_pct):
                 continue
             t = _build_trade(
                 [pa1, pa2], [pb],
@@ -296,11 +326,23 @@ def generate_trades_between(
 
     for pb1, pb2 in combinations(tradeable_b, 2):
         for pa in tradeable_a:
-            if not _is_fair(pa["fc_value"], _value([pb1, pb2])):
+            if not _is_fair(pa["fc_value"], _effective_value([pb1, pb2]), fairness_pct):
                 continue
             t = _build_trade(
                 [pa], [pb1, pb2],
                 f"2-for-1: {team_b['display_name']} consolidates depth",
+            )
+            if t:
+                trades.append(t)
+
+    # --- 2-for-2 ---
+    for pa1, pa2 in combinations(tradeable_a, 2):
+        for pb1, pb2 in combinations(tradeable_b, 2):
+            if not _is_fair(_effective_value([pa1, pa2]), _effective_value([pb1, pb2]), fairness_pct):
+                continue
+            t = _build_trade(
+                [pa1, pa2], [pb1, pb2],
+                f"2-for-2: {team_a['display_name']} ↔ {team_b['display_name']}",
             )
             if t:
                 trades.append(t)
@@ -346,7 +388,7 @@ def generate_trades_between(
         combined  = -(ld_a + ld_b)
         return (both_up, one_up, combined, t["value_delta"])
 
-    cap = 50 if expand_mode else (25 if force_mode else 10)
+    cap = 75 if expand_mode else (40 if force_mode else 15)
     return sorted(unique, key=_sort_key)[:cap]
 
 
