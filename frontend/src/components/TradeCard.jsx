@@ -125,7 +125,15 @@ export default function TradeCard({ trade, leagueId, highlightId }) {
               <PlayerChip key={i} player={p} highlighted={highlightId && p.sleeper_id === highlightId} />
             ))}
           </div>
-          <div className="trade-total">Assets: {fmt(trade.value_a_gives)}</div>
+          <div className="trade-total">
+            Assets: {fmt(trade.value_a_gives)}
+            {trade.effective_value_a_gives != null && trade.effective_value_a_gives < trade.value_a_gives && (
+              <span className="trade-stack-adj" title="Stack discount applied: multiple players at the same position are worth less combined than their raw FC values suggest">
+                {' '}· trade value: <strong>{fmt(trade.effective_value_a_gives)}</strong>
+                <span className="trade-stack-penalty"> (−{fmt(trade.value_a_gives - trade.effective_value_a_gives)} stack)</span>
+              </span>
+            )}
+          </div>
           {showAge && ageA != null && (
             <div className={`trade-age-row ${aGetsYounger ? 'trade-age-win' : ''}`}>
               Avg age given: {ageA.toFixed(1)} yrs{aGetsYounger ? ' · receives younger' : ''}
@@ -156,7 +164,15 @@ export default function TradeCard({ trade, leagueId, highlightId }) {
               <PlayerChip key={i} player={p} highlighted={highlightId && p.sleeper_id === highlightId} />
             ))}
           </div>
-          <div className="trade-total">Assets: {fmt(trade.value_b_gives)}</div>
+          <div className="trade-total">
+            Assets: {fmt(trade.value_b_gives)}
+            {trade.effective_value_b_gives != null && trade.effective_value_b_gives < trade.value_b_gives && (
+              <span className="trade-stack-adj" title="Stack discount applied: multiple players at the same position are worth less combined than their raw FC values suggest">
+                {' '}· trade value: <strong>{fmt(trade.effective_value_b_gives)}</strong>
+                <span className="trade-stack-penalty"> (−{fmt(trade.value_b_gives - trade.effective_value_b_gives)} stack)</span>
+              </span>
+            )}
+          </div>
           {showAge && ageB != null && (
             <div className={`trade-age-row ${!aGetsYounger ? 'trade-age-win' : ''}`}>
               Avg age given: {ageB.toFixed(1)} yrs{!aGetsYounger ? ' · receives younger' : ''}

@@ -285,6 +285,8 @@ def generate_trades_between(
             "b_gives": gives_b,
             "value_a_gives": val_a,
             "value_b_gives": val_b,
+            "effective_value_a_gives": eff_a,
+            "effective_value_b_gives": eff_b,
             "value_delta": abs(val_a - val_b),
             "lineup_delta_a": breakdown_a["lineup_delta"],
             "lineup_delta_b": breakdown_b["lineup_delta"],

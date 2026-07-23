@@ -644,6 +644,9 @@ img { display: block; }
 .trade-gives-label { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
 .trade-players { display: flex; flex-direction: column; gap: 5px; margin-bottom: 8px; }
 .trade-total   { font-size: 0.78rem; color: var(--text-muted); }
+.trade-stack-adj { font-size: 0.75rem; color: var(--text-muted); }
+.trade-stack-adj strong { color: var(--warn); }
+.trade-stack-penalty { color: var(--danger); font-size: 0.7rem; }
 .trade-age-row { font-size: 0.72rem; color: var(--text-muted); margin-top: 3px; }
 .trade-age-win { color: #4ade80; }
 .player-chip { display: flex; align-items: center; gap: 6px; }
