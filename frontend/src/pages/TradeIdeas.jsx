@@ -97,6 +97,7 @@ export default function TradeIdeas() {
   // Sort / filter
   const [winWinOnly, setWinWinOnly] = useState(false)
   const [posFilter, setPosFilter] = useState(null)   // null | 'QB' | 'RB' | 'WR' | 'TE'
+  const [countFilter, setCountFilter] = useState(null) // null | 1 | 2
   const [sortBy, setSortBy] = useState('default')    // 'default' | 'fairness' | 'lineup'
   const [expanded, setExpanded] = useState(false)
 
@@ -128,10 +129,11 @@ export default function TradeIdeas() {
     let result = selectedPlayer ? trades.filter((t) => tradeContains(t, selectedPlayer.sleeper_id)) : trades
     if (winWinOnly) result = result.filter((t) => t.lineup_delta_a > 0 && t.lineup_delta_b > 0)
     if (posFilter)  result = result.filter((t) => tradeHasPos(t, posFilter))
+    if (countFilter != null) result = result.filter((t) => t.a_gives.length === countFilter && t.b_gives.length === countFilter)
     if (sortBy === 'fairness') result = [...result].sort((a, b) => a.value_delta - b.value_delta)
     if (sortBy === 'lineup')   result = [...result].sort((a, b) => (b.lineup_delta_a + b.lineup_delta_b) - (a.lineup_delta_a + a.lineup_delta_b))
     return result
-  }, [trades, selectedPlayer, winWinOnly, posFilter, sortBy])
+  }, [trades, selectedPlayer, winWinOnly, posFilter, countFilter, sortBy])
 
   function selectPlayer(player) {
     setSelectedPlayer(player)
@@ -214,6 +216,18 @@ export default function TradeIdeas() {
           >
             Win-Win only
           </button>
+        </div>
+
+        <div className="trade-filter-group">
+          {[1, 2].map((n) => (
+            <button
+              key={n}
+              className={`trade-filter-btn${countFilter === n ? ' active' : ''}`}
+              onClick={() => setCountFilter((v) => (v === n ? null : n))}
+            >
+              {n}v{n}
+            </button>
+          ))}
         </div>
 
         <div className="trade-filter-group">
