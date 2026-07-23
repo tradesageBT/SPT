@@ -78,13 +78,19 @@ function PlayerSearch({ leaguePlayers, addedIds, onAdd }) {
 
 function SidePanel({ label, assets, teamContext, onAdd, onRemove, leaguePlayers, teamsData }) {
   const [pickOpen, setPickOpen] = useState(false)
+  const [manualTeam, setManualTeam] = useState(null)
   const addedIds = useMemo(() => new Set(assets.map((a) => a.sleeper_id)), [assets])
 
+  // teamContext is set by the first player added; manualTeam lets picks be added first
+  const effectiveTeam = teamContext || manualTeam
+
+  useEffect(() => { if (teamContext) setManualTeam(null) }, [teamContext])
+
   const teamPicks = useMemo(() => {
-    if (!teamContext) return []
-    const team = teamsData.find((t) => t.roster_id === teamContext.roster_id)
+    if (!effectiveTeam) return []
+    const team = teamsData.find((t) => t.roster_id === effectiveTeam.roster_id)
     return team?.roster_data?.picks || []
-  }, [teamContext, teamsData])
+  }, [effectiveTeam, teamsData])
 
   const availablePicks = teamPicks.filter((p) => !addedIds.has(pickUid(p)))
   const total = assets.reduce((s, a) => s + (a.fc_value || 0), 0)
@@ -93,12 +99,29 @@ function SidePanel({ label, assets, teamContext, onAdd, onRemove, leaguePlayers,
     <div className="eval-side">
       <div className="eval-side-header">
         <span className="eval-side-label">{label}</span>
-        {teamContext && <span className="eval-side-team">{teamContext.display_name}</span>}
+        {effectiveTeam && <span className="eval-side-team">{effectiveTeam.display_name}</span>}
       </div>
+
+      {/* Team selector — only shown when no player has set the team yet */}
+      {!teamContext && (
+        <select
+          className="eval-team-select"
+          value={manualTeam?.roster_id ?? ''}
+          onChange={e => {
+            const t = teamsData.find(t => t.roster_id === +e.target.value)
+            setManualTeam(t ? { roster_id: t.roster_id, display_name: t.display_name } : null)
+          }}
+        >
+          <option value="">Select team for picks…</option>
+          {teamsData.map(t => (
+            <option key={t.roster_id} value={t.roster_id}>{t.display_name}</option>
+          ))}
+        </select>
+      )}
 
       <PlayerSearch leaguePlayers={leaguePlayers} addedIds={addedIds} onAdd={onAdd} />
 
-      {teamContext && availablePicks.length > 0 && (
+      {effectiveTeam && availablePicks.length > 0 && (
         <div className="eval-pick-wrap">
           <button className="eval-add-pick-btn" onClick={() => setPickOpen((v) => !v)}>
             + Add Pick {pickOpen ? '▲' : '▼'}

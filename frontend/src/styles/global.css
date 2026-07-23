@@ -811,6 +811,18 @@ img { display: block; }
   box-sizing: border-box;
 }
 .eval-search-input:focus { outline: none; border-color: var(--accent); }
+.eval-team-select {
+  width: 100%;
+  background: var(--input-bg, #252840);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  color: var(--text);
+  font-size: 0.875rem;
+  margin-bottom: 8px;
+  cursor: pointer;
+}
+.eval-team-select:focus { outline: none; border-color: var(--accent); }
 
 .eval-search-dropdown {
   position: absolute;
