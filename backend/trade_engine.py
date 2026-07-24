@@ -386,10 +386,19 @@ def generate_trades_between(
         return (both_up, one_up, combined, t["value_delta"])
 
     sorted_trades = sorted(unique, key=_sort_key)
-    # In force/expand mode return everything — the route handler filters by player and caps
-    if force_mode or expand_mode:
-        return sorted_trades
+    if force_player_id:
+        # Prioritise trades containing the forced player, then fill with others up to cap
+        with_player = [t for t in sorted_trades if _has_player(t, force_player_id)]
+        without    = [t for t in sorted_trades if not _has_player(t, force_player_id)]
+        cap = 60 if expand_mode else 30
+        return (with_player + without)[:cap]
+    if expand_mode:
+        return sorted_trades[:60]
     return sorted_trades[:20]
+
+
+def _has_player(trade: dict, sleeper_id: str) -> bool:
+    return any(p.get("sleeper_id") == sleeper_id for p in trade["a_gives"] + trade["b_gives"])
 
 
 def _pick_asset(pick: dict) -> dict:

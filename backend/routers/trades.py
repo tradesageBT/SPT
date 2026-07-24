@@ -187,6 +187,25 @@ async def get_all_trade_ideas(
     expand_mode = expand and force_mode  # expand only makes sense with a forced player
 
     def _run_generation(em: bool) -> list[dict]:
+        # When a player is forced, only run pairs involving their team —
+        # the other team pairs can never produce trades with that player anyway.
+        if force_profile and not roster_id:
+            focus = force_profile
+            others = [p for p in profiles if p["roster_id"] != focus["roster_id"]]
+            cat_focus = _categorize_with_forced(focus, force_player, force_profile)
+            trades = []
+            for other in others:
+                cat_other = _categorize_with_forced(other, force_player, force_profile)
+                trades.extend(generate_trades_between(
+                    focus, other, cat_focus, cat_other,
+                    include_smash=include_smash,
+                    include_picks=include_picks,
+                    force_mode=force_mode,
+                    expand_mode=em,
+                    force_player_id=force_player_id,
+                ))
+            return trades
+
         if roster_id is not None:
             focus = next((p for p in profiles if p["roster_id"] == roster_id), None)
             if not focus:
@@ -205,30 +224,28 @@ async def get_all_trade_ideas(
                     force_player_id=force_player_id,
                 ))
             return sorted(trades, key=lambda x: x["value_delta"])
-        else:
-            cats = {p["roster_id"]: _categorize_with_forced(p, force_player, force_profile) for p in profiles}
-            from itertools import combinations
-            all_trades = []
-            for a, b in combinations(profiles, 2):
-                all_trades.extend(generate_trades_between(
-                    a, b, cats[a["roster_id"]], cats[b["roster_id"]],
-                    include_smash=include_smash,
-                    include_picks=include_picks,
-                    force_mode=force_mode,
-                    expand_mode=em,
-                    force_player_id=force_player_id,
-                ))
-            return all_trades
+
+        cats = {p["roster_id"]: _categorize_with_forced(p, force_player, force_profile) for p in profiles}
+        from itertools import combinations
+        all_trades = []
+        for a, b in combinations(profiles, 2):
+            all_trades.extend(generate_trades_between(
+                a, b, cats[a["roster_id"]], cats[b["roster_id"]],
+                include_smash=include_smash,
+                include_picks=include_picks,
+                force_mode=force_mode,
+                expand_mode=em,
+                force_player_id=force_player_id,
+            ))
+        return all_trades
 
     result = _run_generation(expand_mode)
 
     if force_player_id:
         result = [t for t in result if _trade_has_player(t, force_player_id)]
-        # Auto-escalate: if fewer than 5 results, re-run with expand mode
+        # Auto-escalate once if still thin — avoids double-running in normal cases
         if len(result) < 5 and not expand_mode:
-            result_expanded = _run_generation(True)
-            result_expanded = [t for t in result_expanded if _trade_has_player(t, force_player_id)]
-            # Merge: expanded results first (they cover a wider range), dedupe by player set
+            result_expanded = [t for t in _run_generation(True) if _trade_has_player(t, force_player_id)]
             seen = {tuple(sorted(x["sleeper_id"] for x in t["a_gives"] + t["b_gives"])) for t in result}
             for t in result_expanded:
                 key = tuple(sorted(x["sleeper_id"] for x in t["a_gives"] + t["b_gives"]))
