@@ -263,10 +263,12 @@ def generate_trades_between(
     else:
         fairness_pct = FAIRNESS_PCT
 
+    min_side = 0 if force_mode or expand_mode else MIN_SIDE_VALUE
+
     def _build_trade(gives_a, gives_b, reason):
         val_a = _value(gives_a)
         val_b = _value(gives_b)
-        if val_a < MIN_SIDE_VALUE or val_b < MIN_SIDE_VALUE:
+        if val_a < min_side or val_b < min_side:
             return None
         # Use effective (stacking-discounted) value for fairness gating so that
         # multiple same-position players can't stack up to an elite single player.

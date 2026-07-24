@@ -294,12 +294,25 @@ export default function TradeIdeas() {
       {displayedTrades.length === 0 ? (
         <div className="empty-state">
           <p>
-            {selectedPlayer
+            {selectedPlayer && countFilter != null && trades.length > 0
+              ? `No ${countFilter}v${countFilter} trades found for ${selectedPlayer.name} — try removing the ${countFilter}v${countFilter} filter to see all results.`
+              : countFilter != null && trades.length > 0
+              ? `No ${countFilter}v${countFilter} trades match the current filters — try removing the ${countFilter}v${countFilter} filter.`
+              : selectedPlayer
               ? `No trade ideas found involving ${selectedPlayer.name}.`
               : winWinOnly || posFilter
               ? 'No trades match the current filters.'
               : 'No balanced trade opportunities found.'}
           </p>
+          {countFilter != null && trades.length > 0 && (
+            <button
+              className="btn btn-sm"
+              style={{ marginTop: '0.5rem' }}
+              onClick={() => setCountFilter(null)}
+            >
+              Remove {countFilter}v{countFilter} filter
+            </button>
+          )}
         </div>
       ) : (
         <div className="trades-list">
