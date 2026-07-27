@@ -101,6 +101,19 @@ export default function TradeIdeas() {
   const [sortBy, setSortBy] = useState('default')    // 'default' | 'fairness' | 'lineup'
   const [expanded, setExpanded] = useState(false)
 
+  // Player frequency / exclusions
+  const [excludedPlayers, setExcludedPlayers] = useState(new Set())
+  const [freqOpen, setFreqOpen] = useState(true)
+
+  function toggleExclude(sleeperId) {
+    setExcludedPlayers((prev) => {
+      const next = new Set(prev)
+      if (next.has(sleeperId)) next.delete(sleeperId)
+      else next.add(sleeperId)
+      return next
+    })
+  }
+
   useEffect(() => {
     api.getLeaguePlayers(leagueId).then(setLeaguePlayers).catch(() => {})
   }, [leagueId])
@@ -125,15 +138,29 @@ export default function TradeIdeas() {
     return leaguePlayers.filter((p) => p.name.toLowerCase().includes(q)).slice(0, 8)
   }, [query, leaguePlayers, selectedPlayer])
 
+  // Player frequency — computed from raw trades before exclusion filter
+  const playerFrequency = useMemo(() => {
+    const map = {}
+    for (const trade of trades) {
+      for (const p of [...trade.a_gives, ...trade.b_gives]) {
+        if (p.position === 'PK') continue
+        if (!map[p.sleeper_id]) map[p.sleeper_id] = { sleeper_id: p.sleeper_id, name: p.name, position: p.position, count: 0 }
+        map[p.sleeper_id].count++
+      }
+    }
+    return Object.values(map).sort((a, b) => b.count - a.count)
+  }, [trades])
+
   const displayedTrades = useMemo(() => {
     let result = selectedPlayer ? trades.filter((t) => tradeContains(t, selectedPlayer.sleeper_id)) : trades
+    if (excludedPlayers.size > 0) result = result.filter((t) => ![...t.a_gives, ...t.b_gives].some((p) => excludedPlayers.has(p.sleeper_id)))
     if (winWinOnly) result = result.filter((t) => t.lineup_delta_a > 0 && t.lineup_delta_b > 0)
     if (posFilter)  result = result.filter((t) => tradeHasPos(t, posFilter))
     if (countFilter != null) result = result.filter((t) => t.a_gives.length === countFilter && t.b_gives.length === countFilter)
     if (sortBy === 'fairness') result = [...result].sort((a, b) => a.value_delta - b.value_delta)
     if (sortBy === 'lineup')   result = [...result].sort((a, b) => (b.lineup_delta_a + b.lineup_delta_b) - (a.lineup_delta_a + a.lineup_delta_b))
     return result
-  }, [trades, selectedPlayer, winWinOnly, posFilter, countFilter, sortBy])
+  }, [trades, selectedPlayer, excludedPlayers, winWinOnly, posFilter, countFilter, sortBy])
 
   function selectPlayer(player) {
     setSelectedPlayer(player)
@@ -288,6 +315,46 @@ export default function TradeIdeas() {
         <div className="expand-search-active">
           Expanded search active — showing trades up to ±35% value difference
           <button className="filter-clear-inline" onClick={() => setExpanded(false)}>reset ✕</button>
+        </div>
+      )}
+
+      {playerFrequency.length > 0 && (
+        <div className="player-freq-panel">
+          <div className="player-freq-header" onClick={() => setFreqOpen((v) => !v)}>
+            <span className="player-freq-title">Players in these trades</span>
+            {excludedPlayers.size > 0 && (
+              <button
+                className="player-freq-clear"
+                onClick={(e) => { e.stopPropagation(); setExcludedPlayers(new Set()) }}
+              >
+                Clear {excludedPlayers.size} exclusion{excludedPlayers.size !== 1 ? 's' : ''}
+              </button>
+            )}
+            <span className="player-freq-toggle">{freqOpen ? '▲' : '▼'}</span>
+          </div>
+          {freqOpen && (
+            <div className="player-freq-list">
+              {playerFrequency.map((p) => {
+                const excluded = excludedPlayers.has(p.sleeper_id)
+                return (
+                  <div key={p.sleeper_id} className={`player-freq-row${excluded ? ' freq-excluded' : ''}`}>
+                    <span className="chip-pos" style={{ background: POS_COLOR[p.position] || '#666', fontSize: '0.65rem', padding: '1px 4px', borderRadius: 3 }}>
+                      {p.position}
+                    </span>
+                    <span className="player-freq-name">{p.name}</span>
+                    <span className="player-freq-count">{p.count}</span>
+                    <button
+                      className={`player-freq-btn${excluded ? ' freq-btn-include' : ' freq-btn-exclude'}`}
+                      onClick={() => toggleExclude(p.sleeper_id)}
+                      title={excluded ? 'Include this player' : 'Exclude this player'}
+                    >
+                      {excluded ? 'include' : 'exclude'}
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
 
