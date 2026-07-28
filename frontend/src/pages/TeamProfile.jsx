@@ -157,7 +157,7 @@ export default function TeamProfile() {
   return (
     <div className="team-profile">
       <div className="profile-nav">
-        <Link to={`/league/${leagueId}`} className="back-link">← League</Link>
+        <Link to={`/league/${leagueId}`} className="btn btn-secondary btn-sm">← League Home</Link>
         <Link to={`/league/${leagueId}/trades?roster_id=${rosterId}`} className="btn btn-accent btn-sm">
           Trade Ideas for This Team
         </Link>

@@ -182,7 +182,7 @@ export default function TradeIdeas() {
   return (
     <div className="trades-page">
       <div className="profile-nav">
-        <Link to={`/league/${leagueId}`} className="back-link">← League</Link>
+        <Link to={`/league/${leagueId}`} className="btn btn-secondary btn-sm">← League Home</Link>
       </div>
 
       <div className="trades-header">

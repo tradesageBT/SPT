@@ -479,8 +479,8 @@ export default function TradeEvaluator() {
   return (
     <div className="eval-page">
       <div className="profile-nav">
-        <Link to={`/league/${leagueId}`} className="back-link">← League</Link>
-        <Link to={`/league/${leagueId}/trades`} className="back-link">Trade Ideas</Link>
+        <Link to={`/league/${leagueId}`} className="btn btn-secondary btn-sm">← League Home</Link>
+        <Link to={`/league/${leagueId}/trades`} className="btn btn-secondary btn-sm">Trade Ideas</Link>
         {(sideA.length > 0 || sideB.length > 0) && (
           <button className="btn btn-sm" style={{ marginLeft: 'auto' }} onClick={clearAll}>Clear All</button>
         )}
