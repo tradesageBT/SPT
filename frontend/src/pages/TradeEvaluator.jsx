@@ -132,7 +132,7 @@ function SidePanel({ label, assets, teamContext, onAdd, onRemove, leaguePlayers,
                 <button
                   key={i}
                   className="eval-pick-option"
-                  onClick={() => { onAdd(pickAsset(p), null, null); setPickOpen(false) }}
+                  onClick={() => { onAdd(pickAsset(p), effectiveTeam?.roster_id, effectiveTeam?.display_name); setPickOpen(false) }}
                 >
                   <span className="eval-pick-label">
                     {p.season} {ROUND_LABEL[p.round] ?? `Rd ${p.round}`}
@@ -388,6 +388,7 @@ export default function TradeEvaluator() {
   const [teamB, setTeamB] = useState(null)
   const [analysis, setAnalysis] = useState(null)
   const [evalLoading, setEvalLoading] = useState(false)
+  const analysisRef = useRef(null)
 
   useEffect(() => {
     api.getLeaguePlayers(leagueId).then(setLeaguePlayers).catch(() => {})
@@ -407,7 +408,10 @@ export default function TradeEvaluator() {
       a_gives: sideA,
       b_gives: sideB,
     })
-      .then(setAnalysis)
+      .then((result) => {
+        setAnalysis(result)
+        setTimeout(() => analysisRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100)
+      })
       .catch(() => setAnalysis(null))
       .finally(() => setEvalLoading(false))
   }, [leagueId, teamA?.roster_id, teamB?.roster_id, sideA, sideB])
@@ -520,7 +524,9 @@ export default function TradeEvaluator() {
       {evalLoading && <p className="eval-placeholder">Evaluating…</p>}
 
       {!evalLoading && analysis && (
+        <div ref={analysisRef}>
         <AnalysisPanel analysis={analysis} sideA={sideA} sideB={sideB} />
+        </div>
       )}
 
       {!evalLoading && sweetener && (
