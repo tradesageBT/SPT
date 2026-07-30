@@ -25,7 +25,7 @@ function ConventionBadge({ category, username }) {
   return <span className={`contention-badge ${contentionClass(category)}`}>{category}</span>
 }
 
-export default function TeamCard({ team, rank, maxValue, leagueId }) {
+export default function TeamCard({ team, rank, maxValue, leagueId, rankMode = 'dynasty' }) {
   const barPct = maxValue ? Math.round((team.total_value / maxValue) * 100) : 0
   const playerPct = team.total_value
     ? Math.round((team.player_value / team.total_value) * 100)
@@ -54,23 +54,39 @@ export default function TeamCard({ team, rank, maxValue, leagueId }) {
       </div>
 
       <div className="team-card-value">
-        <div className="team-card-value-row">
-          <div className="value-total">{fmt(team.total_value)}</div>
-          {(team.wins != null && (team.wins > 0 || team.losses > 0)) && (
-            <span className="team-record">
-              {team.wins}–{team.losses}{team.ties > 0 ? `–${team.ties}` : ''}
-            </span>
-          )}
-        </div>
-        <div className="value-bar-wrap">
-          <div className="value-bar">
-            <div className="value-bar-fill" style={{ width: `${barPct}%` }} />
-          </div>
-        </div>
-        <div className="value-split">
-          <span className="split-current">{playerPct}% Players</span>
-          <span className="split-future">{pickPct}% Picks</span>
-        </div>
+        {rankMode === 'season' ? (
+          <>
+            <div className="team-card-value-row">
+              <div className={`value-total season-record-primary${(team.wins || 0) > (team.losses || 0) ? ' record-win' : (team.wins || 0) < (team.losses || 0) ? ' record-loss' : ''}`}>
+                {team.wins ?? 0}–{team.losses ?? 0}{(team.ties || 0) > 0 ? `–${team.ties}` : ''}
+              </div>
+              <span className="team-record">{fmt(Math.round(team.fpts || 0))} pts</span>
+            </div>
+            <div className="value-split">
+              <span className="split-current">Dynasty: {fmt(team.total_value)}</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="team-card-value-row">
+              <div className="value-total">{fmt(team.total_value)}</div>
+              {(team.wins != null && (team.wins > 0 || team.losses > 0)) && (
+                <span className="team-record">
+                  {team.wins}–{team.losses}{team.ties > 0 ? `–${team.ties}` : ''}
+                </span>
+              )}
+            </div>
+            <div className="value-bar-wrap">
+              <div className="value-bar">
+                <div className="value-bar-fill" style={{ width: `${barPct}%` }} />
+              </div>
+            </div>
+            <div className="value-split">
+              <span className="split-current">{playerPct}% Players</span>
+              <span className="split-future">{pickPct}% Picks</span>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="team-card-positions">

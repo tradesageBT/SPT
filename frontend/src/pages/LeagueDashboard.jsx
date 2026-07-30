@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import TeamCard from '../components/TeamCard'
@@ -12,6 +12,7 @@ export default function LeagueDashboard() {
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState(null)
+  const [rankMode, setRankMode] = useState('dynasty') // 'dynasty' | 'season'
 
   useEffect(() => {
     setLoading(true)
@@ -73,6 +74,19 @@ export default function LeagueDashboard() {
   if (!data) return null
 
   const maxValue = Math.max(...data.teams.map((t) => t.total_value || 0), 1)
+  const hasSeasonData = data.teams.some((t) => (t.wins || 0) + (t.losses || 0) > 0)
+
+  const rankedTeams = useMemo(() => {
+    if (rankMode === 'season') {
+      return [...data.teams].sort((a, b) => {
+        const netA = (a.wins || 0) - (a.losses || 0)
+        const netB = (b.wins || 0) - (b.losses || 0)
+        if (netB !== netA) return netB - netA
+        return (b.fpts || 0) - (a.fpts || 0)
+      })
+    }
+    return data.teams // already sorted by total_value DESC from backend
+  }, [data.teams, rankMode])
 
   return (
     <div className="dashboard">
@@ -110,14 +124,32 @@ export default function LeagueDashboard() {
         </div>
       </div>
 
+      {hasSeasonData && (
+        <div className="rank-mode-toggle">
+          <button
+            className={`rank-mode-btn${rankMode === 'dynasty' ? ' active' : ''}`}
+            onClick={() => setRankMode('dynasty')}
+          >
+            Dynasty Rankings
+          </button>
+          <button
+            className={`rank-mode-btn${rankMode === 'season' ? ' active' : ''}`}
+            onClick={() => setRankMode('season')}
+          >
+            {data.season} Standings
+          </button>
+        </div>
+      )}
+
       <div className="team-list">
-        {data.teams.map((team, idx) => (
+        {rankedTeams.map((team, idx) => (
           <TeamCard
             key={team.roster_id}
             team={team}
             rank={idx + 1}
             maxValue={maxValue}
             leagueId={leagueId}
+            rankMode={rankMode}
           />
         ))}
       </div>
