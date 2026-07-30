@@ -25,7 +25,7 @@ function ConventionBadge({ category, username }) {
   return <span className={`contention-badge ${contentionClass(category)}`}>{category}</span>
 }
 
-export default function TeamCard({ team, rank, maxValue, leagueId, rankMode = 'dynasty' }) {
+export default function TeamCard({ team, rank, maxValue, leagueId, rankMode = 'dynasty', hasSeasonData = false }) {
   const barPct = maxValue ? Math.round((team.total_value / maxValue) * 100) : 0
   const playerPct = team.total_value
     ? Math.round((team.player_value / team.total_value) * 100)
@@ -56,14 +56,21 @@ export default function TeamCard({ team, rank, maxValue, leagueId, rankMode = 'd
       <div className="team-card-value">
         {rankMode === 'season' ? (
           <>
-            <div className="team-card-value-row">
-              <div className={`value-total season-record-primary${(team.wins || 0) > (team.losses || 0) ? ' record-win' : (team.wins || 0) < (team.losses || 0) ? ' record-loss' : ''}`}>
-                {team.wins ?? 0}–{team.losses ?? 0}{(team.ties || 0) > 0 ? `–${team.ties}` : ''}
+            {hasSeasonData ? (
+              <div className="team-card-value-row">
+                <div className={`value-total season-record-primary${(team.wins || 0) > (team.losses || 0) ? ' record-win' : (team.wins || 0) < (team.losses || 0) ? ' record-loss' : ''}`}>
+                  {team.wins ?? 0}–{team.losses ?? 0}{(team.ties || 0) > 0 ? `–${team.ties}` : ''}
+                </div>
+                <span className="team-record">{fmt(Math.round(team.fpts || 0))} pts</span>
               </div>
-              <span className="team-record">{fmt(Math.round(team.fpts || 0))} pts</span>
-            </div>
+            ) : (
+              <div className="team-card-value-row">
+                <div className="value-total">{fmt(team.starter_value)}</div>
+                <span className="team-record projected-label">Projected</span>
+              </div>
+            )}
             <div className="value-split">
-              <span className="split-current">Dynasty: {fmt(team.total_value)}</span>
+              <span className="split-current">{hasSeasonData ? `Dynasty: ${fmt(team.total_value)}` : 'Starter value only'}</span>
             </div>
           </>
         ) : (

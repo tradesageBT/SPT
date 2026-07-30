@@ -1948,3 +1948,15 @@ img { display: block; }
 }
 .season-record-primary.record-win  { color: var(--accent); }
 .season-record-primary.record-loss { color: var(--danger); }
+
+.projected-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--warn);
+  border: 1px solid var(--warn);
+  border-radius: 4px;
+  padding: 1px 5px;
+  align-self: center;
+}

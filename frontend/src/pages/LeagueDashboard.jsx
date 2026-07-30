@@ -78,15 +78,21 @@ export default function LeagueDashboard() {
 
   const rankedTeams = useMemo(() => {
     if (rankMode === 'season') {
-      return [...data.teams].sort((a, b) => {
-        const netA = (a.wins || 0) - (a.losses || 0)
-        const netB = (b.wins || 0) - (b.losses || 0)
-        if (netB !== netA) return netB - netA
-        return (b.fpts || 0) - (a.fpts || 0)
-      })
+      if (hasSeasonData) {
+        // In-season: sort by actual W-L record
+        return [...data.teams].sort((a, b) => {
+          const netA = (a.wins || 0) - (a.losses || 0)
+          const netB = (b.wins || 0) - (b.losses || 0)
+          if (netB !== netA) return netB - netA
+          return (b.fpts || 0) - (a.fpts || 0)
+        })
+      } else {
+        // Off-season: sort by starter value — best proxy for this year's performance
+        return [...data.teams].sort((a, b) => (b.starter_value || 0) - (a.starter_value || 0))
+      }
     }
     return data.teams // already sorted by total_value DESC from backend
-  }, [data.teams, rankMode])
+  }, [data.teams, rankMode, hasSeasonData])
 
   return (
     <div className="dashboard">
@@ -124,8 +130,7 @@ export default function LeagueDashboard() {
         </div>
       </div>
 
-      {hasSeasonData && (
-        <div className="rank-mode-toggle">
+      <div className="rank-mode-toggle">
           <button
             className={`rank-mode-btn${rankMode === 'dynasty' ? ' active' : ''}`}
             onClick={() => setRankMode('dynasty')}
@@ -139,7 +144,6 @@ export default function LeagueDashboard() {
             {data.season} Standings
           </button>
         </div>
-      )}
 
       <div className="team-list">
         {rankedTeams.map((team, idx) => (
@@ -150,6 +154,7 @@ export default function LeagueDashboard() {
             maxValue={maxValue}
             leagueId={leagueId}
             rankMode={rankMode}
+            hasSeasonData={hasSeasonData}
           />
         ))}
       </div>
