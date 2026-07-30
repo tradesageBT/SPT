@@ -2,6 +2,7 @@
 Populates and reads players_cache + picks_cache.
 Both are refreshed at most once per day.
 """
+import asyncio
 import json
 import re
 from datetime import datetime, timedelta, timezone
@@ -65,7 +66,18 @@ async def refresh_cache(num_qbs: int = 1, ppr: float = 1.0):
     """
     now = _now_iso()
 
-    fc_data = await fantasycalc_client.get_values(num_qbs=num_qbs, ppr=ppr)
+    # Fetch dynasty + redraft values in parallel — zero extra latency
+    fc_data, fc_redraft = await asyncio.gather(
+        fantasycalc_client.get_values(num_qbs=num_qbs, ppr=ppr, is_dynasty=True),
+        fantasycalc_client.get_values(num_qbs=num_qbs, ppr=ppr, is_dynasty=False),
+    )
+
+    # Build a quick lookup: sleeper_id → redraft value
+    redraft_map: dict[str, int] = {}
+    for entry in fc_redraft:
+        sid = str(entry.get("player", {}).get("sleeperId") or "")
+        if sid:
+            redraft_map[sid] = entry.get("value", 0)
 
     player_rows: list[dict] = []
     picks_rows: list[dict] = []
@@ -98,6 +110,7 @@ async def refresh_cache(num_qbs: int = 1, ppr: float = 1.0):
                 "age": player.get("age"),
                 "years_exp": None,
                 "fc_value": value,
+                "redraft_value": redraft_map.get(sleeper_id, 0),
                 "ppr": ppr,
                 "num_qbs": num_qbs,
                 "last_updated": now,
@@ -107,12 +120,13 @@ async def refresh_cache(num_qbs: int = 1, ppr: float = 1.0):
         conn.executemany(
             """
             INSERT INTO players_cache
-                (sleeper_id, name, position, nfl_team, age, years_exp, fc_value, ppr, num_qbs, last_updated)
+                (sleeper_id, name, position, nfl_team, age, years_exp, fc_value, redraft_value, ppr, num_qbs, last_updated)
             VALUES
-                (:sleeper_id, :name, :position, :nfl_team, :age, :years_exp, :fc_value, :ppr, :num_qbs, :last_updated)
+                (:sleeper_id, :name, :position, :nfl_team, :age, :years_exp, :fc_value, :redraft_value, :ppr, :num_qbs, :last_updated)
             ON CONFLICT(sleeper_id) DO UPDATE SET
                 name=excluded.name, position=excluded.position, nfl_team=excluded.nfl_team,
                 age=excluded.age, years_exp=excluded.years_exp, fc_value=excluded.fc_value,
+                redraft_value=excluded.redraft_value,
                 ppr=excluded.ppr, num_qbs=excluded.num_qbs, last_updated=excluded.last_updated
             """,
             player_rows,

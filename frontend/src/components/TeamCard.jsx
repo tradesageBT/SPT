@@ -65,12 +65,12 @@ export default function TeamCard({ team, rank, maxValue, leagueId, rankMode = 'd
               </div>
             ) : (
               <div className="team-card-value-row">
-                <div className="value-total">{fmt(team.starter_value)}</div>
+                <div className="value-total">{fmt(team.redraft_starter_value || team.starter_value)}</div>
                 <span className="team-record projected-label">Projected</span>
               </div>
             )}
             <div className="value-split">
-              <span className="split-current">{hasSeasonData ? `Dynasty: ${fmt(team.total_value)}` : 'Starter value only'}</span>
+              <span className="split-current">{hasSeasonData ? `Dynasty: ${fmt(team.total_value)}` : 'Redraft starter value'}</span>
             </div>
           </>
         ) : (

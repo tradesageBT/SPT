@@ -37,6 +37,7 @@ def _player_entry(pid: str, players_cache: dict) -> dict:
         "nfl_team": p.get("nfl_team", ""),
         "age": p.get("age"),
         "fc_value": p.get("fc_value", 0),
+        "redraft_value": p.get("redraft_value", 0),
     }
 
 
@@ -233,6 +234,7 @@ def compute_team_profile(
     player_value = 0
     starter_value = 0
     bench_value = 0
+    redraft_starter_value = 0
     positional: dict[str, int] = {p: 0 for p in SKILL_POSITIONS}
     positional_starters: dict[str, list[int]] = {p: [] for p in SKILL_POSITIONS}
     age_weighted_sum = 0.0
@@ -252,6 +254,7 @@ def compute_team_profile(
 
         if is_starter:
             starter_value += value
+            redraft_starter_value += entry.get("redraft_value", 0)
         elif not on_taxi and not on_ir:
             bench_value += value
 
@@ -309,6 +312,7 @@ def compute_team_profile(
         "pick_value": pick_value,
         "starter_value": starter_value,
         "bench_value": bench_value,
+        "redraft_starter_value": redraft_starter_value,
         "wins": wins,
         "losses": losses,
         "ties": ties,

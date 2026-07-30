@@ -87,8 +87,8 @@ export default function LeagueDashboard() {
           return (b.fpts || 0) - (a.fpts || 0)
         })
       } else {
-        // Off-season: sort by starter value — best proxy for this year's performance
-        return [...data.teams].sort((a, b) => (b.starter_value || 0) - (a.starter_value || 0))
+        // Off-season: sort by redraft starter value — 1-year rankings for starters only
+        return [...data.teams].sort((a, b) => (b.redraft_starter_value || 0) - (a.redraft_starter_value || 0))
       }
     }
     return data.teams // already sorted by total_value DESC from backend

@@ -5,14 +5,15 @@ BASE = "https://api.fantasycalc.com"
 TIMEOUT = 30.0
 
 
-async def get_values(num_qbs: int = 1, ppr: float = 1.0) -> list[dict]:
+async def get_values(num_qbs: int = 1, ppr: float = 1.0, is_dynasty: bool = True) -> list[dict]:
     """
-    Fetch dynasty player + pick values from FantasyCalc.
+    Fetch player + pick values from FantasyCalc.
+    is_dynasty=True → dynasty values; is_dynasty=False → redraft (1-year) values.
     Returns raw list of {value, player: {sleeperId, name, position, ...}}.
     """
     superflex = "true" if num_qbs >= 2 else "false"
     params = {
-        "isDynasty": "true",
+        "isDynasty": "true" if is_dynasty else "false",
         "numQbs": str(num_qbs),
         "ppr": str(ppr),
         "superflex": superflex,
