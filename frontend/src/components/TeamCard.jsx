@@ -54,7 +54,14 @@ export default function TeamCard({ team, rank, maxValue, leagueId }) {
       </div>
 
       <div className="team-card-value">
-        <div className="value-total">{fmt(team.total_value)}</div>
+        <div className="team-card-value-row">
+          <div className="value-total">{fmt(team.total_value)}</div>
+          {(team.wins != null && (team.wins > 0 || team.losses > 0)) && (
+            <span className="team-record">
+              {team.wins}–{team.losses}{team.ties > 0 ? `–${team.ties}` : ''}
+            </span>
+          )}
+        </div>
         <div className="value-bar-wrap">
           <div className="value-bar">
             <div className="value-bar-fill" style={{ width: `${barPct}%` }} />

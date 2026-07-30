@@ -211,6 +211,12 @@ def compute_team_profile(
     display_name = user.get("display_name", f"Team {roster['roster_id']}")
     avatar = user.get("avatar")
 
+    roster_settings = roster.get("settings") or {}
+    wins  = int(roster_settings.get("wins", 0) or 0)
+    losses = int(roster_settings.get("losses", 0) or 0)
+    ties  = int(roster_settings.get("ties", 0) or 0)
+    fpts  = float(roster_settings.get("fpts", 0) or 0) + float(roster_settings.get("fpts_decimal", 0) or 0) / 100
+
     taxi_ids: set[str] = set(p for p in (roster.get("taxi") or []) if p and p != "0")
     reserve_ids: set[str] = set(p for p in (roster.get("reserve") or []) if p and p != "0")
 
@@ -303,6 +309,10 @@ def compute_team_profile(
         "pick_value": pick_value,
         "starter_value": starter_value,
         "bench_value": bench_value,
+        "wins": wins,
+        "losses": losses,
+        "ties": ties,
+        "fpts": fpts,
         "positional_breakdown": positional,
         "positional_starter_value": {pos: sum(vals) for pos, vals in positional_starters.items()},
         "positional_starters": positional_starters,  # raw per-slot values, stripped before persisting
@@ -401,9 +411,17 @@ def compute_league_profiles(
             profile["contention_score"], pick_ratio, top_third
         )
 
-    # Estimate projected pick slot using current player value as standings proxy.
-    # Worst player value → picks first (slot 1). ±1 pick gives the range.
-    sorted_by_strength = sorted(profiles, key=lambda t: t["player_value"])
+    # Estimate projected pick slot from actual standings when games have been played,
+    # otherwise fall back to dynasty player value as a pre-season proxy.
+    # Worst record (fewest net wins, then fewest points) picks first (slot 1).
+    total_games_played = sum(p.get("wins", 0) + p.get("losses", 0) + p.get("ties", 0) for p in profiles)
+    if total_games_played > 0:
+        sorted_by_strength = sorted(
+            profiles,
+            key=lambda t: (t.get("wins", 0) - t.get("losses", 0), t.get("fpts", 0)),
+        )
+    else:
+        sorted_by_strength = sorted(profiles, key=lambda t: t["player_value"])
     roster_rank: dict[int, int] = {
         p["roster_id"]: rank for rank, p in enumerate(sorted_by_strength, start=1)
     }

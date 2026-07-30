@@ -202,17 +202,20 @@ async def _sync_league(league_id: str, force: bool = False, background_tasks: Ba
                 INSERT INTO teams (
                     sleeper_league_id, roster_id, owner_id, display_name, avatar,
                     total_value, player_value, pick_value, starter_value, bench_value,
+                    wins, losses, ties, fpts,
                     positional_breakdown, positional_surplus, positional_need,
                     positional_rank,
                     contention_score, contention_category,
                     roster_data, computed_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(sleeper_league_id, roster_id) DO UPDATE SET
                     owner_id=excluded.owner_id, display_name=excluded.display_name,
                     avatar=excluded.avatar, total_value=excluded.total_value,
                     player_value=excluded.player_value, pick_value=excluded.pick_value,
                     starter_value=excluded.starter_value, bench_value=excluded.bench_value,
+                    wins=excluded.wins, losses=excluded.losses,
+                    ties=excluded.ties, fpts=excluded.fpts,
                     positional_breakdown=excluded.positional_breakdown,
                     positional_surplus=excluded.positional_surplus,
                     positional_need=excluded.positional_need,
@@ -232,6 +235,10 @@ async def _sync_league(league_id: str, force: bool = False, background_tasks: Ba
                     p["pick_value"],
                     p["starter_value"],
                     p["bench_value"],
+                    p.get("wins", 0),
+                    p.get("losses", 0),
+                    p.get("ties", 0),
+                    p.get("fpts", 0.0),
                     json.dumps(p["positional_breakdown"]),
                     json.dumps(p["positional_surplus"]),
                     json.dumps(p["positional_need"]),

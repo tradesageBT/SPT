@@ -1902,3 +1902,12 @@ img { display: block; }
   border-color: var(--accent);
   color: #fff;
 }
+
+/* --- W-L record on team card --- */
+.team-card-value-row { display: flex; align-items: baseline; gap: 8px; }
+.team-record {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
