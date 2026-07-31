@@ -59,6 +59,26 @@ export default function LeagueDashboard() {
     }
   }
 
+  const hasSeasonData = (data?.teams ?? []).some((t) => (t.wins || 0) + (t.losses || 0) > 0)
+  const maxValue = data ? Math.max(...data.teams.map((t) => t.total_value || 0), 1) : 1
+
+  const rankedTeams = useMemo(() => {
+    if (!data) return []
+    if (rankMode === 'season') {
+      if (hasSeasonData) {
+        return [...data.teams].sort((a, b) => {
+          const netA = (a.wins || 0) - (a.losses || 0)
+          const netB = (b.wins || 0) - (b.losses || 0)
+          if (netB !== netA) return netB - netA
+          return (b.fpts || 0) - (a.fpts || 0)
+        })
+      } else {
+        return [...data.teams].sort((a, b) => (b.redraft_starter_value || 0) - (a.redraft_starter_value || 0))
+      }
+    }
+    return data.teams
+  }, [data, rankMode, hasSeasonData])
+
   if (loading) return <LoadingSpinner message={syncing ? 'Syncing league data…' : 'Fetching league data…'} />
   if (error) return (
     <div className="error-state">
@@ -72,27 +92,6 @@ export default function LeagueDashboard() {
     </div>
   )
   if (!data) return null
-
-  const maxValue = Math.max(...data.teams.map((t) => t.total_value || 0), 1)
-  const hasSeasonData = data.teams.some((t) => (t.wins || 0) + (t.losses || 0) > 0)
-
-  const rankedTeams = useMemo(() => {
-    if (rankMode === 'season') {
-      if (hasSeasonData) {
-        // In-season: sort by actual W-L record
-        return [...data.teams].sort((a, b) => {
-          const netA = (a.wins || 0) - (a.losses || 0)
-          const netB = (b.wins || 0) - (b.losses || 0)
-          if (netB !== netA) return netB - netA
-          return (b.fpts || 0) - (a.fpts || 0)
-        })
-      } else {
-        // Off-season: sort by redraft starter value — 1-year rankings for starters only
-        return [...data.teams].sort((a, b) => (b.redraft_starter_value || 0) - (a.redraft_starter_value || 0))
-      }
-    }
-    return data.teams // already sorted by total_value DESC from backend
-  }, [data.teams, rankMode, hasSeasonData])
 
   return (
     <div className="dashboard">
