@@ -23,6 +23,7 @@ export const api = {
     if (opts.includePicks) params.set('include_picks', 'true')
     if (opts.forcePlayerId) params.set('force_player_id', opts.forcePlayerId)
     if (opts.expand) params.set('expand', 'true')
+    if (opts.excludedPlayerIds?.length) opts.excludedPlayerIds.forEach((id) => params.append('exclude', id))
     return request(`/leagues/${leagueId}/trades?${params}`)
   },
   getAllTrades: (leagueId, opts = {}) => {
@@ -31,6 +32,7 @@ export const api = {
     if (opts.includePicks) params.set('include_picks', 'true')
     if (opts.forcePlayerId) params.set('force_player_id', opts.forcePlayerId)
     if (opts.expand) params.set('expand', 'true')
+    if (opts.excludedPlayerIds?.length) opts.excludedPlayerIds.forEach((id) => params.append('exclude', id))
     const qs = params.toString()
     return request(`/leagues/${leagueId}/trades${qs ? `?${qs}` : ''}`)
   },

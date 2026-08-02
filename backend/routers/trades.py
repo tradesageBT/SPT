@@ -158,7 +158,9 @@ async def get_all_trade_ideas(
     include_picks: bool = Query(False),
     force_player_id: str | None = Query(None),
     expand: bool = Query(False),
+    exclude: list[str] = Query(default=[]),
 ):
+    excluded_ids: set[str] = set(exclude)
     profiles = _load_profiles(league_id)
 
     # When forcing a specific player, find their team and inject them into the
@@ -186,16 +188,22 @@ async def get_all_trade_ideas(
     force_mode = force_player_id is not None
     expand_mode = expand and force_mode  # expand only makes sense with a forced player
 
+    def _cat(profile):
+        cats = _categorize_with_forced(profile, force_player, force_profile)
+        if excluded_ids:
+            cats = {k: [p for p in v if p.get("sleeper_id") not in excluded_ids] for k, v in cats.items()}
+        return cats
+
     def _run_generation(em: bool) -> list[dict]:
         # When a player is forced, only run pairs involving their team —
         # the other team pairs can never produce trades with that player anyway.
         if force_profile and not roster_id:
             focus = force_profile
             others = [p for p in profiles if p["roster_id"] != focus["roster_id"]]
-            cat_focus = _categorize_with_forced(focus, force_player, force_profile)
+            cat_focus = _cat(focus)
             trades = []
             for other in others:
-                cat_other = _categorize_with_forced(other, force_player, force_profile)
+                cat_other = _cat(other)
                 trades.extend(generate_trades_between(
                     focus, other, cat_focus, cat_other,
                     include_smash=include_smash,
@@ -211,10 +219,10 @@ async def get_all_trade_ideas(
             if not focus:
                 raise HTTPException(status_code=404, detail="Roster not found")
             others = [p for p in profiles if p["roster_id"] != roster_id]
-            cat_focus = _categorize_with_forced(focus, force_player, force_profile)
+            cat_focus = _cat(focus)
             trades = []
             for other in others:
-                cat_other = _categorize_with_forced(other, force_player, force_profile)
+                cat_other = _cat(other)
                 trades.extend(generate_trades_between(
                     focus, other, cat_focus, cat_other,
                     include_smash=include_smash,
@@ -225,7 +233,7 @@ async def get_all_trade_ideas(
                 ))
             return sorted(trades, key=lambda x: x["value_delta"])
 
-        cats = {p["roster_id"]: _categorize_with_forced(p, force_player, force_profile) for p in profiles}
+        cats = {p["roster_id"]: _cat(p) for p in profiles}
         from itertools import combinations
         all_trades = []
         for a, b in combinations(profiles, 2):
@@ -240,6 +248,9 @@ async def get_all_trade_ideas(
         return all_trades
 
     result = _run_generation(expand_mode)
+
+    if excluded_ids:
+        result = [t for t in result if not any(p.get("sleeper_id") in excluded_ids for p in t["a_gives"] + t["b_gives"])]
 
     if force_player_id:
         result = [t for t in result if _trade_has_player(t, force_player_id)]

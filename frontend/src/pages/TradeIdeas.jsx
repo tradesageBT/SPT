@@ -103,6 +103,7 @@ export default function TradeIdeas() {
 
   // Player frequency / exclusions
   const [excludedPlayers, setExcludedPlayers] = useState(new Set())
+  const [blockedPlayers, setBlockedPlayers] = useState(new Set()) // sent to backend on regenerate
   const [freqOpen, setFreqOpen] = useState(true)
 
   function toggleExclude(sleeperId) {
@@ -121,7 +122,13 @@ export default function TradeIdeas() {
   useEffect(() => {
     setLoading(true)
     setError(null)
-    const opts = { includeSmash, includePicks, forcePlayerId: selectedPlayer?.sleeper_id ?? null, expand: expanded }
+    const opts = {
+      includeSmash,
+      includePicks,
+      forcePlayerId: selectedPlayer?.sleeper_id ?? null,
+      expand: expanded,
+      excludedPlayerIds: blockedPlayers.size > 0 ? [...blockedPlayers] : undefined,
+    }
     const fetcher = focusRosterId
       ? api.getTradesForTeam(leagueId, focusRosterId, opts)
       : api.getAllTrades(leagueId, opts)
@@ -130,7 +137,7 @@ export default function TradeIdeas() {
       .then(setTrades)
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false))
-  }, [leagueId, focusRosterId, includeSmash, includePicks, selectedPlayer, expanded])
+  }, [leagueId, focusRosterId, includeSmash, includePicks, selectedPlayer, expanded, blockedPlayers])
 
   const suggestions = useMemo(() => {
     if (!query.trim() || selectedPlayer) return []
@@ -358,6 +365,18 @@ export default function TradeIdeas() {
         </div>
       )}
 
+      {blockedPlayers.size > 0 && (
+        <div className="expand-search-active">
+          Regenerated excluding {blockedPlayers.size} player{blockedPlayers.size !== 1 ? 's' : ''}
+          <button
+            className="filter-clear-inline"
+            onClick={() => { setBlockedPlayers(new Set()); setExcludedPlayers(new Set()) }}
+          >
+            reset ✕
+          </button>
+        </div>
+      )}
+
       {displayedTrades.length === 0 ? (
         <div className="empty-state">
           <p>
@@ -365,12 +384,26 @@ export default function TradeIdeas() {
               ? `No ${countFilter}v${countFilter} trades found for ${selectedPlayer.name} — try removing the ${countFilter}v${countFilter} filter to see all results.`
               : countFilter != null && trades.length > 0
               ? `No ${countFilter}v${countFilter} trades match the current filters — try removing the ${countFilter}v${countFilter} filter.`
+              : excludedPlayers.size > 0 && trades.length > 0
+              ? `All trades filtered out by ${excludedPlayers.size} exclusion${excludedPlayers.size !== 1 ? 's' : ''}. Regenerate to find new trades that avoid those players.`
               : selectedPlayer
               ? `No trade ideas found involving ${selectedPlayer.name}.`
               : winWinOnly || posFilter
               ? 'No trades match the current filters.'
               : 'No balanced trade opportunities found.'}
           </p>
+          {excludedPlayers.size > 0 && trades.length > 0 && (
+            <button
+              className="btn btn-accent btn-sm"
+              style={{ marginTop: '0.75rem' }}
+              onClick={() => {
+                setBlockedPlayers((prev) => new Set([...prev, ...excludedPlayers]))
+                setExcludedPlayers(new Set())
+              }}
+            >
+              ↻ Regenerate without excluded players
+            </button>
+          )}
           {countFilter != null && trades.length > 0 && (
             <button
               className="btn btn-sm"
