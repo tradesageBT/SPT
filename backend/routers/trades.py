@@ -88,15 +88,20 @@ async def evaluate_trade(league_id: str, body: TradeEvalRequest):
     lineup_delta_b = breakdown_b["lineup_delta"]
     value_diff = value_a - value_b  # positive = A gives more raw value
 
-    # Winner: lineup delta comparison is primary; raw value delta is tiebreak
-    is_win_win = lineup_delta_a > 0 and lineup_delta_b > 0
+    # Winner: raw value is primary (who received more assets); lineup delta is
+    # tiebreak for value-close trades (e.g. swapping surplus positions).
+    # Lineup delta alone is unreliable as a primary signal — a team can improve
+    # their starting lineup by consolidating depth into one stud while still
+    # giving away more total dynasty value.
+    is_win_win = lineup_delta_a > 0 and lineup_delta_b > 0 and abs(value_diff) <= 500
     ld_diff = lineup_delta_a - lineup_delta_b   # positive = A improved more
     if is_win_win:
         winner = "even"
+    elif abs(value_diff) > 500:
+        # value_diff > 0 means A gives more value → B wins
+        winner = "b" if value_diff > 0 else "a"
     elif abs(ld_diff) >= 300:
         winner = "a" if ld_diff > 0 else "b"
-    elif abs(value_diff) > 500:
-        winner = "b" if value_diff > 0 else "a"
     else:
         winner = "even"
 
