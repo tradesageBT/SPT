@@ -98,6 +98,7 @@ export default function TradeIdeas() {
   const [winWinOnly, setWinWinOnly] = useState(false)
   const [posFilter, setPosFilter] = useState(null)   // null | 'QB' | 'RB' | 'WR' | 'TE'
   const [countFilter, setCountFilter] = useState(null) // null | 1 | 2
+  const [partnerFilter, setPartnerFilter] = useState(null) // null | roster_id
   const [sortBy, setSortBy] = useState('default')    // 'default' | 'fairness' | 'lineup'
   const [expanded, setExpanded] = useState(false)
 
@@ -145,6 +146,19 @@ export default function TradeIdeas() {
     return leaguePlayers.filter((p) => p.name.toLowerCase().includes(q)).slice(0, 8)
   }, [query, leaguePlayers, selectedPlayer])
 
+  // All unique counterparty teams derived from the trades list
+  const partnerTeams = useMemo(() => {
+    const focusId = focusRosterId ? parseInt(focusRosterId) : null
+    const map = {}
+    for (const t of trades) {
+      if (t.team_a.roster_id !== focusId) map[t.team_a.roster_id] = t.team_a.display_name
+      if (t.team_b.roster_id !== focusId) map[t.team_b.roster_id] = t.team_b.display_name
+    }
+    return Object.entries(map)
+      .map(([id, name]) => ({ roster_id: parseInt(id), display_name: name }))
+      .sort((a, b) => a.display_name.localeCompare(b.display_name))
+  }, [trades, focusRosterId])
+
   // Player frequency — computed from raw trades before exclusion filter
   const playerFrequency = useMemo(() => {
     const map = {}
@@ -161,13 +175,14 @@ export default function TradeIdeas() {
   const displayedTrades = useMemo(() => {
     let result = selectedPlayer ? trades.filter((t) => tradeContains(t, selectedPlayer.sleeper_id)) : trades
     if (excludedPlayers.size > 0) result = result.filter((t) => ![...t.a_gives, ...t.b_gives].some((p) => excludedPlayers.has(p.sleeper_id)))
+    if (partnerFilter != null) result = result.filter((t) => t.team_a.roster_id === partnerFilter || t.team_b.roster_id === partnerFilter)
     if (winWinOnly) result = result.filter((t) => t.lineup_delta_a > 0 && t.lineup_delta_b > 0)
     if (posFilter)  result = result.filter((t) => tradeHasPos(t, posFilter))
     if (countFilter != null) result = result.filter((t) => t.a_gives.length === countFilter && t.b_gives.length === countFilter)
     if (sortBy === 'fairness') result = [...result].sort((a, b) => a.value_delta - b.value_delta)
     if (sortBy === 'lineup')   result = [...result].sort((a, b) => (b.lineup_delta_a + b.lineup_delta_b) - (a.lineup_delta_a + a.lineup_delta_b))
     return result
-  }, [trades, selectedPlayer, excludedPlayers, winWinOnly, posFilter, countFilter, sortBy])
+  }, [trades, selectedPlayer, excludedPlayers, partnerFilter, winWinOnly, posFilter, countFilter, sortBy])
 
   function selectPlayer(player) {
     setSelectedPlayer(player)
@@ -238,6 +253,25 @@ export default function TradeIdeas() {
               </div>
             )}
           </div>
+
+          {partnerTeams.length > 0 && (
+            <div className="partner-filter-wrap">
+              <span className="partner-filter-label">Trade with:</span>
+              <select
+                className="partner-filter-select"
+                value={partnerFilter ?? ''}
+                onChange={(e) => setPartnerFilter(e.target.value ? parseInt(e.target.value) : null)}
+              >
+                <option value="">Any team</option>
+                {partnerTeams.map((t) => (
+                  <option key={t.roster_id} value={t.roster_id}>{t.display_name}</option>
+                ))}
+              </select>
+              {partnerFilter != null && (
+                <button className="filter-clear" onClick={() => setPartnerFilter(null)} title="Clear">✕</button>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

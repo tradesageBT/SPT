@@ -466,6 +466,20 @@ img { display: block; }
 
 /* Player filter */
 .player-filter-wrap { position: relative; min-width: 220px; }
+.partner-filter-wrap { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.partner-filter-label { font-size: 0.75rem; color: var(--text-muted); white-space: nowrap; text-transform: uppercase; letter-spacing: 0.05em; }
+.partner-filter-select {
+  padding: 7px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 0.875rem;
+  cursor: pointer;
+  outline: none;
+  flex: 1;
+}
+.partner-filter-select:focus { border-color: var(--accent); }
 .player-filter-input-row { display: flex; align-items: center; gap: 6px; }
 .player-filter-input {
   width: 100%;
