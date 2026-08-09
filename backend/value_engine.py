@@ -420,8 +420,9 @@ def compute_league_profiles(
         )
 
     # Estimate projected pick slot from actual standings when games have been played,
-    # otherwise fall back to dynasty player value as a pre-season proxy.
-    # Worst record (fewest net wins, then fewest points) picks first (slot 1).
+    # otherwise use redraft starter value (1-year value of starters) as a pre-season proxy —
+    # this reflects who will win games THIS year, not long-term dynasty strength.
+    # Worst team picks first (slot 1).
     total_games_played = sum(p.get("wins", 0) + p.get("losses", 0) + p.get("ties", 0) for p in profiles)
     if total_games_played > 0:
         sorted_by_strength = sorted(
@@ -429,7 +430,7 @@ def compute_league_profiles(
             key=lambda t: (t.get("wins", 0) - t.get("losses", 0), t.get("fpts", 0)),
         )
     else:
-        sorted_by_strength = sorted(profiles, key=lambda t: t["player_value"])
+        sorted_by_strength = sorted(profiles, key=lambda t: t.get("redraft_starter_value", 0))
     roster_rank: dict[int, int] = {
         p["roster_id"]: rank for rank, p in enumerate(sorted_by_strength, start=1)
     }
