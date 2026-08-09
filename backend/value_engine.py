@@ -391,11 +391,13 @@ def compute_league_profiles(
         profile["positional_need"] = need
         del profile["positional_starters"]
 
-    # Positional league ranks — rank each team at QB/RB/WR/TE by starter value
+    # Positional league ranks — rank each team at QB/RB/WR/TE by total positional value
+    # (all players at the position, not just starters). Starter lineups are often empty
+    # pre-season or carry stale/0-value players, making starter-only ranks unreliable.
     num_teams = len(profiles)
     for pos in SKILL_POSITIONS:
         sorted_by_pos = sorted(
-            profiles, key=lambda p: p["positional_starter_value"].get(pos, 0), reverse=True
+            profiles, key=lambda p: p.get("positional_breakdown", {}).get(pos, 0), reverse=True
         )
         for rank, profile in enumerate(sorted_by_pos, start=1):
             profile.setdefault("positional_rank", {"n": num_teams})[pos] = rank
