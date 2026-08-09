@@ -147,4 +147,5 @@ def init_db():
             ALTER TABLE teams ADD COLUMN IF NOT EXISTS fpts REAL DEFAULT 0;
             ALTER TABLE teams ADD COLUMN IF NOT EXISTS redraft_starter_value INTEGER DEFAULT 0;
             ALTER TABLE players_cache ADD COLUMN IF NOT EXISTS redraft_value INTEGER DEFAULT 0;
+            ALTER TABLE players_cache ADD COLUMN IF NOT EXISTS pos_rank INTEGER DEFAULT NULL;
         """)
