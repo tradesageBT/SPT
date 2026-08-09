@@ -50,6 +50,9 @@ async def get_team(league_id: str, roster_id: int):
         p.setdefault("position", cached.get("position", ""))
         p.setdefault("nfl_team", cached.get("nfl_team", ""))
         p.setdefault("age", cached.get("age"))
+        p.setdefault("fc_value", cached.get("fc_value", 0))
+        p.setdefault("overall_rank", cached.get("overall_rank"))
+        p.setdefault("pos_rank", cached.get("pos_rank"))
 
     # Smash/Pass/Trash
     profile_for_cat = {

@@ -9,6 +9,63 @@ import ContentionMeter from '../components/ContentionMeter'
 const fmt = (n) => n?.toLocaleString() ?? '—'
 const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0)
 
+const POS_ORDER = ['QB', 'RB', 'WR', 'TE']
+const POS_COLOR = { QB: '#e05c5c', RB: '#5cb8e0', WR: '#01d9ac', TE: '#e0a45c' }
+
+function RankingsTab({ players, positionalRank, numTeams }) {
+  const byPos = {}
+  for (const p of players) {
+    if (!POS_ORDER.includes(p.position)) continue
+    if (!byPos[p.position]) byPos[p.position] = []
+    byPos[p.position].push(p)
+  }
+  for (const pos of POS_ORDER) {
+    if (byPos[pos]) {
+      byPos[pos].sort((a, b) => (a.overall_rank ?? 9999) - (b.overall_rank ?? 9999))
+    }
+  }
+
+  const n = numTeams || 0
+
+  return (
+    <div className="rankings-tab">
+      {POS_ORDER.filter((pos) => byPos[pos]?.length).map((pos) => {
+        const leagueRank = positionalRank?.[pos]
+        const third = n ? Math.ceil(n / 3) : 0
+        const rankCls = leagueRank && third
+          ? leagueRank <= third ? 'rank-tag-top' : leagueRank > n - third ? 'rank-tag-bot' : 'rank-tag-mid'
+          : ''
+        return (
+          <div key={pos} className="rankings-pos-group">
+            <div className="rankings-pos-header">
+              <span className="rankings-pos-pill" style={{ background: POS_COLOR[pos] }}>{pos}</span>
+              {leagueRank && n ? (
+                <span className={`rank-tag ${rankCls}`} style={{ fontSize: '0.8rem' }}>
+                  League <strong>#{leagueRank}</strong> of {n}
+                </span>
+              ) : null}
+            </div>
+            <div className="rankings-player-list">
+              {byPos[pos].map((p) => (
+                <div key={p.sleeper_id} className="rankings-player-row">
+                  <span className="rankings-overall">{p.overall_rank ? `#${p.overall_rank}` : '—'}</span>
+                  <span className="rankings-pos-rank" style={{ color: POS_COLOR[pos] }}>
+                    {p.pos_rank ? `${pos}${p.pos_rank}` : '—'}
+                  </span>
+                  <span className="rankings-name">{p.name}</span>
+                  <span className="rankings-team">{p.nfl_team}</span>
+                  {p.age && <span className="rankings-age">{p.age}y</span>}
+                  <span className="rankings-value">{fmt(p.fc_value)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 const ROUND_LABEL = { 1: '1st', 2: '2nd', 3: '3rd', 4: '4th' }
 
 function TradeModal({ p, ownerName, onClose }) {
@@ -136,6 +193,7 @@ export default function TeamProfile() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [tab, setTab] = useState('spt')
 
   useEffect(() => {
     api.getTeam(leagueId, rosterId)
@@ -224,33 +282,56 @@ export default function TeamProfile() {
         numTeams={data.num_teams}
       />
 
-      {/* SPT categorization */}
-      <div className="spt-section">
-        <div className="spt-col smash-col">
-          <h2 className="spt-heading smash-heading">
-            <span className="badge badge-smash">SMASH</span>
-            <span className="spt-count">{categorized.smash?.length ?? 0}</span>
-          </h2>
-          <p className="spt-desc">Core keepers — don't trade without elite return</p>
-          <PlayerTable players={categorized.smash || []} leagueId={leagueId} />
-        </div>
-        <div className="spt-col pass-col">
-          <h2 className="spt-heading pass-heading">
-            <span className="badge badge-pass">PASS</span>
-            <span className="spt-count">{categorized.pass?.length ?? 0}</span>
-          </h2>
-          <p className="spt-desc">Tradeable pieces — moveable without gutting the roster</p>
-          <PlayerTable players={categorized.pass || []} leagueId={leagueId} />
-        </div>
-        <div className="spt-col trash-col">
-          <h2 className="spt-heading trash-heading">
-            <span className="badge badge-trash">TRASH</span>
-            <span className="spt-count">{categorized.trash?.length ?? 0}</span>
-          </h2>
-          <p className="spt-desc">Low-value — cut candidates</p>
-          <PlayerTable players={categorized.trash || []} leagueId={leagueId} />
-        </div>
+      {/* Tab toggle */}
+      <div className="rank-mode-toggle" style={{ marginBottom: '1.25rem' }}>
+        <button
+          className={`rank-mode-btn${tab === 'spt' ? ' active' : ''}`}
+          onClick={() => setTab('spt')}
+        >
+          Smash / Pass / Trash
+        </button>
+        <button
+          className={`rank-mode-btn${tab === 'rankings' ? ' active' : ''}`}
+          onClick={() => setTab('rankings')}
+        >
+          Player Rankings
+        </button>
       </div>
+
+      {tab === 'spt' ? (
+        <div className="spt-section">
+          <div className="spt-col smash-col">
+            <h2 className="spt-heading smash-heading">
+              <span className="badge badge-smash">SMASH</span>
+              <span className="spt-count">{categorized.smash?.length ?? 0}</span>
+            </h2>
+            <p className="spt-desc">Core keepers — don't trade without elite return</p>
+            <PlayerTable players={categorized.smash || []} leagueId={leagueId} />
+          </div>
+          <div className="spt-col pass-col">
+            <h2 className="spt-heading pass-heading">
+              <span className="badge badge-pass">PASS</span>
+              <span className="spt-count">{categorized.pass?.length ?? 0}</span>
+            </h2>
+            <p className="spt-desc">Tradeable pieces — moveable without gutting the roster</p>
+            <PlayerTable players={categorized.pass || []} leagueId={leagueId} />
+          </div>
+          <div className="spt-col trash-col">
+            <h2 className="spt-heading trash-heading">
+              <span className="badge badge-trash">TRASH</span>
+              <span className="spt-count">{categorized.trash?.length ?? 0}</span>
+            </h2>
+            <p className="spt-desc">Low-value — cut candidates</p>
+            <PlayerTable players={categorized.trash || []} leagueId={leagueId} />
+          </div>
+        </div>
+      ) : (
+        <RankingsTab
+          players={roster_data.players || []}
+          positionalRank={data.positional_rank || {}}
+          numTeams={(data.positional_rank || {}).n || 0}
+        />
+      )}
 
       {/* Draft picks by year */}
       {roster_data.picks?.length > 0 && (

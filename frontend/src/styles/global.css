@@ -278,6 +278,21 @@ img { display: block; }
 
 /* ── SPT Section ─────────────────────────────────────────────────────────── */
 .spt-section { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 32px; }
+
+/* Rankings tab */
+.rankings-tab { display: flex; flex-direction: column; gap: 24px; margin-bottom: 32px; }
+.rankings-pos-group { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.rankings-pos-header { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.rankings-pos-pill { font-size: 0.7rem; font-weight: 700; padding: 2px 8px; border-radius: 4px; color: #000; letter-spacing: 0.04em; }
+.rankings-player-list { display: flex; flex-direction: column; }
+.rankings-player-row { display: flex; align-items: center; gap: 10px; padding: 9px 16px; border-bottom: 1px solid var(--border); }
+.rankings-player-row:last-child { border-bottom: none; }
+.rankings-overall { min-width: 36px; font-size: 0.75rem; color: var(--text-muted); font-weight: 500; }
+.rankings-pos-rank { min-width: 38px; font-size: 0.78rem; font-weight: 700; }
+.rankings-name { flex: 1; font-size: 0.875rem; font-weight: 500; }
+.rankings-team { font-size: 0.72rem; color: var(--text-muted); min-width: 28px; }
+.rankings-age { font-size: 0.72rem; color: var(--text-muted); }
+.rankings-value { font-size: 0.875rem; font-weight: 600; color: var(--accent); min-width: 50px; text-align: right; }
 .spt-col { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
 .spt-heading { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
 .spt-count { font-size: 0.85rem; color: var(--text-muted); }
