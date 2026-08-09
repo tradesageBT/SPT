@@ -394,7 +394,6 @@ def compute_league_profiles(
         profile["positional_surplus"] = surplus
         profile["positional_need"] = need
         del profile["positional_starters"]
-        del profile["positional_all_values"]
 
     # Positional league ranks — rank each team by their top-N players at each position,
     # where N = the number of pure starter slots for that position in the league settings.
@@ -425,6 +424,9 @@ def compute_league_profiles(
         sorted_by_pos = sorted(profiles, key=_top_n_value, reverse=True)
         for rank, profile in enumerate(sorted_by_pos, start=1):
             profile.setdefault("positional_rank", {"n": num_teams})[pos] = rank
+
+    for profile in profiles:
+        profile.pop("positional_all_values", None)
 
     # Tailored contention categories — blend roster age (contention_score) with
     # future draft capital and overall roster strength rather than a flat 3-way split.
