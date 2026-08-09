@@ -217,7 +217,6 @@ export default function TeamProfile() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [tab, setTab] = useState('spt')
 
   useEffect(() => {
     api.getTeam(leagueId, rosterId)
@@ -306,56 +305,40 @@ export default function TeamProfile() {
         numTeams={data.num_teams}
       />
 
-      {/* Tab toggle */}
-      <div className="rank-mode-toggle" style={{ marginBottom: '1.25rem' }}>
-        <button
-          className={`rank-mode-btn${tab === 'spt' ? ' active' : ''}`}
-          onClick={() => setTab('spt')}
-        >
-          Smash / Pass / Trash
-        </button>
-        <button
-          className={`rank-mode-btn${tab === 'rankings' ? ' active' : ''}`}
-          onClick={() => setTab('rankings')}
-        >
-          Player Rankings
-        </button>
-      </div>
+      {/* Player rankings with Dynasty / Redraft toggle */}
+      <RankingsTab
+        players={roster_data.players || []}
+        positionalRank={data.positional_rank || {}}
+        numTeams={(data.positional_rank || {}).n || 0}
+      />
 
-      {tab === 'spt' ? (
-        <div className="spt-section">
-          <div className="spt-col smash-col">
-            <h2 className="spt-heading smash-heading">
-              <span className="badge badge-smash">SMASH</span>
-              <span className="spt-count">{categorized.smash?.length ?? 0}</span>
-            </h2>
-            <p className="spt-desc">Core keepers — don't trade without elite return</p>
-            <PlayerTable players={categorized.smash || []} leagueId={leagueId} />
-          </div>
-          <div className="spt-col pass-col">
-            <h2 className="spt-heading pass-heading">
-              <span className="badge badge-pass">PASS</span>
-              <span className="spt-count">{categorized.pass?.length ?? 0}</span>
-            </h2>
-            <p className="spt-desc">Tradeable pieces — moveable without gutting the roster</p>
-            <PlayerTable players={categorized.pass || []} leagueId={leagueId} />
-          </div>
-          <div className="spt-col trash-col">
-            <h2 className="spt-heading trash-heading">
-              <span className="badge badge-trash">TRASH</span>
-              <span className="spt-count">{categorized.trash?.length ?? 0}</span>
-            </h2>
-            <p className="spt-desc">Low-value — cut candidates</p>
-            <PlayerTable players={categorized.trash || []} leagueId={leagueId} />
-          </div>
+      {/* SPT categorization — always shown below rankings */}
+      <div className="spt-section">
+        <div className="spt-col smash-col">
+          <h2 className="spt-heading smash-heading">
+            <span className="badge badge-smash">SMASH</span>
+            <span className="spt-count">{categorized.smash?.length ?? 0}</span>
+          </h2>
+          <p className="spt-desc">Core keepers — don't trade without elite return</p>
+          <PlayerTable players={categorized.smash || []} leagueId={leagueId} />
         </div>
-      ) : (
-        <RankingsTab
-          players={roster_data.players || []}
-          positionalRank={data.positional_rank || {}}
-          numTeams={(data.positional_rank || {}).n || 0}
-        />
-      )}
+        <div className="spt-col pass-col">
+          <h2 className="spt-heading pass-heading">
+            <span className="badge badge-pass">PASS</span>
+            <span className="spt-count">{categorized.pass?.length ?? 0}</span>
+          </h2>
+          <p className="spt-desc">Tradeable pieces — moveable without gutting the roster</p>
+          <PlayerTable players={categorized.pass || []} leagueId={leagueId} />
+        </div>
+        <div className="spt-col trash-col">
+          <h2 className="spt-heading trash-heading">
+            <span className="badge badge-trash">TRASH</span>
+            <span className="spt-count">{categorized.trash?.length ?? 0}</span>
+          </h2>
+          <p className="spt-desc">Low-value — cut candidates</p>
+          <PlayerTable players={categorized.trash || []} leagueId={leagueId} />
+        </div>
+      </div>
 
       {/* Draft picks by year */}
       {roster_data.picks?.length > 0 && (
