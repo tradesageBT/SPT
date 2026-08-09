@@ -53,6 +53,9 @@ async def get_team(league_id: str, roster_id: int):
         p.setdefault("fc_value", cached.get("fc_value", 0))
         p.setdefault("overall_rank", cached.get("overall_rank"))
         p.setdefault("pos_rank", cached.get("pos_rank"))
+        p.setdefault("redraft_overall_rank", cached.get("redraft_overall_rank"))
+        p.setdefault("redraft_pos_rank", cached.get("redraft_pos_rank"))
+        p.setdefault("redraft_value", cached.get("redraft_value", 0))
 
     # Smash/Pass/Trash
     profile_for_cat = {

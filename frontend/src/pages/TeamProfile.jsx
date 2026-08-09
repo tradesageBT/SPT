@@ -13,15 +13,19 @@ const POS_ORDER = ['QB', 'RB', 'WR', 'TE']
 const POS_COLOR = { QB: '#e05c5c', RB: '#5cb8e0', WR: '#01d9ac', TE: '#e0a45c' }
 
 function RankingsTab({ players, positionalRank, numTeams }) {
+  const [rankMode, setRankMode] = useState('dynasty')
+  const isDynasty = rankMode === 'dynasty'
+
   const byPos = {}
   for (const p of players) {
     if (!POS_ORDER.includes(p.position)) continue
     if (!byPos[p.position]) byPos[p.position] = []
     byPos[p.position].push(p)
   }
+  const overallKey = isDynasty ? 'overall_rank' : 'redraft_overall_rank'
   for (const pos of POS_ORDER) {
     if (byPos[pos]) {
-      byPos[pos].sort((a, b) => (a.overall_rank ?? 9999) - (b.overall_rank ?? 9999))
+      byPos[pos].sort((a, b) => (a[overallKey] ?? 9999) - (b[overallKey] ?? 9999))
     }
   }
 
@@ -29,6 +33,21 @@ function RankingsTab({ players, positionalRank, numTeams }) {
 
   return (
     <div className="rankings-tab">
+      <div className="rank-mode-toggle" style={{ marginBottom: '1rem' }}>
+        <button
+          className={`rank-mode-btn${isDynasty ? ' active' : ''}`}
+          onClick={() => setRankMode('dynasty')}
+        >
+          Dynasty
+        </button>
+        <button
+          className={`rank-mode-btn${!isDynasty ? ' active' : ''}`}
+          onClick={() => setRankMode('redraft')}
+        >
+          Redraft
+        </button>
+      </div>
+
       {POS_ORDER.filter((pos) => byPos[pos]?.length).map((pos) => {
         const leagueRank = positionalRank?.[pos]
         const third = n ? Math.ceil(n / 3) : 0
@@ -46,18 +65,23 @@ function RankingsTab({ players, positionalRank, numTeams }) {
               ) : null}
             </div>
             <div className="rankings-player-list">
-              {byPos[pos].map((p) => (
-                <div key={p.sleeper_id} className="rankings-player-row">
-                  <span className="rankings-overall">{p.overall_rank ? `#${p.overall_rank}` : '—'}</span>
-                  <span className="rankings-pos-rank" style={{ color: POS_COLOR[pos] }}>
-                    {p.pos_rank ? `${pos}${p.pos_rank}` : '—'}
-                  </span>
-                  <span className="rankings-name">{p.name}</span>
-                  <span className="rankings-team">{p.nfl_team}</span>
-                  {p.age && <span className="rankings-age">{p.age}y</span>}
-                  <span className="rankings-value">{fmt(p.fc_value)}</span>
-                </div>
-              ))}
+              {byPos[pos].map((p) => {
+                const overall = isDynasty ? p.overall_rank : p.redraft_overall_rank
+                const posRank = isDynasty ? p.pos_rank : p.redraft_pos_rank
+                const value = isDynasty ? p.fc_value : p.redraft_value
+                return (
+                  <div key={p.sleeper_id} className="rankings-player-row">
+                    <span className="rankings-overall">{overall ? `#${overall}` : '—'}</span>
+                    <span className="rankings-pos-rank" style={{ color: POS_COLOR[pos] }}>
+                      {posRank ? `${pos}${posRank}` : '—'}
+                    </span>
+                    <span className="rankings-name">{p.name}</span>
+                    <span className="rankings-team">{p.nfl_team}</span>
+                    {p.age && <span className="rankings-age">{p.age}y</span>}
+                    <span className="rankings-value">{fmt(value)}</span>
+                  </div>
+                )
+              })}
             </div>
           </div>
         )

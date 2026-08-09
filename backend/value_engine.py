@@ -40,6 +40,8 @@ def _player_entry(pid: str, players_cache: dict) -> dict:
         "redraft_value": p.get("redraft_value", 0),
         "overall_rank": p.get("overall_rank"),
         "pos_rank": p.get("pos_rank"),
+        "redraft_overall_rank": p.get("redraft_overall_rank"),
+        "redraft_pos_rank": p.get("redraft_pos_rank"),
     }
 
 

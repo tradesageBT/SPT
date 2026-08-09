@@ -72,12 +72,22 @@ async def refresh_cache(num_qbs: int = 1, ppr: float = 1.0):
         fantasycalc_client.get_values(num_qbs=num_qbs, ppr=ppr, is_dynasty=False),
     )
 
-    # Build a quick lookup: sleeper_id → redraft value
+    # Build redraft lookups: value, overall rank, positional rank
     redraft_map: dict[str, int] = {}
+    redraft_overall_rank_map: dict[str, int] = {}
+    redraft_pos_rank_map: dict[str, int] = {}
+    _rd_overall = 0
+    _rd_pos_counter: dict[str, int] = {}
     for entry in fc_redraft:
-        sid = str(entry.get("player", {}).get("sleeperId") or "")
-        if sid:
+        player = entry.get("player", {})
+        sid = str(player.get("sleeperId") or "")
+        pos = player.get("position", "")
+        if sid and pos in SKILL_POSITIONS:
+            _rd_overall += 1
+            _rd_pos_counter[pos] = _rd_pos_counter.get(pos, 0) + 1
             redraft_map[sid] = entry.get("value", 0)
+            redraft_overall_rank_map[sid] = _rd_overall
+            redraft_pos_rank_map[sid] = _rd_pos_counter[pos]
 
     player_rows: list[dict] = []
     picks_rows: list[dict] = []
@@ -117,6 +127,8 @@ async def refresh_cache(num_qbs: int = 1, ppr: float = 1.0):
                 "redraft_value": redraft_map.get(sleeper_id, 0),
                 "overall_rank": overall_rank_counter,
                 "pos_rank": pos_rank_counter[position],
+                "redraft_overall_rank": redraft_overall_rank_map.get(sleeper_id),
+                "redraft_pos_rank": redraft_pos_rank_map.get(sleeper_id),
                 "ppr": ppr,
                 "num_qbs": num_qbs,
                 "last_updated": now,
@@ -126,14 +138,17 @@ async def refresh_cache(num_qbs: int = 1, ppr: float = 1.0):
         conn.executemany(
             """
             INSERT INTO players_cache
-                (sleeper_id, name, position, nfl_team, age, years_exp, fc_value, redraft_value, overall_rank, pos_rank, ppr, num_qbs, last_updated)
+                (sleeper_id, name, position, nfl_team, age, years_exp, fc_value, redraft_value,
+                 overall_rank, pos_rank, redraft_overall_rank, redraft_pos_rank, ppr, num_qbs, last_updated)
             VALUES
-                (:sleeper_id, :name, :position, :nfl_team, :age, :years_exp, :fc_value, :redraft_value, :overall_rank, :pos_rank, :ppr, :num_qbs, :last_updated)
+                (:sleeper_id, :name, :position, :nfl_team, :age, :years_exp, :fc_value, :redraft_value,
+                 :overall_rank, :pos_rank, :redraft_overall_rank, :redraft_pos_rank, :ppr, :num_qbs, :last_updated)
             ON CONFLICT(sleeper_id) DO UPDATE SET
                 name=excluded.name, position=excluded.position, nfl_team=excluded.nfl_team,
                 age=excluded.age, years_exp=excluded.years_exp, fc_value=excluded.fc_value,
                 redraft_value=excluded.redraft_value, overall_rank=excluded.overall_rank,
-                pos_rank=excluded.pos_rank,
+                pos_rank=excluded.pos_rank, redraft_overall_rank=excluded.redraft_overall_rank,
+                redraft_pos_rank=excluded.redraft_pos_rank,
                 ppr=excluded.ppr, num_qbs=excluded.num_qbs, last_updated=excluded.last_updated
             """,
             player_rows,
