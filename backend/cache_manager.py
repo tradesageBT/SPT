@@ -44,12 +44,14 @@ def get_cached_picks() -> dict:
 def players_cache_is_stale(ppr: float = 1.0, num_qbs: int = 1) -> bool:
     with db() as conn:
         row = conn.execute(
-            "SELECT last_updated, ppr, num_qbs FROM players_cache LIMIT 1"
+            "SELECT last_updated, ppr, num_qbs, overall_rank FROM players_cache LIMIT 1"
         ).fetchone()
     if not row:
         return True
-    # Refresh if scoring settings changed or TTL expired
+    # Refresh if scoring settings changed, TTL expired, or rank columns not yet populated
     if row.get("ppr") != ppr or row.get("num_qbs") != num_qbs:
+        return True
+    if row.get("overall_rank") is None:
         return True
     return _is_stale(row["last_updated"])
 
