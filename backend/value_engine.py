@@ -241,6 +241,7 @@ def compute_team_profile(
     redraft_starter_value = 0
     positional: dict[str, int] = {p: 0 for p in SKILL_POSITIONS}
     positional_starters: dict[str, list[int]] = {p: [] for p in SKILL_POSITIONS}
+    positional_all_values: dict[str, list[int]] = {p: [] for p in SKILL_POSITIONS}
     age_weighted_sum = 0.0
     age_weight_total = 0.0
     enriched_players: list[dict] = []
@@ -264,6 +265,7 @@ def compute_team_profile(
 
         if pos in positional:
             positional[pos] += value
+            positional_all_values[pos].append(value)
             if is_starter:
                 positional_starters[pos].append(value)
 
@@ -323,7 +325,8 @@ def compute_team_profile(
         "fpts": fpts,
         "positional_breakdown": positional,
         "positional_starter_value": {pos: sum(vals) for pos, vals in positional_starters.items()},
-        "positional_starters": positional_starters,  # raw per-slot values, stripped before persisting
+        "positional_starters": positional_starters,        # raw per-slot values, stripped before persisting
+        "positional_all_values": positional_all_values,    # all rostered values per pos, stripped before persisting
         "positional_surplus": {},   # filled after league-wide pass
         "positional_need": {},      # filled after league-wide pass
         "contention_score": round(contention_score, 3),
@@ -339,6 +342,7 @@ def compute_league_profiles(
     players_cache: dict,
     picks_cache: dict,
     picks_by_roster: dict | None = None,
+    roster_positions: list[str] | None = None,
 ) -> list[dict]:
     profiles = [
         compute_team_profile(
@@ -390,15 +394,35 @@ def compute_league_profiles(
         profile["positional_surplus"] = surplus
         profile["positional_need"] = need
         del profile["positional_starters"]
+        del profile["positional_all_values"]
 
-    # Positional league ranks — rank each team at QB/RB/WR/TE by total positional value
-    # (all players at the position, not just starters). Starter lineups are often empty
-    # pre-season or carry stale/0-value players, making starter-only ranks unreliable.
+    # Positional league ranks — rank each team by their top-N players at each position,
+    # where N = the number of pure starter slots for that position in the league settings.
+    # This correctly rewards elite top-end talent over raw depth.
+    rp = roster_positions or []
+    pure_slots: dict[str, int] = {
+        "QB": sum(1 for p in rp if p == "QB") + sum(1 for p in rp if p == "SUPER_FLEX"),
+        "RB": sum(1 for p in rp if p == "RB"),
+        "WR": sum(1 for p in rp if p == "WR"),
+        "TE": sum(1 for p in rp if p == "TE"),
+    }
+    # FLEX slots split across RB/WR/TE — add one to each that has fewer pure slots
+    flex_count = sum(1 for p in rp if p in ("FLEX", "RB_WR_TE", "WR_RB", "WR_TE", "RB_WR"))
+    for _ in range(flex_count):
+        fewest = min(("RB", "WR", "TE"), key=lambda p: pure_slots[p])
+        pure_slots[fewest] += 1
+    # Default slots when roster_positions not provided
+    for pos, default in (("QB", 1), ("RB", 2), ("WR", 3), ("TE", 1)):
+        if pure_slots[pos] == 0:
+            pure_slots[pos] = default
+
     num_teams = len(profiles)
     for pos in SKILL_POSITIONS:
-        sorted_by_pos = sorted(
-            profiles, key=lambda p: p.get("positional_breakdown", {}).get(pos, 0), reverse=True
-        )
+        n_slots = pure_slots[pos]
+        def _top_n_value(profile, pos=pos, n=n_slots):
+            vals = sorted(profile.get("positional_all_values", {}).get(pos, []), reverse=True)
+            return sum(vals[:n])
+        sorted_by_pos = sorted(profiles, key=_top_n_value, reverse=True)
         for rank, profile in enumerate(sorted_by_pos, start=1):
             profile.setdefault("positional_rank", {"n": num_teams})[pos] = rank
 

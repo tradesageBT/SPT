@@ -143,7 +143,8 @@ async def _sync_league(league_id: str, force: bool = False, background_tasks: Ba
     )
 
     profiles = compute_league_profiles(
-        rosters, users_map, players_cache, picks_cache, picks_by_roster
+        rosters, users_map, players_cache, picks_cache, picks_by_roster,
+        roster_positions=roster_positions,
     )
 
     for profile in profiles:
