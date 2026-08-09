@@ -12,7 +12,8 @@ const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0)
 const POS_ORDER = ['QB', 'RB', 'WR', 'TE']
 const POS_COLOR = { QB: '#e05c5c', RB: '#5cb8e0', WR: '#01d9ac', TE: '#e0a45c' }
 
-function RankingsTab({ players, positionalRank, numTeams, rankMode }) {
+function RankingsTab({ players, positionalRank, numTeams }) {
+  const [rankMode, setRankMode] = useState('dynasty')
   const isDynasty = rankMode === 'dynasty'
 
   const byPos = {}
@@ -32,6 +33,14 @@ function RankingsTab({ players, positionalRank, numTeams, rankMode }) {
 
   return (
     <div className="rankings-tab">
+      <div className="rankings-section-header">
+        <h2 className="section-title" style={{ margin: 0 }}>Player Rankings</h2>
+        <div className="rank-mode-toggle" style={{ margin: 0 }}>
+          <button className={`rank-mode-btn${isDynasty ? ' active' : ''}`} onClick={() => setRankMode('dynasty')}>Dynasty</button>
+          <button className={`rank-mode-btn${!isDynasty ? ' active' : ''}`} onClick={() => setRankMode('redraft')}>Redraft</button>
+        </div>
+      </div>
+
       {POS_ORDER.filter((pos) => byPos[pos]?.length).map((pos) => {
         const leagueRank = positionalRank?.[pos]
         const third = n ? Math.ceil(n / 3) : 0
@@ -201,7 +210,6 @@ export default function TeamProfile() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [rankMode, setRankMode] = useState('dynasty')
 
   useEffect(() => {
     api.getTeam(leagueId, rosterId)
@@ -241,21 +249,6 @@ export default function TeamProfile() {
           <h1 className="page-title">{data.display_name}</h1>
           <p className="page-sub">Total Value: <strong className="accent">{fmt(data.total_value)}</strong></p>
         </div>
-      </div>
-
-      <div className="rank-mode-toggle">
-        <button
-          className={`rank-mode-btn${rankMode === 'dynasty' ? ' active' : ''}`}
-          onClick={() => setRankMode('dynasty')}
-        >
-          Dynasty Rankings
-        </button>
-        <button
-          className={`rank-mode-btn${rankMode === 'redraft' ? ' active' : ''}`}
-          onClick={() => setRankMode('redraft')}
-        >
-          Redraft Rankings
-        </button>
       </div>
 
       {/* Value split */}
@@ -310,7 +303,6 @@ export default function TeamProfile() {
         players={roster_data.players || []}
         positionalRank={data.positional_rank || {}}
         numTeams={(data.positional_rank || {}).n || 0}
-        rankMode={rankMode}
       />
 
       {/* SPT categorization — always shown below rankings */}
