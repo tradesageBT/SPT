@@ -67,7 +67,12 @@ export default function PlayerTable({ players = [], leagueId }) {
             {p.on_ir && <span className="player-status-badge status-ir">IR</span>}
             <span className="player-team">{p.nfl_team}</span>
             {p.age && <span className="player-age">{p.age}y</span>}
-            {p.pos_rank && <span className="player-pos-rank">{p.position}{p.pos_rank}</span>}
+            {p.pos_rank && (
+              <span className="player-pos-rank">
+                {p.overall_rank && <span className="player-overall-rank">#{p.overall_rank}</span>}
+                {p.position}{p.pos_rank}
+              </span>
+            )}
             <span className="player-value">{fmt(p.fc_value)}</span>
           </div>
         ))}

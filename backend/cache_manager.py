@@ -83,6 +83,7 @@ async def refresh_cache(num_qbs: int = 1, ppr: float = 1.0):
     picks_rows: list[dict] = []
     _FP_PATTERN = re.compile(r"^FP_(\d{4})_(\d)$")
     pos_rank_counter: dict[str, int] = {}
+    overall_rank_counter = 0
 
     for entry in fc_data:
         value = entry.get("value", 0)
@@ -104,6 +105,7 @@ async def refresh_cache(num_qbs: int = 1, ppr: float = 1.0):
                 })
         elif sleeper_id and position in SKILL_POSITIONS:
             pos_rank_counter[position] = pos_rank_counter.get(position, 0) + 1
+            overall_rank_counter += 1
             player_rows.append({
                 "sleeper_id": sleeper_id,
                 "name": player.get("name", ""),
@@ -113,6 +115,7 @@ async def refresh_cache(num_qbs: int = 1, ppr: float = 1.0):
                 "years_exp": None,
                 "fc_value": value,
                 "redraft_value": redraft_map.get(sleeper_id, 0),
+                "overall_rank": overall_rank_counter,
                 "pos_rank": pos_rank_counter[position],
                 "ppr": ppr,
                 "num_qbs": num_qbs,
@@ -123,13 +126,14 @@ async def refresh_cache(num_qbs: int = 1, ppr: float = 1.0):
         conn.executemany(
             """
             INSERT INTO players_cache
-                (sleeper_id, name, position, nfl_team, age, years_exp, fc_value, redraft_value, pos_rank, ppr, num_qbs, last_updated)
+                (sleeper_id, name, position, nfl_team, age, years_exp, fc_value, redraft_value, overall_rank, pos_rank, ppr, num_qbs, last_updated)
             VALUES
-                (:sleeper_id, :name, :position, :nfl_team, :age, :years_exp, :fc_value, :redraft_value, :pos_rank, :ppr, :num_qbs, :last_updated)
+                (:sleeper_id, :name, :position, :nfl_team, :age, :years_exp, :fc_value, :redraft_value, :overall_rank, :pos_rank, :ppr, :num_qbs, :last_updated)
             ON CONFLICT(sleeper_id) DO UPDATE SET
                 name=excluded.name, position=excluded.position, nfl_team=excluded.nfl_team,
                 age=excluded.age, years_exp=excluded.years_exp, fc_value=excluded.fc_value,
-                redraft_value=excluded.redraft_value, pos_rank=excluded.pos_rank,
+                redraft_value=excluded.redraft_value, overall_rank=excluded.overall_rank,
+                pos_rank=excluded.pos_rank,
                 ppr=excluded.ppr, num_qbs=excluded.num_qbs, last_updated=excluded.last_updated
             """,
             player_rows,

@@ -38,6 +38,7 @@ def _player_entry(pid: str, players_cache: dict) -> dict:
         "age": p.get("age"),
         "fc_value": p.get("fc_value", 0),
         "redraft_value": p.get("redraft_value", 0),
+        "overall_rank": p.get("overall_rank"),
         "pos_rank": p.get("pos_rank"),
     }
 
