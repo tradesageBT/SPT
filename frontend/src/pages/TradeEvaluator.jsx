@@ -23,7 +23,7 @@ function pickAsset(pick) {
   }
 }
 
-function PlayerSearch({ leaguePlayers, addedIds, onAdd }) {
+function PlayerSearch({ leaguePlayers, addedIds, onAdd, searchablePicks = [] }) {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const inputRef = useRef(null)
@@ -31,10 +31,12 @@ function PlayerSearch({ leaguePlayers, addedIds, onAdd }) {
   const suggestions = useMemo(() => {
     if (!query.trim()) return []
     const q = query.toLowerCase()
-    return leaguePlayers
+    const players = leaguePlayers
       .filter((p) => !addedIds.has(p.sleeper_id) && p.name.toLowerCase().includes(q))
-      .slice(0, 8)
-  }, [query, leaguePlayers, addedIds])
+    const picks = searchablePicks
+      .filter((p) => !addedIds.has(p.sleeper_id) && p.name.toLowerCase().includes(q))
+    return [...picks, ...players].slice(0, 8)
+  }, [query, leaguePlayers, addedIds, searchablePicks])
 
   function handleSelect(player) {
     onAdd(
@@ -119,7 +121,16 @@ function SidePanel({ label, assets, teamContext, onAdd, onRemove, leaguePlayers,
         </select>
       )}
 
-      <PlayerSearch leaguePlayers={leaguePlayers} addedIds={addedIds} onAdd={onAdd} />
+      <PlayerSearch
+        leaguePlayers={leaguePlayers}
+        addedIds={addedIds}
+        onAdd={onAdd}
+        searchablePicks={effectiveTeam ? availablePicks.map(p => ({
+          ...pickAsset(p),
+          roster_id: effectiveTeam.roster_id,
+          display_name: effectiveTeam.display_name,
+        })) : []}
+      />
 
       {effectiveTeam && availablePicks.length > 0 && (
         <div className="eval-pick-wrap">
