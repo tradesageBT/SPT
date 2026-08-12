@@ -795,6 +795,47 @@ img { display: block; }
   color: #fff; flex-shrink: 0;
 }
 
+/* ── Trade Feed ──────────────────────────────────────────────────────────── */
+.trade-feed { margin-top: 12px; }
+.trade-feed-controls {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.trade-feed-disclaimer { font-size: 0.72rem; color: var(--text-muted); margin: 0; flex: 1; min-width: 160px; }
+.trade-feed-status { color: var(--text-muted); font-size: 0.85rem; padding: 20px 0; text-align: center; }
+.trade-feed-list { display: flex; flex-direction: column; gap: 10px; }
+
+.trade-feed-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.trade-feed-card-top {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px; gap: 8px; flex-wrap: wrap;
+}
+.trade-feed-date { font-size: 0.72rem; color: var(--text-muted); }
+.trade-feed-verdict {
+  font-size: 0.75rem; font-weight: 700;
+  padding: 3px 8px; border-radius: 20px;
+}
+.trade-feed-delta { font-weight: 400; opacity: 0.8; }
+
+.trade-feed-sides {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+}
+.trade-feed-side { display: flex; flex-direction: column; gap: 5px; }
+.trade-feed-side-header {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 6px;
+}
+.trade-feed-team { font-size: 0.78rem; font-weight: 600; color: var(--text); }
+.trade-feed-side-total { font-size: 0.72rem; color: var(--accent); font-weight: 600; }
+.trade-feed-assets { display: flex; flex-direction: column; gap: 3px; }
+.trade-feed-asset { display: flex; align-items: center; gap: 5px; font-size: 0.8rem; }
+.trade-feed-asset-name { color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trade-feed-asset-val { color: var(--text-muted); font-size: 0.72rem; white-space: nowrap; flex-shrink: 0; }
+
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 640px) {
   .dashboard-header { flex-direction: column; align-items: stretch; }

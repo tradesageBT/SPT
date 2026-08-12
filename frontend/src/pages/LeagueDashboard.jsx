@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import TeamCard from '../components/TeamCard'
+import TradeFeed from '../components/TradeFeed'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { saveRecentLeague } from '../utils/recentLeagues'
 
@@ -142,21 +143,31 @@ export default function LeagueDashboard() {
           >
             {data.season} Standings
           </button>
+          <button
+            className={`rank-mode-btn${rankMode === 'trades' ? ' active' : ''}`}
+            onClick={() => setRankMode('trades')}
+          >
+            Trade Feed
+          </button>
         </div>
 
-      <div className="team-list">
-        {rankedTeams.map((team, idx) => (
-          <TeamCard
-            key={team.roster_id}
-            team={team}
-            rank={idx + 1}
-            maxValue={maxValue}
-            leagueId={leagueId}
-            rankMode={rankMode}
-            hasSeasonData={hasSeasonData}
-          />
-        ))}
-      </div>
+      {rankMode === 'trades' ? (
+        <TradeFeed leagueId={leagueId} teams={data.teams} />
+      ) : (
+        <div className="team-list">
+          {rankedTeams.map((team, idx) => (
+            <TeamCard
+              key={team.roster_id}
+              team={team}
+              rank={idx + 1}
+              maxValue={maxValue}
+              leagueId={leagueId}
+              rankMode={rankMode}
+              hasSeasonData={hasSeasonData}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

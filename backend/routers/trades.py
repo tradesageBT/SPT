@@ -309,9 +309,10 @@ async def get_recent_transactions(league_id: str):
         t for week_txns in txn_results for t in week_txns
         if t.get("type") == "trade" and t.get("status") == "complete"
     ]
-    recent = sorted(all_txns, key=lambda t: t.get("created") or 0, reverse=True)[:15]
+    recent = sorted(all_txns, key=lambda t: t.get("created") or 0, reverse=True)
 
     players_cache = cache_manager.get_cached_players()
+    picks_cache = cache_manager.get_cached_picks()
     result = []
 
     for txn in recent:
@@ -335,6 +336,7 @@ async def get_recent_transactions(league_id: str):
             sides[from_rid]["gave"].append({
                 "name": p.get("name", str(pid)),
                 "position": p.get("position", ""),
+                "fc_value": p.get("fc_value", 0),
             })
 
         for pick in picks:
@@ -348,18 +350,34 @@ async def get_recent_transactions(league_id: str):
             })
             rnd = int(pick.get("round", 1))
             season = str(pick.get("season", ""))
+            pick_val = cache_manager.resolve_pick_value(picks_cache, season, rnd)
             sides[from_rid]["gave"].append({
                 "name": f"{season} {_ROUND_LABEL.get(rnd, f'Rd {rnd}')}",
                 "position": "PK",
+                "fc_value": pick_val,
             })
 
         if len(sides) < 2:
             continue
 
+        sides_list = list(sides.values())
+        for side in sides_list:
+            side["total_value"] = sum(a.get("fc_value", 0) for a in side["gave"])
+
+        val_a = sides_list[0]["total_value"]
+        val_b = sides_list[1]["total_value"] if len(sides_list) > 1 else 0
+        delta = abs(val_a - val_b)
+        winner = "a" if val_a > val_b + 200 else "b" if val_b > val_a + 200 else "even"
+
         date_str = (
             datetime.fromtimestamp(created / 1000, tz=timezone.utc).strftime("%b %d, %Y")
             if created else None
         )
-        result.append({"date": date_str, "sides": list(sides.values())})
+        result.append({
+            "date": date_str,
+            "sides": sides_list,
+            "value_delta": delta,
+            "winner": winner,
+        })
 
     return result
