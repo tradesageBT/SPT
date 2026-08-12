@@ -292,13 +292,73 @@ def _trade_has_player(trade: dict, sleeper_id: str) -> bool:
 
 
 _ROUND_LABEL = {1: "1st", 2: "2nd", 3: "3rd", 4: "4th"}
+_GRADE_LABELS = [None, "F", "D", "C", "B", "A"]
+_WIN_NOW  = {"Championship Window", "Win-Now Push", "Sustainable Contender"}
+_REBUILD  = {"Full Rebuild", "Fire Sale", "Retooling"}
+_SKILL_POS = {"QB", "RB", "WR", "TE"}
+
+
+def _trade_grade(
+    net_value: int,
+    gave_val: int,
+    recv_assets: list,
+    gave_assets: list,
+    profile: dict,
+    is_best_piece: bool,
+) -> str:
+    deal_size = gave_val + sum(a.get("fc_value", 0) for a in recv_assets)
+    if deal_size < 500:
+        return "C"
+
+    # Factor 1: value exchange → base grade
+    value_pct = net_value / (deal_size / 2) * 100
+    if value_pct >= 20:    grade = 5  # A
+    elif value_pct >= 8:   grade = 4  # B
+    elif value_pct >= -8:  grade = 3  # C
+    elif value_pct >= -20: grade = 2  # D
+    else:                  grade = 1  # F
+
+    # Factor 2: best piece in the trade (+1 received it, -1 gave it away)
+    best_mod = 1 if is_best_piece else -1
+
+    # Factor 3: age fit vs team contention stage
+    contention = profile.get("contention_category", "")
+    ages = [a["age"] for a in recv_assets if a.get("position") in _SKILL_POS and a.get("age")]
+    age_mod = 0
+    if ages:
+        avg_age = sum(ages) / len(ages)
+        if contention in _WIN_NOW:
+            age_mod = 1 if avg_age >= 27 else -1 if avg_age <= 23 else 0
+        elif contention in _REBUILD:
+            age_mod = 1 if avg_age <= 24 else -1 if avg_age >= 28 else 0
+        else:  # Ascending, Treading Water, etc.
+            age_mod = 1 if avg_age <= 25 else 0
+
+    # Factor 4: positional fit vs team needs
+    pos_need = profile.get("positional_need", {})
+    fit = 0
+    for a in recv_assets:
+        if a.get("position") in _SKILL_POS:
+            need = pos_need.get(a["position"], "Adequate")
+            if need == "Need":       fit += 1
+            elif need == "Strength": fit -= 1
+    for a in gave_assets:
+        if a.get("position") in _SKILL_POS:
+            need = pos_need.get(a["position"], "Adequate")
+            if need == "Need":       fit -= 1
+            elif need == "Strength": fit += 1
+    pos_mod = 1 if fit >= 2 else -1 if fit <= -2 else 0
+
+    grade = max(1, min(5, grade + best_mod + age_mod + pos_mod))
+    return _GRADE_LABELS[grade]
 
 
 @router.get("/{league_id}/recent-transactions")
 async def get_recent_transactions(league_id: str):
     """Return the 15 most recent completed trades in this league's current season."""
     profiles = _load_profiles(league_id)
-    roster_names = {p["roster_id"]: p["display_name"] for p in profiles}
+    roster_names    = {p["roster_id"]: p["display_name"] for p in profiles}
+    roster_profiles = {p["roster_id"]: p for p in profiles}
 
     txn_results = await asyncio.gather(*[
         sleeper_client.get_transactions(league_id, week)
@@ -323,6 +383,9 @@ async def get_recent_transactions(league_id: str):
 
         sides: dict[int, dict] = {}
         received_val: dict[int, int] = {}
+        received_assets: dict[int, list] = {}
+        best_piece_val = 0
+        best_piece_rid: int | None = None
 
         for pid, to_rid in adds.items():
             from_rid = drops.get(str(pid))
@@ -342,6 +405,14 @@ async def get_recent_transactions(league_id: str):
                 "fc_value": val,
             })
             received_val[to_rid_int] = received_val.get(to_rid_int, 0) + val
+            received_assets.setdefault(to_rid_int, []).append({
+                "position": p.get("position", ""),
+                "fc_value": val,
+                "age": p.get("age"),
+            })
+            if val > best_piece_val:
+                best_piece_val = val
+                best_piece_rid = to_rid_int
 
         for pick in picks:
             from_rid = pick.get("previous_owner_id")
@@ -362,7 +433,16 @@ async def get_recent_transactions(league_id: str):
                 "fc_value": pick_val,
             })
             if to_rid is not None:
-                received_val[int(to_rid)] = received_val.get(int(to_rid), 0) + pick_val
+                to_rid_int = int(to_rid)
+                received_val[to_rid_int] = received_val.get(to_rid_int, 0) + pick_val
+                received_assets.setdefault(to_rid_int, []).append({
+                    "position": "PK",
+                    "fc_value": pick_val,
+                    "age": None,
+                })
+                if pick_val > best_piece_val:
+                    best_piece_val = pick_val
+                    best_piece_rid = to_rid_int
 
         if len(sides) < 2:
             continue
@@ -370,10 +450,19 @@ async def get_recent_transactions(league_id: str):
         sides_list = list(sides.values())
         roster_ids = list(sides.keys())
         for i, rid in enumerate(roster_ids):
-            gave = sum(a.get("fc_value", 0) for a in sides_list[i]["gave"])
-            recv = received_val.get(rid, 0)
-            sides_list[i]["total_value"] = gave
-            sides_list[i]["net_value"] = recv - gave
+            gave_val = sum(a.get("fc_value", 0) for a in sides_list[i]["gave"])
+            recv_val = received_val.get(rid, 0)
+            recv_ast = received_assets.get(rid, [])
+            sides_list[i]["total_value"] = gave_val
+            sides_list[i]["net_value"] = recv_val - gave_val
+            sides_list[i]["grade"] = _trade_grade(
+                net_value=recv_val - gave_val,
+                gave_val=gave_val,
+                recv_assets=recv_ast,
+                gave_assets=sides_list[i]["gave"],
+                profile=roster_profiles.get(rid, {}),
+                is_best_piece=(rid == best_piece_rid and best_piece_val >= 1000),
+            )
 
         # Winner = team with highest net value (received − gave)
         net_vals = [s["net_value"] for s in sides_list]

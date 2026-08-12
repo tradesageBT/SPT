@@ -68,6 +68,11 @@ export default function TradeFeed({ leagueId, teams }) {
                   <div key={j} className="trade-feed-side">
                     <div className="trade-feed-side-header">
                       <span className="trade-feed-team">{side.team_name}</span>
+                      {side.grade && (
+                        <span className={`trade-grade trade-grade-${side.grade.toLowerCase()}`}>
+                          {side.grade}
+                        </span>
+                      )}
                       {side.total_value > 0 && (
                         <span className="trade-feed-side-total">{fmt(side.total_value)}</span>
                       )}

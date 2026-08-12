@@ -839,6 +839,16 @@ img { display: block; }
 .trade-feed-asset-name { color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .trade-feed-asset-val { color: var(--text-muted); font-size: 0.72rem; white-space: nowrap; flex-shrink: 0; }
 
+.trade-grade {
+  font-size: 0.68rem; font-weight: 800; letter-spacing: 0.02em;
+  padding: 2px 6px; border-radius: 4px; flex-shrink: 0;
+}
+.trade-grade-a { background: rgba(1,217,172,0.15);   color: #01d9ac; }
+.trade-grade-b { background: rgba(92,184,224,0.15);  color: var(--info); }
+.trade-grade-c { background: rgba(139,144,176,0.12); color: var(--text-muted); }
+.trade-grade-d { background: rgba(224,164,92,0.15);  color: #e0a45c; }
+.trade-grade-f { background: rgba(224,92,92,0.15);   color: #e05c5c; }
+
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 640px) {
   .dashboard-header { flex-direction: column; align-items: stretch; }
