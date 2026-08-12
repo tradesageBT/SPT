@@ -47,14 +47,8 @@ export default function TradeFeed({ leagueId, teams }) {
 
       <div className="trade-feed-list">
         {displayed.map((trade, i) => {
-          const sideA = trade.sides[0]
-          const sideB = trade.sides[1]
           const isEven = trade.winner === 'even'
-          const winnerName = isEven
-            ? 'Even'
-            : trade.winner === 'a'
-            ? `${sideA?.team_name} Wins`
-            : `${sideB?.team_name} Wins`
+          const winnerName = isEven ? 'Even' : `${trade.winner} Wins`
 
           return (
             <div key={i} className="trade-feed-card">
@@ -66,7 +60,10 @@ export default function TradeFeed({ leagueId, teams }) {
                 </span>
               </div>
 
-              <div className="trade-feed-sides">
+              <div
+                className="trade-feed-sides"
+                style={{ gridTemplateColumns: `repeat(${trade.sides.length}, 1fr)` }}
+              >
                 {trade.sides.map((side, j) => (
                   <div key={j} className="trade-feed-side">
                     <div className="trade-feed-side-header">

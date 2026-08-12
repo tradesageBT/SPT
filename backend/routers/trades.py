@@ -322,25 +322,30 @@ async def get_recent_transactions(league_id: str):
         created = txn.get("created")
 
         sides: dict[int, dict] = {}
+        received_val: dict[int, int] = {}
 
         for pid, to_rid in adds.items():
             from_rid = drops.get(str(pid))
             if from_rid is None:
                 continue
             from_rid = int(from_rid)
+            to_rid_int = int(to_rid)
             sides.setdefault(from_rid, {
                 "team_name": roster_names.get(from_rid, f"Team {from_rid}"),
                 "gave": [],
             })
             p = players_cache.get(str(pid), {})
+            val = p.get("fc_value", 0)
             sides[from_rid]["gave"].append({
                 "name": p.get("name", str(pid)),
                 "position": p.get("position", ""),
-                "fc_value": p.get("fc_value", 0),
+                "fc_value": val,
             })
+            received_val[to_rid_int] = received_val.get(to_rid_int, 0) + val
 
         for pick in picks:
             from_rid = pick.get("previous_owner_id")
+            to_rid = pick.get("owner_id")
             if from_rid is None:
                 continue
             from_rid = int(from_rid)
@@ -356,18 +361,26 @@ async def get_recent_transactions(league_id: str):
                 "position": "PK",
                 "fc_value": pick_val,
             })
+            if to_rid is not None:
+                received_val[int(to_rid)] = received_val.get(int(to_rid), 0) + pick_val
 
         if len(sides) < 2:
             continue
 
         sides_list = list(sides.values())
-        for side in sides_list:
-            side["total_value"] = sum(a.get("fc_value", 0) for a in side["gave"])
+        roster_ids = list(sides.keys())
+        for i, rid in enumerate(roster_ids):
+            gave = sum(a.get("fc_value", 0) for a in sides_list[i]["gave"])
+            recv = received_val.get(rid, 0)
+            sides_list[i]["total_value"] = gave
+            sides_list[i]["net_value"] = recv - gave
 
-        val_a = sides_list[0]["total_value"]
-        val_b = sides_list[1]["total_value"] if len(sides_list) > 1 else 0
-        delta = abs(val_a - val_b)
-        winner = "a" if val_a > val_b + 200 else "b" if val_b > val_a + 200 else "even"
+        # Winner = team with highest net value (received − gave)
+        net_vals = [s["net_value"] for s in sides_list]
+        best_idx = max(range(len(sides_list)), key=lambda i: net_vals[i])
+        best_net = net_vals[best_idx]
+        winner = sides_list[best_idx]["team_name"] if best_net > 200 else "even"
+        delta = best_net if best_net > 200 else 0
 
         date_str = (
             datetime.fromtimestamp(created / 1000, tz=timezone.utc).strftime("%b %d, %Y")
