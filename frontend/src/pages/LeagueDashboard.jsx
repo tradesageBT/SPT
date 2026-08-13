@@ -13,7 +13,10 @@ export default function LeagueDashboard() {
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [error, setError] = useState(null)
-  const [rankMode, setRankMode] = useState('dynasty') // 'dynasty' | 'season'
+  const [rankMode, setRankMode] = useState('dynasty') // 'dynasty' | 'season' | 'trades'
+  const [trades, setTrades] = useState(null)
+  const [tradesLoading, setTradesLoading] = useState(false)
+  const [tradesError, setTradesError] = useState(null)
 
   useEffect(() => {
     setLoading(true)
@@ -47,12 +50,23 @@ export default function LeagueDashboard() {
       .finally(() => setLoading(false))
   }, [leagueId])
 
+  useEffect(() => {
+    if (rankMode !== 'trades' || trades !== null || tradesLoading) return
+    setTradesLoading(true)
+    setTradesError(null)
+    api.getRecentTrades(leagueId)
+      .then(setTrades)
+      .catch((e) => setTradesError(e.message))
+      .finally(() => setTradesLoading(false))
+  }, [rankMode, leagueId, trades, tradesLoading])
+
   async function handleSync() {
     setSyncing(true)
     try {
       await api.syncLeague(leagueId)
       const fresh = await api.getLeague(leagueId)
       setData(fresh)
+      setTrades(null) // invalidate trade cache so next view re-fetches
     } catch (e) {
       setError(`Sync failed: ${e?.message || e}`)
     } finally {
@@ -152,7 +166,12 @@ export default function LeagueDashboard() {
         </div>
 
       {rankMode === 'trades' ? (
-        <TradeFeed leagueId={leagueId} teams={data.teams} />
+        <TradeFeed
+          trades={trades}
+          loading={tradesLoading}
+          error={tradesError}
+          teams={data.teams}
+        />
       ) : (
         <div className="team-list">
           {rankedTeams.map((team, idx) => (

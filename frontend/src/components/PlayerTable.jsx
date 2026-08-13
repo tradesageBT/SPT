@@ -42,14 +42,18 @@ function AcqBadge({ type, faab }) {
   )
 }
 
-export default function PlayerTable({ players = [], leagueId }) {
+export default function PlayerTable({ players = [], leagueId, isDynasty = true }) {
   const [selected, setSelected] = useState(null)
 
   if (!players.length) return <p className="empty-players">None</p>
   return (
     <>
       <div className="player-table">
-        {players.map((p) => (
+        {players.map((p) => {
+          const posRank = isDynasty ? p.pos_rank : p.redraft_pos_rank
+          const overallRank = isDynasty ? p.overall_rank : p.redraft_overall_rank
+          const value = isDynasty ? p.fc_value : p.redraft_value
+          return (
           <div
             key={p.sleeper_id}
             className={`player-row${leagueId ? ' player-row-clickable' : ''}`}
@@ -67,15 +71,15 @@ export default function PlayerTable({ players = [], leagueId }) {
             {p.on_ir && <span className="player-status-badge status-ir">IR</span>}
             <span className="player-team">{p.nfl_team}</span>
             {p.age && <span className="player-age">{p.age}y</span>}
-            {p.pos_rank && (
+            {posRank && (
               <span className="player-pos-rank">
-                {p.overall_rank && <span className="player-overall-rank">#{p.overall_rank}</span>}
-                {p.position}{p.pos_rank}
+                {overallRank && <span className="player-overall-rank">#{overallRank}</span>}
+                {p.position}{posRank}
               </span>
             )}
-            <span className="player-value">{fmt(p.fc_value)}</span>
+            <span className="player-value">{fmt(value)}</span>
           </div>
-        ))}
+        )})}
       </div>
       {selected && (
         <PlayerHistoryModal

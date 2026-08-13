@@ -1,12 +1,11 @@
 export const CONTENTION_CLASS = {
+  'All-In': 'winnow',
   'Championship Window': 'winnow',
-  'Fire Sale': 'winnow',
-  'Win-Now Push': 'urgent',
-  'Retooling': 'urgent',
   'Sustainable Contender': 'mixed',
   'Ascending': 'rebuild',
-  'Full Rebuild': 'rebuild',
   'Treading Water': 'neutral',
+  'Retooling': 'urgent',
+  'Full Rebuild': 'rebuild',
 }
 
 export const CONTENTION_COLOR = {

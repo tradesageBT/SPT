@@ -210,7 +210,11 @@ export default function TradeIdeas() {
       <div className="trades-header">
         <div>
           <h1 className="page-title">Trade Ideas</h1>
-          {focusRosterId && <p className="page-sub">Focused on roster {focusRosterId}</p>}
+          {focusRosterId && (
+            <p className="page-sub">
+              {leaguePlayers.find((p) => String(p.roster_id) === focusRosterId)?.display_name ?? `Team ${focusRosterId}`}
+            </p>
+          )}
         </div>
 
         <div className="trades-controls">

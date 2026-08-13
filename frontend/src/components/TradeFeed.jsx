@@ -1,21 +1,10 @@
-import { useEffect, useState } from 'react'
-import { api } from '../api/client'
+import { useState } from 'react'
 
 const fmt = (n) => n?.toLocaleString() ?? '—'
 const POS_COLOR = { QB: '#e05c5c', RB: '#5cb8e0', WR: '#01d9ac', TE: '#e0a45c', PK: '#888' }
 
-export default function TradeFeed({ leagueId, teams }) {
-  const [trades, setTrades] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
+export default function TradeFeed({ trades, loading, error, teams }) {
   const [teamFilter, setTeamFilter] = useState('')
-
-  useEffect(() => {
-    api.getRecentTrades(leagueId)
-      .then(setTrades)
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false))
-  }, [leagueId])
 
   if (loading) return <div className="trade-feed-status">Loading trade history…</div>
   if (error) return <div className="trade-feed-status">❌ {error}</div>

@@ -12,8 +12,7 @@ const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0)
 const POS_ORDER = ['QB', 'RB', 'WR', 'TE']
 const POS_COLOR = { QB: '#e05c5c', RB: '#5cb8e0', WR: '#01d9ac', TE: '#e0a45c' }
 
-function RankingsTab({ players, positionalRank, numTeams }) {
-  const [rankMode, setRankMode] = useState('dynasty')
+function RankingsTab({ players, positionalRank, numTeams, rankMode, setRankMode }) {
   const isDynasty = rankMode === 'dynasty'
 
   const byPos = {}
@@ -210,6 +209,7 @@ export default function TeamProfile() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [rankMode, setRankMode] = useState('dynasty')
 
   useEffect(() => {
     api.getTeam(leagueId, rosterId)
@@ -295,7 +295,6 @@ export default function TeamProfile() {
       <PositionalBreakdown
         breakdown={data.positional_breakdown || {}}
         rank={data.positional_rank || {}}
-        numTeams={data.num_teams}
       />
 
       {/* Player rankings with Dynasty / Redraft toggle */}
@@ -303,9 +302,11 @@ export default function TeamProfile() {
         players={roster_data.players || []}
         positionalRank={data.positional_rank || {}}
         numTeams={(data.positional_rank || {}).n || 0}
+        rankMode={rankMode}
+        setRankMode={setRankMode}
       />
 
-      {/* SPT categorization — always shown below rankings */}
+      {/* SPT categorization — mirrors dynasty/redraft toggle from RankingsTab */}
       <div className="spt-section">
         <div className="spt-col smash-col">
           <h2 className="spt-heading smash-heading">
@@ -313,7 +314,7 @@ export default function TeamProfile() {
             <span className="spt-count">{categorized.smash?.length ?? 0}</span>
           </h2>
           <p className="spt-desc">Core keepers — don't trade without elite return</p>
-          <PlayerTable players={categorized.smash || []} leagueId={leagueId} />
+          <PlayerTable players={categorized.smash || []} leagueId={leagueId} isDynasty={rankMode === 'dynasty'} />
         </div>
         <div className="spt-col pass-col">
           <h2 className="spt-heading pass-heading">
@@ -321,7 +322,7 @@ export default function TeamProfile() {
             <span className="spt-count">{categorized.pass?.length ?? 0}</span>
           </h2>
           <p className="spt-desc">Tradeable pieces — moveable without gutting the roster</p>
-          <PlayerTable players={categorized.pass || []} leagueId={leagueId} />
+          <PlayerTable players={categorized.pass || []} leagueId={leagueId} isDynasty={rankMode === 'dynasty'} />
         </div>
         <div className="spt-col trash-col">
           <h2 className="spt-heading trash-heading">
@@ -329,7 +330,7 @@ export default function TeamProfile() {
             <span className="spt-count">{categorized.trash?.length ?? 0}</span>
           </h2>
           <p className="spt-desc">Low-value — cut candidates</p>
-          <PlayerTable players={categorized.trash || []} leagueId={leagueId} />
+          <PlayerTable players={categorized.trash || []} leagueId={leagueId} isDynasty={rankMode === 'dynasty'} />
         </div>
       </div>
 

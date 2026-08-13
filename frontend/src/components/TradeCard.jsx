@@ -6,14 +6,13 @@ const fmtDelta = (n) => (n >= 0 ? '+' : '') + n?.toLocaleString()
 const POS_COLOR = { QB: '#e05c5c', RB: '#5cb8e0', WR: '#01d9ac', TE: '#e0a45c', PK: '#888' }
 
 const CONTENTION_SHORT = {
+  'All-In': 'All-In',
   'Championship Window': 'Win Now',
   'Sustainable Contender': 'Contender',
-  'Win-Now Push': 'Win-Now Push',
   'Ascending': 'Ascending',
   'Treading Water': 'Neutral',
-  'Full Rebuild': 'Rebuild',
   'Retooling': 'Retooling',
-  'Fire Sale': 'Fire Sale',
+  'Full Rebuild': 'Rebuild',
 }
 
 function avgAge(players) {
