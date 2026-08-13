@@ -103,6 +103,46 @@ function TeamTradeModal({ team, onClose }) {
   )
 }
 
+function AcquiredTable({ title, teams, gotKey, gaveKey, onSelect }) {
+  const sorted = [...teams]
+    .filter(t => t[gotKey] > 0 || t[gaveKey] > 0)
+    .sort((a, b) => b[gotKey] - a[gotKey])
+
+  if (!sorted.length) return null
+
+  return (
+    <div className="tlb-sub-table">
+      <div className="tlb-sub-title">{title}</div>
+      <div className="tlb-sub-header">
+        <span className="tlb-col-rank">#</span>
+        <span className="tlb-col-team">Team</span>
+        <span className="tlb-col-stat">Got</span>
+        <span className="tlb-col-stat">Gave</span>
+        <span className="tlb-col-stat">Net</span>
+      </div>
+      {sorted.map((team, idx) => {
+        const net = team[gotKey] - team[gaveKey]
+        const netCls = net > 0 ? 'tlb-pos' : net < 0 ? 'tlb-neg' : ''
+        return (
+          <div
+            key={team.roster_id}
+            className="tlb-sub-row"
+            onClick={() => onSelect(team.roster_id)}
+          >
+            <span className="tlb-col-rank">
+              {MEDAL[idx] ?? <span className="tlb-rank-num">{idx + 1}</span>}
+            </span>
+            <span className="tlb-col-team">{team.team_name}</span>
+            <span className="tlb-col-stat tlb-pos">{team[gotKey]}</span>
+            <span className="tlb-col-stat tlb-neg">{team[gaveKey]}</span>
+            <span className={`tlb-col-stat tlb-val ${netCls}`}>{fmtNet(net)}</span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function TradeLeaderboard({ trades, loading, error, teams }) {
   const [selected, setSelected] = useState(null)
 
@@ -220,6 +260,23 @@ export default function TradeLeaderboard({ trades, loading, error, teams }) {
             </div>
           )
         })}
+      </div>
+
+      <div className="tlb-sub-tables">
+        <AcquiredTable
+          title="Players Acquired"
+          teams={leaderboard}
+          gotKey="players_received"
+          gaveKey="players_given"
+          onSelect={(rid) => setSelected(rid)}
+        />
+        <AcquiredTable
+          title="Picks Acquired"
+          teams={leaderboard}
+          gotKey="picks_received"
+          gaveKey="picks_given"
+          onSelect={(rid) => setSelected(rid)}
+        />
       </div>
 
       {selectedStat && (
