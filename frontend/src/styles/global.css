@@ -1156,7 +1156,7 @@ img { display: block; }
 }
 .tlb-sub-header {
   display: grid;
-  grid-template-columns: 32px 1fr 36px 36px 44px;
+  grid-template-columns: 32px 1fr 36px 36px 44px 70px;
   gap: 4px;
   padding: 4px 10px;
   font-size: 0.62rem;
@@ -1167,7 +1167,7 @@ img { display: block; }
 }
 .tlb-sub-row {
   display: grid;
-  grid-template-columns: 32px 1fr 36px 36px 44px;
+  grid-template-columns: 32px 1fr 36px 36px 44px 70px;
   gap: 4px;
   align-items: center;
   padding: 7px 10px;

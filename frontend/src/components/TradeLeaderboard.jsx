@@ -103,7 +103,7 @@ function TeamTradeModal({ team, onClose }) {
   )
 }
 
-function AcquiredTable({ title, teams, gotKey, gaveKey, onSelect }) {
+function AcquiredTable({ title, teams, gotKey, gaveKey, gotValKey, gaveValKey, onSelect }) {
   const sorted = [...teams]
     .filter(t => t[gotKey] > 0 || t[gaveKey] > 0)
     .sort((a, b) => (b[gotKey] - b[gaveKey]) - (a[gotKey] - a[gaveKey]))
@@ -119,10 +119,13 @@ function AcquiredTable({ title, teams, gotKey, gaveKey, onSelect }) {
         <span className="tlb-col-stat">Got</span>
         <span className="tlb-col-stat">Gave</span>
         <span className="tlb-col-stat">Net</span>
+        <span className="tlb-col-stat">Value</span>
       </div>
       {sorted.map((team, idx) => {
         const net = team[gotKey] - team[gaveKey]
         const netCls = net > 0 ? 'tlb-pos' : net < 0 ? 'tlb-neg' : ''
+        const valNet = (team[gotValKey] || 0) - (team[gaveValKey] || 0)
+        const valCls = valNet > 0 ? 'tlb-pos' : valNet < 0 ? 'tlb-neg' : ''
         return (
           <div
             key={team.roster_id}
@@ -136,6 +139,7 @@ function AcquiredTable({ title, teams, gotKey, gaveKey, onSelect }) {
             <span className="tlb-col-stat tlb-pos">{team[gotKey]}</span>
             <span className="tlb-col-stat tlb-neg">{team[gaveKey]}</span>
             <span className={`tlb-col-stat tlb-val ${netCls}`}>{fmtNet(net)}</span>
+            <span className={`tlb-col-stat tlb-val ${valCls}`}>{fmtNet(valNet)}</span>
           </div>
         )
       })}
@@ -156,8 +160,12 @@ export default function TradeLeaderboard({ trades, loading, error, teams }) {
         total_trades: 0,
         players_given: 0,
         players_received: 0,
+        player_value_given: 0,
+        player_value_received: 0,
         picks_given: 0,
         picks_received: 0,
+        pick_value_given: 0,
+        pick_value_received: 0,
         trades: [],
       }
     }
@@ -171,12 +179,12 @@ export default function TradeLeaderboard({ trades, loading, error, teams }) {
           stat.total_trades++
           stat.net_value += side.net_value || 0
           for (const a of side.gave || []) {
-            if (a.position === 'PK') stat.picks_given++
-            else stat.players_given++
+            if (a.position === 'PK') { stat.picks_given++; stat.pick_value_given += a.fc_value || 0 }
+            else { stat.players_given++; stat.player_value_given += a.fc_value || 0 }
           }
           for (const a of side.received || []) {
-            if (a.position === 'PK') stat.picks_received++
-            else stat.players_received++
+            if (a.position === 'PK') { stat.picks_received++; stat.pick_value_received += a.fc_value || 0 }
+            else { stat.players_received++; stat.player_value_received += a.fc_value || 0 }
           }
           stat.trades.push({
             date: trade.date,
@@ -268,6 +276,8 @@ export default function TradeLeaderboard({ trades, loading, error, teams }) {
           teams={leaderboard}
           gotKey="players_received"
           gaveKey="players_given"
+          gotValKey="player_value_received"
+          gaveValKey="player_value_given"
           onSelect={(rid) => setSelected(rid)}
         />
         <AcquiredTable
@@ -275,6 +285,8 @@ export default function TradeLeaderboard({ trades, loading, error, teams }) {
           teams={leaderboard}
           gotKey="picks_received"
           gaveKey="picks_given"
+          gotValKey="pick_value_received"
+          gaveValKey="pick_value_given"
           onSelect={(rid) => setSelected(rid)}
         />
       </div>
