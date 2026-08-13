@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import TeamCard from '../components/TeamCard'
 import TradeFeed from '../components/TradeFeed'
+import TradeLeaderboard from '../components/TradeLeaderboard'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { saveRecentLeague } from '../utils/recentLeagues'
 
@@ -51,7 +52,7 @@ export default function LeagueDashboard() {
   }, [leagueId])
 
   useEffect(() => {
-    if (rankMode !== 'trades' || trades !== null || tradesLoading) return
+    if ((rankMode !== 'trades' && rankMode !== 'leaderboard') || trades !== null || tradesLoading) return
     setTradesLoading(true)
     setTradesError(null)
     api.getRecentTrades(leagueId)
@@ -163,10 +164,23 @@ export default function LeagueDashboard() {
           >
             Trade Feed
           </button>
+          <button
+            className={`rank-mode-btn${rankMode === 'leaderboard' ? ' active' : ''}`}
+            onClick={() => setRankMode('leaderboard')}
+          >
+            Leaderboard
+          </button>
         </div>
 
       {rankMode === 'trades' ? (
         <TradeFeed
+          trades={trades}
+          loading={tradesLoading}
+          error={tradesError}
+          teams={data.teams}
+        />
+      ) : rankMode === 'leaderboard' ? (
+        <TradeLeaderboard
           trades={trades}
           loading={tradesLoading}
           error={tradesError}

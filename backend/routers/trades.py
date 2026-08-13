@@ -449,6 +449,7 @@ async def get_recent_transactions(league_id: str):
         sides: dict[int, dict] = {}
         received_val: dict[int, int] = {}
         received_assets: dict[int, list] = {}
+        received_full: dict[int, list] = {}  # full asset info for display
         best_piece_val = 0
         best_piece_rid: int | None = None
         best_piece_name = ""
@@ -466,17 +467,19 @@ async def get_recent_transactions(league_id: str):
             p = players_cache.get(str(pid), {})
             val = p.get("fc_value", 0)
             pname = p.get("name", str(pid))
-            sides[from_rid]["gave"].append({
+            asset_info = {
                 "name": pname,
                 "position": p.get("position", ""),
                 "fc_value": val,
-            })
+            }
+            sides[from_rid]["gave"].append(asset_info)
             received_val[to_rid_int] = received_val.get(to_rid_int, 0) + val
             received_assets.setdefault(to_rid_int, []).append({
                 "position": p.get("position", ""),
                 "fc_value": val,
                 "age": p.get("age"),
             })
+            received_full.setdefault(to_rid_int, []).append(asset_info)
             if val > best_piece_val:
                 best_piece_val = val
                 best_piece_rid = to_rid_int
@@ -496,11 +499,12 @@ async def get_recent_transactions(league_id: str):
             season = str(pick.get("season", ""))
             pick_val = cache_manager.resolve_pick_value(picks_cache, season, rnd)
             pick_name = f"{season} {_ROUND_LABEL.get(rnd, f'Rd {rnd}')}"
-            sides[from_rid]["gave"].append({
+            pick_info = {
                 "name": pick_name,
                 "position": "PK",
                 "fc_value": pick_val,
-            })
+            }
+            sides[from_rid]["gave"].append(pick_info)
             if to_rid is not None:
                 to_rid_int = int(to_rid)
                 received_val[to_rid_int] = received_val.get(to_rid_int, 0) + pick_val
@@ -509,6 +513,7 @@ async def get_recent_transactions(league_id: str):
                     "fc_value": pick_val,
                     "age": None,
                 })
+                received_full.setdefault(to_rid_int, []).append(pick_info)
                 if pick_val > best_piece_val:
                     best_piece_val = pick_val
                     best_piece_rid = to_rid_int
@@ -525,6 +530,7 @@ async def get_recent_transactions(league_id: str):
             recv_ast = received_assets.get(rid, [])
             sides_list[i]["total_value"] = gave_val
             sides_list[i]["net_value"] = recv_val - gave_val
+            sides_list[i]["received"] = received_full.get(rid, [])
             grade, reason = _trade_grade(
                 net_value=recv_val - gave_val,
                 gave_val=gave_val,
@@ -551,6 +557,7 @@ async def get_recent_transactions(league_id: str):
         )
         result.append({
             "date": date_str,
+            "ts": created or 0,
             "sides": sides_list,
             "value_delta": delta,
             "winner": winner,
