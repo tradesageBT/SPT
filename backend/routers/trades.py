@@ -305,10 +305,11 @@ def _trade_grade(
     gave_assets: list,
     profile: dict,
     is_best_piece: bool,
-) -> str:
+    best_piece_val: int = 0,
+) -> tuple[str, str]:
     deal_size = gave_val + sum(a.get("fc_value", 0) for a in recv_assets)
     if deal_size < 500:
-        return "C"
+        return "C", "Trade too small to evaluate."
 
     # Factor 1: value exchange → base grade
     value_pct = net_value / (deal_size / 2) * 100
@@ -319,6 +320,7 @@ def _trade_grade(
     else:                  grade = 1  # F
 
     # Factor 2: best piece in the trade (+1 received it, -1 gave it away)
+    significant_piece = best_piece_val >= 1000
     best_mod = 1 if is_best_piece else -1
 
     # Factor 3: age fit vs team contention stage
@@ -350,7 +352,45 @@ def _trade_grade(
     pos_mod = 1 if fit >= 2 else -1 if fit <= -2 else 0
 
     grade = max(1, min(5, grade + best_mod + age_mod + pos_mod))
-    return _GRADE_LABELS[grade]
+
+    # Build human-readable reason from each factor
+    parts = []
+
+    if value_pct >= 20:
+        parts.append("received significantly more value")
+    elif value_pct >= 8:
+        parts.append("favorable value exchange")
+    elif value_pct >= -8:
+        parts.append("roughly even on value")
+    elif value_pct >= -20:
+        parts.append("gave up more value")
+    else:
+        parts.append("significantly overpaid")
+
+    if significant_piece:
+        if is_best_piece:
+            parts.append("landed the best asset in the deal")
+        else:
+            parts.append("gave up the best asset")
+
+    if age_mod > 0:
+        if contention in _WIN_NOW:
+            parts.append("received prime-age players for their window")
+        else:
+            parts.append("added youth for the rebuild")
+    elif age_mod < 0:
+        if contention in _WIN_NOW:
+            parts.append("received too much youth while in win-now mode")
+        else:
+            parts.append("took on aging veterans in a rebuild")
+
+    if pos_mod > 0:
+        parts.append("addressed a positional need")
+    elif pos_mod < 0:
+        parts.append("gave up assets at a position of need")
+
+    reason = "; ".join(parts).capitalize() + "."
+    return _GRADE_LABELS[grade], reason
 
 
 @router.get("/{league_id}/recent-transactions")
@@ -455,14 +495,17 @@ async def get_recent_transactions(league_id: str):
             recv_ast = received_assets.get(rid, [])
             sides_list[i]["total_value"] = gave_val
             sides_list[i]["net_value"] = recv_val - gave_val
-            sides_list[i]["grade"] = _trade_grade(
+            grade, reason = _trade_grade(
                 net_value=recv_val - gave_val,
                 gave_val=gave_val,
                 recv_assets=recv_ast,
                 gave_assets=sides_list[i]["gave"],
                 profile=roster_profiles.get(rid, {}),
                 is_best_piece=(rid == best_piece_rid and best_piece_val >= 1000),
+                best_piece_val=best_piece_val,
             )
+            sides_list[i]["grade"] = grade
+            sides_list[i]["reason"] = reason
 
         # Winner = team with highest net value (received − gave)
         net_vals = [s["net_value"] for s in sides_list]

@@ -848,6 +848,10 @@ img { display: block; }
 .trade-grade-c { background: rgba(139,144,176,0.12); color: var(--text-muted); }
 .trade-grade-d { background: rgba(224,164,92,0.15);  color: #e0a45c; }
 .trade-grade-f { background: rgba(224,92,92,0.15);   color: #e05c5c; }
+.trade-grade-reason {
+  font-size: 0.68rem; color: var(--text-muted); font-style: italic;
+  margin: 3px 0 6px; line-height: 1.4;
+}
 
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 @media (max-width: 640px) {

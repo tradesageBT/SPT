@@ -77,6 +77,9 @@ export default function TradeFeed({ leagueId, teams }) {
                         <span className="trade-feed-side-total">{fmt(side.total_value)}</span>
                       )}
                     </div>
+                    {side.reason && (
+                      <p className="trade-grade-reason">{side.reason}</p>
+                    )}
                     <div className="trade-feed-assets">
                       {side.gave.map((a, k) => (
                         <div key={k} className="trade-feed-asset">
