@@ -106,7 +106,7 @@ function TeamTradeModal({ team, onClose }) {
 function AcquiredTable({ title, teams, gotKey, gaveKey, onSelect }) {
   const sorted = [...teams]
     .filter(t => t[gotKey] > 0 || t[gaveKey] > 0)
-    .sort((a, b) => b[gotKey] - a[gotKey])
+    .sort((a, b) => (b[gotKey] - b[gaveKey]) - (a[gotKey] - a[gaveKey]))
 
   if (!sorted.length) return null
 
