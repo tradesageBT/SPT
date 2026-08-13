@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
@@ -8,6 +9,15 @@ from trade_engine import generate_all_trades, generate_trades_between, categoriz
 import sleeper_client
 import cache_manager
 import logger
+
+# In-memory cache for recent-transactions: {league_id: (timestamp, payload)}
+# Avoids the 23 parallel Sleeper API calls on every Trade Feed tab click.
+_TXNS_CACHE: dict[str, tuple[float, list]] = {}
+_TXNS_TTL = 300  # 5 minutes
+
+
+def clear_transactions_cache(league_id: str) -> None:
+    _TXNS_CACHE.pop(league_id, None)
 
 router = APIRouter(prefix="/api/leagues", tags=["trades"])
 
@@ -293,8 +303,8 @@ def _trade_has_player(trade: dict, sleeper_id: str) -> bool:
 
 _ROUND_LABEL = {1: "1st", 2: "2nd", 3: "3rd", 4: "4th"}
 _GRADE_LABELS = [None, "F", "D", "C", "B", "A"]
-_WIN_NOW  = {"Championship Window", "Win-Now Push", "Sustainable Contender"}
-_REBUILD  = {"Full Rebuild", "Fire Sale", "Retooling"}
+_WIN_NOW  = {"All-In", "Championship Window", "Sustainable Contender"}
+_REBUILD  = {"Full Rebuild", "Retooling"}
 _SKILL_POS = {"QB", "RB", "WR", "TE"}
 
 
@@ -406,7 +416,11 @@ def _trade_grade(
 
 @router.get("/{league_id}/recent-transactions")
 async def get_recent_transactions(league_id: str):
-    """Return the 15 most recent completed trades in this league's current season."""
+    """Return the most recent completed trades in this league's current season."""
+    cached = _TXNS_CACHE.get(league_id)
+    if cached and time.time() - cached[0] < _TXNS_TTL:
+        return cached[1]
+
     profiles = _load_profiles(league_id)
     roster_names    = {p["roster_id"]: p["display_name"] for p in profiles}
     roster_profiles = {p["roster_id"]: p for p in profiles}
@@ -420,7 +434,7 @@ async def get_recent_transactions(league_id: str):
         t for week_txns in txn_results for t in week_txns
         if t.get("type") == "trade" and t.get("status") == "complete"
     ]
-    recent = sorted(all_txns, key=lambda t: t.get("created") or 0, reverse=True)
+    recent = sorted(all_txns, key=lambda t: t.get("created") or 0, reverse=True)[:40]
 
     players_cache = cache_manager.get_cached_players()
     picks_cache = cache_manager.get_cached_picks()
@@ -542,4 +556,5 @@ async def get_recent_transactions(league_id: str):
             "winner": winner,
         })
 
+    _TXNS_CACHE[league_id] = (time.time(), result)
     return result

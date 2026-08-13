@@ -7,6 +7,7 @@ from database import db, init_db
 import sleeper_client
 import cache_manager
 from value_engine import compute_league_profiles, build_picks_by_roster
+from routers.trades import clear_transactions_cache
 
 router = APIRouter(prefix="/api/leagues", tags=["leagues"])
 
@@ -259,7 +260,6 @@ async def _sync_league(league_id: str, force: bool = False, background_tasks: Ba
 
 @router.get("/{league_id}")
 async def get_league(league_id: str, background_tasks: BackgroundTasks):
-    init_db()
 
     with db() as conn:
         row = conn.execute(
@@ -304,8 +304,8 @@ async def get_league(league_id: str, background_tasks: BackgroundTasks):
 
 @router.post("/{league_id}/sync")
 async def force_sync(league_id: str, background_tasks: BackgroundTasks):
-    init_db()
     league_info, profiles = await _sync_league(league_id, force=True, background_tasks=background_tasks)
+    clear_transactions_cache(league_id)
     return {
         "ok": True,
         "league_name": league_info.get("name"),
@@ -461,7 +461,7 @@ async def get_draft_state(league_id: str):
 
 def _team_row_to_dict(row) -> dict:
     d = dict(row)
-    for field in ("positional_breakdown", "positional_surplus", "positional_rank", "roster_data"):
+    for field in ("positional_breakdown", "positional_surplus", "positional_need", "positional_rank", "roster_data"):
         if d.get(field):
             d[field] = json.loads(d[field])
     return d
