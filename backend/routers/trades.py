@@ -298,6 +298,15 @@ _REBUILD  = {"Full Rebuild", "Fire Sale", "Retooling"}
 _SKILL_POS = {"QB", "RB", "WR", "TE"}
 
 
+def _join_reasons(parts: list[str]) -> str:
+    if not parts:
+        return ""
+    parts[0] = parts[0].capitalize()
+    if len(parts) == 1:
+        return parts[0] + "."
+    return ", ".join(parts[:-1]) + ", and " + parts[-1] + "."
+
+
 def _trade_grade(
     net_value: int,
     gave_val: int,
@@ -306,6 +315,7 @@ def _trade_grade(
     profile: dict,
     is_best_piece: bool,
     best_piece_val: int = 0,
+    best_piece_name: str = "",
 ) -> tuple[str, str]:
     deal_size = gave_val + sum(a.get("fc_value", 0) for a in recv_assets)
     if deal_size < 500:
@@ -319,9 +329,9 @@ def _trade_grade(
     elif value_pct >= -20: grade = 2  # D
     else:                  grade = 1  # F
 
-    # Factor 2: best piece in the trade (+1 received it, -1 gave it away)
+    # Factor 2: best piece — +1 for receiving it, 0 for giving it (no penalty for fair multi-piece trades)
     significant_piece = best_piece_val >= 1000
-    best_mod = 1 if is_best_piece else -1
+    best_mod = 1 if (is_best_piece and significant_piece) else 0
 
     # Factor 3: age fit vs team contention stage
     contention = profile.get("contention_category", "")
@@ -353,7 +363,7 @@ def _trade_grade(
 
     grade = max(1, min(5, grade + best_mod + age_mod + pos_mod))
 
-    # Build human-readable reason from each factor
+    # Build human-readable reason
     parts = []
 
     if value_pct >= 20:
@@ -368,10 +378,12 @@ def _trade_grade(
         parts.append("significantly overpaid")
 
     if significant_piece:
+        piece_label = f"landed {best_piece_name}" if best_piece_name else "landed the best asset"
         if is_best_piece:
-            parts.append("landed the best asset in the deal")
+            parts.append(piece_label)
         else:
-            parts.append("gave up the best asset")
+            gave_label = f"gave up {best_piece_name}" if best_piece_name else "gave up the top asset"
+            parts.append(gave_label)
 
     if age_mod > 0:
         if contention in _WIN_NOW:
@@ -389,8 +401,7 @@ def _trade_grade(
     elif pos_mod < 0:
         parts.append("gave up assets at a position of need")
 
-    reason = "; ".join(parts).capitalize() + "."
-    return _GRADE_LABELS[grade], reason
+    return _GRADE_LABELS[grade], _join_reasons(parts)
 
 
 @router.get("/{league_id}/recent-transactions")
@@ -426,6 +437,7 @@ async def get_recent_transactions(league_id: str):
         received_assets: dict[int, list] = {}
         best_piece_val = 0
         best_piece_rid: int | None = None
+        best_piece_name = ""
 
         for pid, to_rid in adds.items():
             from_rid = drops.get(str(pid))
@@ -439,8 +451,9 @@ async def get_recent_transactions(league_id: str):
             })
             p = players_cache.get(str(pid), {})
             val = p.get("fc_value", 0)
+            pname = p.get("name", str(pid))
             sides[from_rid]["gave"].append({
-                "name": p.get("name", str(pid)),
+                "name": pname,
                 "position": p.get("position", ""),
                 "fc_value": val,
             })
@@ -453,6 +466,7 @@ async def get_recent_transactions(league_id: str):
             if val > best_piece_val:
                 best_piece_val = val
                 best_piece_rid = to_rid_int
+                best_piece_name = pname
 
         for pick in picks:
             from_rid = pick.get("previous_owner_id")
@@ -467,8 +481,9 @@ async def get_recent_transactions(league_id: str):
             rnd = int(pick.get("round", 1))
             season = str(pick.get("season", ""))
             pick_val = cache_manager.resolve_pick_value(picks_cache, season, rnd)
+            pick_name = f"{season} {_ROUND_LABEL.get(rnd, f'Rd {rnd}')}"
             sides[from_rid]["gave"].append({
-                "name": f"{season} {_ROUND_LABEL.get(rnd, f'Rd {rnd}')}",
+                "name": pick_name,
                 "position": "PK",
                 "fc_value": pick_val,
             })
@@ -483,6 +498,7 @@ async def get_recent_transactions(league_id: str):
                 if pick_val > best_piece_val:
                     best_piece_val = pick_val
                     best_piece_rid = to_rid_int
+                    best_piece_name = pick_name
 
         if len(sides) < 2:
             continue
@@ -503,6 +519,7 @@ async def get_recent_transactions(league_id: str):
                 profile=roster_profiles.get(rid, {}),
                 is_best_piece=(rid == best_piece_rid and best_piece_val >= 1000),
                 best_piece_val=best_piece_val,
+                best_piece_name=best_piece_name,
             )
             sides_list[i]["grade"] = grade
             sides_list[i]["reason"] = reason
