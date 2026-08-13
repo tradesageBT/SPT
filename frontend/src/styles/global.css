@@ -1145,6 +1145,7 @@ img { display: block; }
   display: flex;
   flex-direction: column;
   gap: 2px;
+  overflow-x: auto;
 }
 .tlb-sub-title {
   font-size: 0.7rem;
@@ -1183,6 +1184,13 @@ img { display: block; }
   .tlb-hide-sm { display: none; }
   .tlb-header-row { grid-template-columns: 36px 1fr 90px 90px; }
   .tlb-row        { grid-template-columns: 36px 1fr 90px 90px; }
+  .tlb-sub-header,
+  .tlb-sub-row {
+    grid-template-columns: 26px 1fr 28px 28px 38px 56px;
+    padding-left: 6px;
+    padding-right: 6px;
+    gap: 3px;
+  }
 }
 
 /* Trade leaderboard modal */
