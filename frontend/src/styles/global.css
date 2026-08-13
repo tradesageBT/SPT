@@ -2233,10 +2233,11 @@ img { display: block; }
   border-radius: var(--radius-sm);
   padding: 3px;
   margin-bottom: 16px;
-  width: fit-content;
+  width: 100%;
 }
 .rank-mode-btn {
-  padding: 6px 18px;
+  flex: 1;
+  padding: 6px 8px;
   font-size: 0.82rem;
   font-weight: 600;
   border: none;
@@ -2245,6 +2246,8 @@ img { display: block; }
   color: var(--text-muted);
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
+  white-space: nowrap;
+  text-align: center;
 }
 .rank-mode-btn.active {
   background: var(--accent);
