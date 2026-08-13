@@ -173,9 +173,8 @@ export default function TradeLeaderboard({ trades, loading, error, teams }) {
           <span className="tlb-col-rank">#</span>
           <span className="tlb-col-team">Team</span>
           <span className="tlb-col-stat">Net Value</span>
-          <span className="tlb-col-stat tlb-hide-sm">Trades</span>
-          <span className="tlb-col-stat tlb-hide-sm">Players</span>
-          <span className="tlb-col-stat tlb-hide-sm">Picks</span>
+          <span className="tlb-col-stat tlb-hide-sm">Players +/-</span>
+          <span className="tlb-col-stat tlb-hide-sm">Picks +/-</span>
           <span className="tlb-col-stat">Per Trade</span>
         </div>
 
@@ -183,10 +182,12 @@ export default function TradeLeaderboard({ trades, loading, error, teams }) {
           const avgPerTrade = team.total_trades
             ? Math.round(team.net_value / team.total_trades)
             : 0
-          const totalPlayers = team.players_given + team.players_received
-          const totalPicks = team.picks_given + team.picks_received
+          const playerNet = team.players_received - team.players_given
+          const pickNet = team.picks_received - team.picks_given
           const netCls = team.net_value > 0 ? 'tlb-pos' : team.net_value < 0 ? 'tlb-neg' : ''
           const avgCls = avgPerTrade > 0 ? 'tlb-pos' : avgPerTrade < 0 ? 'tlb-neg' : ''
+          const playerCls = playerNet > 0 ? 'tlb-pos' : playerNet < 0 ? 'tlb-neg' : ''
+          const pickCls = pickNet > 0 ? 'tlb-pos' : pickNet < 0 ? 'tlb-neg' : ''
 
           return (
             <div
@@ -198,18 +199,20 @@ export default function TradeLeaderboard({ trades, loading, error, teams }) {
               <span className="tlb-col-rank">
                 {MEDAL[idx] ?? <span className="tlb-rank-num">{idx + 1}</span>}
               </span>
-              <span className="tlb-col-team">{team.team_name}</span>
+              <span className="tlb-col-team">
+                {team.team_name}
+                {team.total_trades > 0 && (
+                  <span className="tlb-trade-count"> · {team.total_trades}</span>
+                )}
+              </span>
               <span className={`tlb-col-stat tlb-val ${netCls}`}>
                 {team.total_trades === 0 ? '—' : fmtNet(team.net_value)}
               </span>
-              <span className="tlb-col-stat tlb-hide-sm">
-                {team.total_trades || '—'}
+              <span className={`tlb-col-stat tlb-hide-sm ${playerCls}`}>
+                {team.total_trades === 0 ? '—' : fmtNet(playerNet)}
               </span>
-              <span className="tlb-col-stat tlb-hide-sm">
-                {totalPlayers || '—'}
-              </span>
-              <span className="tlb-col-stat tlb-hide-sm">
-                {totalPicks || '—'}
+              <span className={`tlb-col-stat tlb-hide-sm ${pickCls}`}>
+                {team.total_trades === 0 ? '—' : fmtNet(pickNet)}
               </span>
               <span className={`tlb-col-stat tlb-val ${avgCls}`}>
                 {team.total_trades === 0 ? '—' : fmtNet(avgPerTrade)}
