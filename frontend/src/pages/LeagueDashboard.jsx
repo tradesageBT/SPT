@@ -168,7 +168,7 @@ export default function LeagueDashboard() {
             className={`rank-mode-btn${rankMode === 'leaderboard' ? ' active' : ''}`}
             onClick={() => setRankMode('leaderboard')}
           >
-            Leaderboard
+            Trade Ranks
           </button>
         </div>
 
