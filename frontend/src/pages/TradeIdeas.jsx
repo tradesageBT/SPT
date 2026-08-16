@@ -344,12 +344,12 @@ export default function TradeIdeas() {
         </div>
       )}
 
-      {selectedPlayer && !expanded && trades.length < 8 && (
+      {selectedPlayer && !expanded && displayedTrades.length < 8 && (
         <div className="expand-search-banner">
           <span className="expand-search-note">
-            {trades.length === 0
-              ? `No trade ideas found for ${selectedPlayer.name} at standard fairness.`
-              : `Only ${trades.length} trade idea${trades.length !== 1 ? 's' : ''} found for ${selectedPlayer.name}.`}
+            {displayedTrades.length === 0
+              ? `No trade ideas found for ${selectedPlayer.name}${partnerFilter != null ? ' with this team' : ''} at standard fairness.`
+              : `Only ${displayedTrades.length} trade idea${displayedTrades.length !== 1 ? 's' : ''} found for ${selectedPlayer.name}.`}
           </span>
           <button
             className="btn btn-accent btn-sm expand-search-btn"
@@ -362,7 +362,7 @@ export default function TradeIdeas() {
 
       {expanded && (
         <div className="expand-search-active">
-          Expanded search active — showing trades up to ±35% value difference
+          Expanded search active — showing trades up to ±50% value difference
           <button className="filter-clear-inline" onClick={() => setExpanded(false)}>reset ✕</button>
         </div>
       )}
