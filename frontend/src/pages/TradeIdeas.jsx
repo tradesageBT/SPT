@@ -178,7 +178,11 @@ export default function TradeIdeas() {
     if (partnerFilter != null) result = result.filter((t) => t.team_a.roster_id === partnerFilter || t.team_b.roster_id === partnerFilter)
     if (winWinOnly) result = result.filter((t) => t.lineup_delta_a > 0 && t.lineup_delta_b > 0)
     if (posFilter)  result = result.filter((t) => tradeHasPos(t, posFilter))
-    if (countFilter != null) result = result.filter((t) => t.a_gives.length === countFilter && t.b_gives.length === countFilter)
+    if (countFilter != null) result = result.filter((t) => {
+      const playersA = t.a_gives.filter(p => p.position !== 'PK').length
+      const playersB = t.b_gives.filter(p => p.position !== 'PK').length
+      return playersA === countFilter && playersB === countFilter
+    })
     if (sortBy === 'fairness') result = [...result].sort((a, b) => a.value_delta - b.value_delta)
     if (sortBy === 'lineup')   result = [...result].sort((a, b) => (b.lineup_delta_a + b.lineup_delta_b) - (a.lineup_delta_a + a.lineup_delta_b))
     return result
