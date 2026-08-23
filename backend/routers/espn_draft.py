@@ -33,13 +33,17 @@ def _normalize(name: str) -> str:
 def _espn_headers(espn_s2: str, swid: str) -> dict:
     return {
         "Cookie": f"espn_s2={espn_s2}; SWID={swid}",
-        "User-Agent": "Mozilla/5.0",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+        "Accept": "application/json",
+        "Referer": "https://fantasy.espn.com/",
     }
 
 
 async def _fetch_espn(url: str, espn_s2: str, swid: str, params: dict | None = None) -> dict:
-    async with httpx.AsyncClient(timeout=ESPN_TIMEOUT, verify=False) as client:
+    async with httpx.AsyncClient(timeout=ESPN_TIMEOUT, verify=False, follow_redirects=False) as client:
         r = await client.get(url, headers=_espn_headers(espn_s2, swid), params=params)
+    if r.status_code in (301, 302, 303, 307, 308):
+        raise HTTPException(status_code=401, detail="ESPN rejected the request — your espn_s2 or SWID cookie is invalid. Copy them again from fantasy.espn.com in a desktop browser (F12 → Application → Cookies).")
     if r.status_code == 401:
         raise HTTPException(status_code=401, detail="ESPN credentials invalid or expired. Re-enter your espn_s2 and SWID cookies.")
     if r.status_code == 404:
