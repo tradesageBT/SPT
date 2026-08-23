@@ -41,17 +41,17 @@ export default function Home() {
       {mode === 'redraft' ? (
         <div className="home-hero">
           <h1 className="home-title">
-            Redraft draft assistant.<br />
+            Auction draft assistant.<br />
             <span className="accent">Live ESPN integration.</span>
           </h1>
           <p className="home-sub">
-            Connect to your ESPN redraft league via session cookies. Get real-time
-            player rankings, tier breaks, and VOR analysis as the draft unfolds.
+            Connect to your ESPN auction league via session cookies. Get real-time
+            player rankings, tier breaks, VOR, and live budget tracking for every team.
           </p>
           <button className="btn btn-primary" style={{ fontSize: '1rem', padding: '12px 28px' }} onClick={() => navigate('/redraft-draft')}>
-            Open Draft Room →
+            Open Auction Room →
           </button>
-          <p className="home-hint">Supports ESPN leagues · Snake draft · PPR / Half-PPR / Standard</p>
+          <p className="home-hint">Supports ESPN auction leagues · PPR / Half-PPR / Standard</p>
         </div>
       ) : (
       <div className="home-hero">

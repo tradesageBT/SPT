@@ -1,5 +1,5 @@
 """
-ESPN Fantasy Football draft assistant.
+ESPN Fantasy Football auction draft assistant.
 Proxies to ESPN's unofficial API using the user's session cookies.
 """
 import re
@@ -11,14 +11,11 @@ router = APIRouter(prefix="/api/espn-draft")
 ESPN_BASE = "https://fantasy.espn.com/apis/v3/games/ffl"
 ESPN_TIMEOUT = 15.0
 
-# Per-process cache: (league_id, season) -> {espn_id: {name, position, nfl_team}}
+# Per-process cache: (league_id, season) -> {espn_id: {name, position}}
 _ESPN_PLAYER_MAP: dict[tuple, dict] = {}
 
 # ESPN position ID → our position label
 _ESPN_POS = {1: "QB", 2: "RB", 3: "WR", 4: "TE", 5: "K", 16: "DEF"}
-
-# Default roster slots for redraft — used to infer user roster needs
-_DEFAULT_ROSTER_SLOTS = {"QB": 1, "RB": 2, "WR": 2, "TE": 1, "FLEX": 2, "K": 1, "DEF": 1}
 
 
 def _normalize(name: str) -> str:
@@ -71,25 +68,6 @@ async def _load_espn_players(league_id: str, season: int, espn_s2: str, swid: st
     _ESPN_PLAYER_MAP[key] = player_map
 
 
-def _snake_slot(pick_num: int, num_teams: int) -> int:
-    """Return 1-indexed draft slot for the given overall pick in a snake draft."""
-    round_num = (pick_num - 1) // num_teams
-    pick_in_round = (pick_num - 1) % num_teams
-    if round_num % 2 == 0:
-        return pick_in_round + 1
-    else:
-        return num_teams - pick_in_round
-
-
-def _picks_until_my_turn(current_overall: int, my_slot: int, num_teams: int) -> int:
-    """How many picks until the user is on the clock (0 = right now)."""
-    pick = current_overall + 1
-    for i in range(num_teams * 2 + 1):
-        if _snake_slot(pick + i, num_teams) == my_slot:
-            return i
-    return -1
-
-
 def _compute_tiers(players: list[dict]) -> list[dict]:
     """Assign tier numbers based on value drop-offs (>8% from previous player)."""
     if not players:
@@ -129,6 +107,7 @@ async def get_espn_draft_state(
     swid: str = Query(...),
     season: int = Query(2025),
     my_slot: int = Query(1),
+    budget: int = Query(200),
 ):
     from cache_manager import get_cached_players
 
@@ -154,11 +133,14 @@ async def get_espn_draft_state(
         name = f"{t.get('location', '')} {t.get('nickname', '')}".strip() or f"Team {tid}"
         team_map[tid] = name
 
-    # slot -> team name (pick_order is teamIds in draft slot order)
+    # slot -> team id and name
     slot_to_team: dict[int, str] = {
         i + 1: team_map.get(tid, f"Team {tid}")
         for i, tid in enumerate(pick_order)
     }
+
+    # My team id from slot
+    my_team_id = pick_order[my_slot - 1] if my_slot <= len(pick_order) else None
 
     # --- Parse picks ---
     draft_detail = data.get("draftDetail", {})
@@ -176,25 +158,46 @@ async def get_espn_draft_state(
     else:
         status = "pre_draft"
 
-    # Build set of picked ESPN player IDs
-    picked_espn_ids: set[int] = {int(p.get("playerId", 0)) for p in raw_picks if p.get("playerId")}
+    # Build set of picked ESPN player IDs and per-team budget spending
+    picked_espn_ids: set[int] = set()
+    team_budget_spent: dict[int, int] = {}
+    team_picks: dict[int, list] = {t.get("id"): [] for t in espn_teams}
 
-    # Enrich picks with player info
+    # Enrich picks with player info and bid amounts
     enriched_picks = []
     for pk in raw_picks:
         eid = int(pk.get("playerId", 0))
+        if eid:
+            picked_espn_ids.add(eid)
         ep = espn_player_map.get(eid, {})
         team_id = pk.get("teamId")
-        slot_num = _snake_slot(pk["overallPickNumber"], num_teams) if num_teams else 1
-        enriched_picks.append({
+        bid_amount = pk.get("bidAmount", 0)
+
+        if team_id:
+            team_budget_spent[team_id] = team_budget_spent.get(team_id, 0) + bid_amount
+
+        enriched_pick = {
             "overall": pk.get("overallPickNumber"),
             "round": pk.get("roundId"),
             "pick": pk.get("roundPickNumber"),
+            "team_id": team_id,
             "team_name": team_map.get(team_id, f"Team {team_id}"),
             "player_name": ep.get("name", f"Player {eid}"),
             "position": ep.get("position", ""),
             "espn_id": eid,
-        })
+            "bid_amount": bid_amount,
+        }
+        enriched_picks.append(enriched_pick)
+        if team_id:
+            team_picks.setdefault(team_id, []).append(enriched_pick)
+
+    # --- My budget calculation ---
+    my_budget_spent = team_budget_spent.get(my_team_id, 0) if my_team_id else 0
+    my_budget_remaining = budget - my_budget_spent
+    my_picks_count = len(team_picks.get(my_team_id, [])) if my_team_id else 0
+    my_slots_remaining = max(0, rounds - my_picks_count)
+    # Must keep $1 per remaining slot after this one
+    max_bid = max(1, my_budget_remaining - max(0, my_slots_remaining - 1))
 
     # --- Available players from our cache ---
     players_cache = get_cached_players()
@@ -204,25 +207,17 @@ async def get_espn_draft_state(
     for p in players_cache.values():
         name_to_cache[_normalize(p["name"])] = p
 
-    # Find which cache sleeper_ids are taken (by name match from ESPN picks)
-    taken_names: set[str] = set()
-    for pk in enriched_picks:
-        n = _normalize(pk["player_name"])
-        if n:
-            taken_names.add(n)
+    # Names taken via picks
+    taken_names: set[str] = {_normalize(pk["player_name"]) for pk in enriched_picks if pk["player_name"]}
 
-    # Also directly exclude by ESPN player ID if we have a name match
     available_raw = [
         p for p in players_cache.values()
         if p.get("redraft_value", 0) > 0
         and _normalize(p["name"]) not in taken_names
     ]
     available_raw.sort(key=lambda x: x.get("redraft_value", 0), reverse=True)
-
-    # Cap at 300 available players
     available_raw = available_raw[:300]
 
-    # Compute tiers and VOR
     available = [
         {
             "sleeper_id": p["sleeper_id"],
@@ -241,28 +236,17 @@ async def get_espn_draft_state(
     available = _compute_tiers(available)
     available = _compute_vor(available, num_teams)
 
-    # --- On the clock ---
-    next_pick = picks_made + 1
-    otc_slot = _snake_slot(next_pick, num_teams) if num_teams and status == "drafting" else None
-    otc_team = slot_to_team.get(otc_slot, "") if otc_slot else ""
-    my_pick_next = (otc_slot == my_slot) if otc_slot else False
-    picks_until = _picks_until_my_turn(picks_made, my_slot, num_teams) if status == "drafting" else -1
-
-    # --- Per-team pick summary ---
-    team_picks: dict[int, list] = {t.get("id"): [] for t in espn_teams}
-    for pk in enriched_picks:
-        slot_of_pick = _snake_slot(pk["overall"], num_teams) if num_teams else 1
-        team_id_for_slot = pick_order[slot_of_pick - 1] if slot_of_pick <= len(pick_order) else None
-        if team_id_for_slot:
-            team_picks.setdefault(team_id_for_slot, []).append(pk)
-
+    # --- Per-team summary ---
     teams_out = []
     for i, team_id in enumerate(pick_order):
         slot = i + 1
+        spent = team_budget_spent.get(team_id, 0)
         teams_out.append({
             "slot": slot,
             "team_name": slot_to_team.get(slot, f"Team {slot}"),
-            "is_me": slot == my_slot,
+            "is_me": team_id == my_team_id,
+            "budget_spent": spent,
+            "budget_remaining": budget - spent,
             "players": team_picks.get(team_id, []),
         })
 
@@ -272,10 +256,11 @@ async def get_espn_draft_state(
         "total_picks": total_picks,
         "num_teams": num_teams,
         "rounds": rounds,
-        "on_the_clock_slot": otc_slot,
-        "on_the_clock_team": otc_team,
-        "my_pick_next": my_pick_next,
-        "picks_until_my_turn": picks_until,
+        "budget": budget,
+        "my_budget_spent": my_budget_spent,
+        "my_budget_remaining": my_budget_remaining,
+        "my_slots_remaining": my_slots_remaining,
+        "max_bid": max_bid,
         "recent_picks": list(reversed(enriched_picks[-10:])),
         "available": available,
         "teams": teams_out,

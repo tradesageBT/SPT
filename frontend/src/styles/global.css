@@ -1607,6 +1607,59 @@ img { display: block; }
 .rd-recent-team { font-size: 0.72rem; color: var(--text-muted); white-space: nowrap; }
 .rd-empty-sm { font-size: 0.78rem; color: var(--text-muted); font-style: italic; }
 
+/* ── Auction budget UI ──────────────────────────────────────────────────── */
+.rd-max-bid-bar {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+}
+.rd-max-bid-note { margin-left: 8px; font-size: 0.75rem; color: var(--text-muted); }
+.rd-max-bid-pill { font-size: 0.8rem; color: var(--text-muted); margin-top: 4px; }
+.rd-max-bid-pill strong { color: var(--accent); }
+
+.rd-budget-numbers { display: flex; align-items: baseline; gap: 8px; }
+.rd-budget-remaining { font-size: 1.6rem; font-weight: 700; }
+.rd-budget-of { font-size: 0.8rem; color: var(--text-muted); }
+.rd-budget-spent { font-size: 0.78rem; color: var(--text-muted); margin-left: auto; }
+
+.rd-budget-bar-track {
+  height: 6px;
+  background: var(--surface2);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-top: 6px;
+}
+.rd-budget-bar-fill { height: 100%; border-radius: 3px; transition: width 0.4s; }
+
+.rd-bid-tag {
+  font-size: 0.65rem;
+  background: var(--accent);
+  color: #0d1018;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-weight: 700;
+  margin-left: 4px;
+}
+
+/* Team budgets list */
+.rd-team-budgets { display: flex; flex-direction: column; gap: 7px; }
+.rd-team-budget-row {
+  display: grid;
+  grid-template-columns: 1fr 36px 60px;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.78rem;
+}
+.rd-team-budget-row.me { font-weight: 700; color: var(--accent); }
+.rd-tbr-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rd-tbr-remaining { text-align: right; font-weight: 600; font-size: 0.8rem; }
+.rd-tbr-bar-track { height: 4px; background: var(--surface2); border-radius: 2px; overflow: hidden; }
+.rd-tbr-bar-fill { height: 100%; background: var(--accent); border-radius: 2px; opacity: 0.6; }
+
+.rd-recent-bid { font-size: 0.72rem; font-weight: 700; color: var(--accent); width: 32px; flex-shrink: 0; }
+
 @media (max-width: 860px) {
   .rd-board-body { grid-template-columns: 1fr; }
   .rd-player-list { max-height: none; }
