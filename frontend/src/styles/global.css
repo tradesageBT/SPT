@@ -2378,17 +2378,25 @@ img { display: block; }
 
 .rd-player-list { overflow-y: auto; max-height: 70vh; }
 .rd-player-header {
-  display: grid; grid-template-columns: 30px 1fr 52px 52px 52px 52px; gap: 6px;
-  padding: 6px 12px; font-size: 0.7rem; font-weight: 600; color: var(--text-muted);
+  display: grid; grid-template-columns: 1fr 56px 50px 50px 50px; gap: 6px;
+  padding: 6px 12px 6px 15px; font-size: 0.7rem; font-weight: 600; color: var(--text-muted);
   text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border);
   background: var(--surface2); position: sticky; top: 0; z-index: 1;
 }
 .rd-player-row {
-  display: grid; grid-template-columns: 30px 1fr 52px 52px 52px 52px; gap: 6px;
-  align-items: center; padding: 7px 12px; border-bottom: 1px solid var(--border); transition: background 0.1s; cursor: pointer;
+  display: grid; grid-template-columns: 1fr 56px 50px 50px 50px; gap: 6px;
+  align-items: center; padding: 7px 12px 7px 9px; border-bottom: 1px solid var(--border);
+  transition: background 0.1s; cursor: pointer; border-left: 3px solid transparent;
 }
 .rd-player-row:hover { background: var(--surface2); }
 .rd-player-row-selected { background: var(--surface2) !important; }
+/* Tier shown as left border stripe */
+.rd-row-tier-1 { border-left-color: #01d9ac; }
+.rd-row-tier-2 { border-left-color: #5cb8e0; }
+.rd-row-tier-3 { border-left-color: #e0a45c; }
+.rd-row-tier-4 { border-left-color: #e05c5c; }
+.rd-row-tier-5 { border-left-color: #a05ce0; }
+.rd-row-tier-6 { border-left-color: #8b90b0; }
 .rd-player-header-idp { display: grid !important; grid-template-columns: 52px 1fr !important; }
 .rd-player-row-idp { display: grid !important; grid-template-columns: 52px 1fr !important; align-items: center; padding: 7px 12px; border-bottom: 1px solid var(--border); }
 .rd-player-info { display: flex; align-items: center; gap: 6px; min-width: 0; }
@@ -2508,4 +2516,11 @@ img { display: block; }
 @media (max-width: 860px) {
   .rd-board-body { grid-template-columns: 1fr; }
   .rd-player-list { max-height: none; }
+}
+@media (max-width: 500px) {
+  /* Drop Val column and NFL team on small phones */
+  .rd-player-header { grid-template-columns: 1fr 56px 50px 50px; }
+  .rd-player-row    { grid-template-columns: 1fr 56px 50px 50px; }
+  .rd-col-val       { display: none; }
+  .rd-player-team   { display: none; }
 }

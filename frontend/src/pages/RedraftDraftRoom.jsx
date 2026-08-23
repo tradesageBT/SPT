@@ -412,12 +412,11 @@ function DraftBoard({ config, initialData }) {
             ) : (
               <>
                 <div className="rd-player-header">
-                  <span></span>
                   <span>Player</span>
                   <span className="rd-col-center">Rank</span>
                   <span className="rd-col-center">$ Est</span>
                   <span className="rd-col-center">VOR</span>
-                  <span className="rd-col-center">Val</span>
+                  <span className="rd-col-center rd-col-val">Val</span>
                 </div>
                 {available.length === 0 && <div className="rd-empty">No available players matching filters.</div>}
                 {available.map((p, i) => {
@@ -426,14 +425,14 @@ function DraftBoard({ config, initialData }) {
                   const pid = p.sleeper_id || p.name
                   const isSelected = selectedId === pid
                   const comparables = isSelected ? getComparables(p) : []
+                  const tierClass = p.tier ? ` rd-row-tier-${Math.min(p.tier, 6)}` : ''
                   return (
                     <div key={pid || i}>
                       {tierBreak && <div className="rd-tier-break">— Tier {p.tier} —</div>}
                       <div
-                        className={`rd-player-row${isSelected ? ' rd-player-row-selected' : ''}`}
+                        className={`rd-player-row${tierClass}${isSelected ? ' rd-player-row-selected' : ''}`}
                         onClick={() => setSelectedId(isSelected ? null : pid)}
                       >
-                        <TierBadge tier={p.tier} />
                         <div className="rd-player-info">
                           <PosPill pos={p.position} />
                           <span className="rd-player-name">{p.name}</span>
@@ -442,7 +441,7 @@ function DraftBoard({ config, initialData }) {
                         <span className="rd-col-center rd-rank">{p.redraft_pos_rank ? `${p.position}${p.redraft_pos_rank}` : '—'}</span>
                         <AuctionChip value={p.auction_value} maxBid={data.max_bid} />
                         <VorChip vor={p.vor} />
-                        <span className="rd-col-center rd-value">{p.redraft_value?.toLocaleString() ?? '—'}</span>
+                        <span className="rd-col-center rd-value rd-col-val">{p.redraft_value?.toLocaleString() ?? '—'}</span>
                       </div>
                       {isSelected && (
                         <div className="rd-expansion-block">
