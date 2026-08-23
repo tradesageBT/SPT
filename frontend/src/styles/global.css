@@ -2498,6 +2498,10 @@ img { display: block; }
 .rd-tn-right { text-align: right; font-size: 0.75rem; }
 .rd-tn-name { font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+/* Team picker dropdown in My Team header */
+.rd-team-picker { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 5px; font-size: 0.72rem; padding: 2px 6px; cursor: pointer; max-width: 130px; }
+.rd-team-picker:focus { outline: none; border-color: var(--accent); }
+
 /* Keeper badge */
 .rd-keeper-badge { display: inline-block; margin-left: 4px; font-size: 0.6rem; font-weight: 800; padding: 1px 4px; border-radius: 3px; background: #e0a45c33; color: #e0a45c; border: 1px solid #e0a45c55; vertical-align: middle; letter-spacing: 0.03em; }
 

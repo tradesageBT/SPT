@@ -281,6 +281,7 @@ function DraftBoard({ config, initialData }) {
   const [budget, setBudget] = useState(parseInt(config.budget) || 200)
   const [editingBudget, setEditingBudget] = useState(false)
   const [budgetInput, setBudgetInput] = useState(String(config.budget || 200))
+  const [mySlot, setMySlot] = useState(parseInt(config.mySlot) || 1)
   const intervalRef = useRef(null)
 
   const isIdpTab = IDP_POSITIONS.includes(posTab)
@@ -295,15 +296,22 @@ function DraftBoard({ config, initialData }) {
     setEditingBudget(false)
   }
 
+  function changeMyTeam(slot) {
+    setMySlot(slot)
+    const leagues = getSavedLeagues()
+    const idx = leagues.findIndex(l => l.leagueId === config.leagueId && String(l.season) === String(config.season))
+    if (idx >= 0) { leagues[idx].mySlot = String(slot); localStorage.setItem(LEAGUES_KEY, JSON.stringify(leagues)) }
+  }
+
   const refresh = useCallback(async () => {
     try {
-      const d = await api.getEspnDraftState(config.leagueId, config.espnS2, config.swid, config.season, config.mySlot, budget)
+      const d = await api.getEspnDraftState(config.leagueId, config.espnS2, config.swid, config.season, mySlot, budget)
       setData(d)
       setError(null)
     } catch (e) {
       setError(e.message)
     }
-  }, [config, budget])
+  }, [config, mySlot, budget])
 
   useEffect(() => {
     intervalRef.current = setInterval(refresh, POLL_MS)
@@ -524,7 +532,19 @@ function DraftBoard({ config, initialData }) {
 
           {/* My Picks */}
           <div className="rd-sidebar-section">
-            <div className="rd-sidebar-title">My Team ({myPicks.length} players)</div>
+            <div className="rd-sidebar-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <span>My Team ({myPicks.length} players)</span>
+              <select
+                className="rd-team-picker"
+                value={mySlot}
+                onChange={e => changeMyTeam(parseInt(e.target.value))}
+                title="Change which team is yours"
+              >
+                {(data.teams || []).map(t => (
+                  <option key={t.slot} value={t.slot}>{t.team_name}</option>
+                ))}
+              </select>
+            </div>
             {myPicks.length === 0 ? (
               <div className="rd-empty-sm">No picks yet</div>
             ) : (
