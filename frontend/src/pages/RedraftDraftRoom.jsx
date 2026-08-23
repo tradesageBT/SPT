@@ -169,19 +169,32 @@ function DraftBoard({ config, initialData }) {
   const [search, setSearch] = useState('')
   const [error, setError] = useState(null)
   const [selectedId, setSelectedId] = useState(null)
+  const [budget, setBudget] = useState(parseInt(config.budget) || 200)
+  const [editingBudget, setEditingBudget] = useState(false)
+  const [budgetInput, setBudgetInput] = useState(String(config.budget || 200))
   const intervalRef = useRef(null)
 
   const isIdpTab = IDP_POSITIONS.includes(posTab)
 
+  function saveBudget() {
+    const val = parseInt(budgetInput)
+    if (val > 0) {
+      setBudget(val)
+      const saved = (() => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') } catch { return {} } })()
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...saved, budget: String(val) }))
+    }
+    setEditingBudget(false)
+  }
+
   const refresh = useCallback(async () => {
     try {
-      const d = await api.getEspnDraftState(config.leagueId, config.espnS2, config.swid, config.season, config.mySlot, config.budget)
+      const d = await api.getEspnDraftState(config.leagueId, config.espnS2, config.swid, config.season, config.mySlot, budget)
       setData(d)
       setError(null)
     } catch (e) {
       setError(e.message)
     }
-  }, [config])
+  }, [config, budget])
 
   useEffect(() => {
     intervalRef.current = setInterval(refresh, POLL_MS)
@@ -343,7 +356,25 @@ function DraftBoard({ config, initialData }) {
             <div className="rd-sidebar-title">My Budget</div>
             <div className="rd-budget-numbers">
               <span className="rd-budget-remaining" style={{ color: budgetColor }}>${data.my_budget_remaining}</span>
-              <span className="rd-budget-of">of ${data.budget}</span>
+              {editingBudget ? (
+                <span className="rd-budget-edit-row">
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>of $</span>
+                  <input
+                    className="rd-budget-edit-input"
+                    type="number" min="1" max="10000"
+                    value={budgetInput}
+                    onChange={e => setBudgetInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') saveBudget(); if (e.key === 'Escape') setEditingBudget(false) }}
+                    autoFocus
+                  />
+                  <button className="rd-budget-edit-save" onClick={saveBudget}>✓</button>
+                  <button className="rd-budget-edit-cancel" onClick={() => setEditingBudget(false)}>✕</button>
+                </span>
+              ) : (
+                <span className="rd-budget-of" style={{ cursor: 'pointer' }} onClick={() => { setBudgetInput(String(budget)); setEditingBudget(true) }}>
+                  of ${budget} ✎
+                </span>
+              )}
               <span className="rd-budget-spent">spent ${data.my_budget_spent}</span>
             </div>
             <div className="rd-budget-bar-track">
