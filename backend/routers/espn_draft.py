@@ -138,7 +138,7 @@ async def get_espn_draft_state(
     from cache_manager import get_cached_players
 
     url = f"{ESPN_BASE}/seasons/{season}/segments/0/leagues/{league_id}"
-    data = await _fetch_espn(url, espn_s2, swid, params={"view": ["mDraftDetail", "mSettings", "mTeam"]})
+    data = await _fetch_espn(url, espn_s2, swid, params={"view": ["mDraftDetail", "mSettings", "mTeam", "mMembers"]})
 
     # Load ESPN player name map (once per session per league)
     await _load_espn_players(league_id, season, espn_s2, swid)
@@ -151,12 +151,23 @@ async def get_espn_draft_state(
     pick_order = draft_settings.get("pickOrder", [])
     num_teams = len(pick_order) if pick_order else settings.get("size", 10)
 
+    # --- Parse members (owners) ---
+    member_map: dict[str, str] = {}
+    for m in data.get("members", []):
+        mid = m.get("id", "")
+        display = m.get("displayName") or f"{m.get('firstName', '')} {m.get('lastName', '')}".strip()
+        if mid and display:
+            member_map[mid] = display
+
     # --- Parse teams ---
     espn_teams = data.get("teams", [])
     team_map: dict[int, str] = {}
     for t in espn_teams:
         tid = t.get("id")
-        name = f"{t.get('location', '')} {t.get('nickname', '')}".strip() or f"Team {tid}"
+        name = f"{t.get('location', '')} {t.get('nickname', '')}".strip()
+        if not name:
+            owner_id = t.get("primaryOwner", "")
+            name = member_map.get(owner_id, "") or f"Team {tid}"
         team_map[tid] = name
 
     slot_to_team: dict[int, str] = {
@@ -198,14 +209,23 @@ async def get_espn_draft_state(
         if team_id:
             team_budget_spent[team_id] = team_budget_spent.get(team_id, 0) + bid_amount
 
+        # Try to extract name/position from inline playerPoolEntry data on the pick
+        pk_pool = pk.get("playerPoolEntry", {})
+        pk_player = pk_pool.get("player", pk_pool.get("playerProfile", {}))
+        inline_name = pk_player.get("fullName", "") or pk_player.get("name", "")
+        inline_pos_id = pk_player.get("defaultPositionId") or pk_pool.get("defaultPositionId")
+
+        player_name = ep.get("name") or inline_name or f"Player {eid}"
+        position = ep.get("position") or _ESPN_POS.get(inline_pos_id, "")
+
         enriched_pick = {
             "overall": pk.get("overallPickNumber"),
             "round": pk.get("roundId"),
             "pick": pk.get("roundPickNumber"),
             "team_id": team_id,
             "team_name": team_map.get(team_id, f"Team {team_id}"),
-            "player_name": ep.get("name", f"Player {eid}"),
-            "position": ep.get("position", ""),
+            "player_name": player_name,
+            "position": position,
             "espn_id": eid,
             "bid_amount": bid_amount,
         }
