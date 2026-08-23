@@ -93,6 +93,9 @@ def init_db():
 
             ALTER TABLE players_cache ADD COLUMN IF NOT EXISTS ppr REAL DEFAULT 1.0;
             ALTER TABLE players_cache ADD COLUMN IF NOT EXISTS num_qbs INTEGER DEFAULT 1;
+            ALTER TABLE players_cache ADD COLUMN IF NOT EXISTS redraft_value INTEGER DEFAULT 0;
+            ALTER TABLE players_cache ADD COLUMN IF NOT EXISTS redraft_overall_rank INTEGER;
+            ALTER TABLE players_cache ADD COLUMN IF NOT EXISTS redraft_pos_rank INTEGER;
 
             CREATE TABLE IF NOT EXISTS picks_cache (
                 pick_key        TEXT PRIMARY KEY,

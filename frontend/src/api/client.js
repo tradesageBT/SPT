@@ -38,6 +38,10 @@ export const api = {
   getPlayerHistory: (leagueId, playerId) => request(`/leagues/${leagueId}/player/${playerId}/history`),
   getRecentTrades: (leagueId) => request(`/leagues/${leagueId}/recent-transactions`),
   getDraftState: (leagueId) => request(`/leagues/${leagueId}/draft`),
+  getEspnDraftState: (leagueId, espnS2, swid, season, mySlot) => {
+    const p = new URLSearchParams({ league_id: leagueId, espn_s2: espnS2, swid, season, my_slot: mySlot })
+    return request(`/espn-draft/state?${p}`)
+  },
   evaluateTrade: (leagueId, body) =>
     fetch(`${BASE}/leagues/${leagueId}/evaluate-trade`, {
       method: 'POST',

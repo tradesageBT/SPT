@@ -5,6 +5,25 @@ BASE = "https://api.fantasycalc.com"
 TIMEOUT = 30.0
 
 
+async def get_redraft_values(num_qbs: int = 1, ppr: float = 1.0) -> list[dict]:
+    """
+    Fetch redraft player values from FantasyCalc.
+    Returns raw list with value, overallRank, positionRank, player fields.
+    """
+    superflex = "true" if num_qbs >= 2 else "false"
+    params = {
+        "isDynasty": "false",
+        "numQbs": str(num_qbs),
+        "ppr": str(ppr),
+        "superflex": superflex,
+    }
+    async with httpx.AsyncClient(timeout=TIMEOUT, verify=False) as client:
+        r = await client.get(f"{BASE}/values/current", params=params)
+        r.raise_for_status()
+        data = r.json()
+    return data if isinstance(data, list) else []
+
+
 async def get_values(num_qbs: int = 1, ppr: float = 1.0) -> list[dict]:
     """
     Fetch dynasty player + pick values from FantasyCalc.

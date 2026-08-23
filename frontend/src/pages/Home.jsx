@@ -2,10 +2,18 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getRecentLeagues } from '../utils/recentLeagues'
 
+const STORAGE_KEY = 'spt_mode'
+
 export default function Home() {
   const [leagueId, setLeagueId] = useState('')
+  const [mode, setMode] = useState(() => localStorage.getItem(STORAGE_KEY) || 'dynasty')
   const navigate = useNavigate()
   const recents = getRecentLeagues()
+
+  function switchMode(m) {
+    setMode(m)
+    localStorage.setItem(STORAGE_KEY, m)
+  }
 
   function handleSubmit(e) {
     e.preventDefault()
@@ -15,6 +23,37 @@ export default function Home() {
 
   return (
     <div className="home-container">
+      <div className="home-mode-tabs">
+        <button
+          className={`home-mode-tab${mode === 'dynasty' ? ' active' : ''}`}
+          onClick={() => switchMode('dynasty')}
+        >
+          Dynasty League
+        </button>
+        <button
+          className={`home-mode-tab${mode === 'redraft' ? ' active' : ''}`}
+          onClick={() => switchMode('redraft')}
+        >
+          Redraft Draft
+        </button>
+      </div>
+
+      {mode === 'redraft' ? (
+        <div className="home-hero">
+          <h1 className="home-title">
+            Redraft draft assistant.<br />
+            <span className="accent">Live ESPN integration.</span>
+          </h1>
+          <p className="home-sub">
+            Connect to your ESPN redraft league via session cookies. Get real-time
+            player rankings, tier breaks, and VOR analysis as the draft unfolds.
+          </p>
+          <button className="btn btn-primary" style={{ fontSize: '1rem', padding: '12px 28px' }} onClick={() => navigate('/redraft-draft')}>
+            Open Draft Room →
+          </button>
+          <p className="home-hint">Supports ESPN leagues · Snake draft · PPR / Half-PPR / Standard</p>
+        </div>
+      ) : (
       <div className="home-hero">
         <h1 className="home-title">
           Dynasty analysis.<br />
@@ -62,8 +101,9 @@ export default function Home() {
           </div>
         )}
       </div>
+      )}
 
-      <div className="home-features">
+      {mode === 'dynasty' && <div className="home-features">
         <div className="home-features-heading">What you get</div>
 
         <div className="feature-grid">
@@ -129,7 +169,7 @@ export default function Home() {
             </p>
           </div>
         </div>
-      </div>
+      </div>}
     </div>
   )
 }
