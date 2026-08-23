@@ -13,6 +13,7 @@ ESPN_TIMEOUT = 15.0
 
 # Per-process cache: (league_id, season) -> {espn_id: {name, position}}
 _ESPN_PLAYER_MAP: dict[tuple, dict] = {}
+_ESPN_PLAYER_MAP_ERROR: dict[tuple, str] = {}
 
 # ESPN position ID → our position label (skill + kicker/dst + IDP)
 _ESPN_POS = {
@@ -59,13 +60,15 @@ async def _fetch_espn(url: str, espn_s2: str, swid: str, params: dict | None = N
 async def _load_espn_players(league_id: str, season: int, espn_s2: str, swid: str):
     """Fetch ESPN's player list once and cache it for this league+season."""
     key = (league_id, season)
-    if key in _ESPN_PLAYER_MAP:
+    # Only skip if we have actual data; retry if previous attempt errored
+    if key in _ESPN_PLAYER_MAP and key not in _ESPN_PLAYER_MAP_ERROR:
         return
     url = f"{ESPN_BASE}/seasons/{season}/players"
     try:
         data = await _fetch_espn(url, espn_s2, swid, params={"view": "players_wl"})
-    except Exception:
+    except Exception as e:
         _ESPN_PLAYER_MAP[key] = {}
+        _ESPN_PLAYER_MAP_ERROR[key] = str(e)
         return
     player_map = {}
     for entry in (data if isinstance(data, list) else []):
@@ -144,9 +147,9 @@ async def get_espn_draft_state(
     # --- Parse draft settings ---
     settings = data.get("settings", {})
     draft_settings = settings.get("draftSettings", {})
-    num_teams = settings.get("size", 10)
     rounds = draft_settings.get("rounds", 15)
     pick_order = draft_settings.get("pickOrder", [])
+    num_teams = len(pick_order) if pick_order else settings.get("size", 10)
 
     # --- Parse teams ---
     espn_teams = data.get("teams", [])
@@ -300,5 +303,6 @@ async def get_espn_draft_state(
         "recent_picks": list(reversed(enriched_picks[-10:])),
         "available": available,
         "idp_available": idp_available,
+        "idp_load_error": _ESPN_PLAYER_MAP_ERROR.get((league_id, season)),
         "teams": teams_out,
     }
