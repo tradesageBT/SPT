@@ -8,7 +8,8 @@ from fastapi import APIRouter, HTTPException, Query
 
 router = APIRouter(prefix="/api/espn-draft")
 
-ESPN_BASE = "https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl"
+ESPN_BASE = "https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl"   # league-specific endpoints
+ESPN_PLAYERS_BASE = "https://fantasy.espn.com/apis/v3/games/ffl"          # global player pool (hasn't moved)
 ESPN_TIMEOUT = 15.0
 
 # Per-process cache: (league_id, season) -> {espn_id: {name, position}}
@@ -74,9 +75,10 @@ async def _load_espn_players(league_id: str, season: int, espn_s2: str, swid: st
     # Only skip if we have actual data; retry if previous attempt errored
     if key in _ESPN_PLAYER_MAP and key not in _ESPN_PLAYER_MAP_ERROR:
         return
-    url = f"{ESPN_BASE}/seasons/{season}/players"
+    # Use the original fantasy.espn.com for the global player pool — it hasn't moved to lm-api-reads
+    url = f"{ESPN_PLAYERS_BASE}/seasons/{season}/players"
     try:
-        data = await _fetch_espn(url, espn_s2, swid, params={"view": "players_wl"})
+        data = await _fetch_espn(url, espn_s2, swid, params={"view": "players_wl", "scoringPeriodId": 0})
     except Exception as e:
         _ESPN_PLAYER_MAP[key] = {}
         _ESPN_PLAYER_MAP_ERROR[key] = str(e)
@@ -112,6 +114,8 @@ def _compute_tiers(players: list[dict]) -> list[dict]:
     return players
 
 
+_last_replacement_n: dict = {}  # debug: expose computed replacement levels
+
 def _compute_vor(players: list[dict], num_teams: int, roster_slots: dict | None = None) -> list[dict]:
     """Add vor (value over replacement) using actual starting slots per position."""
     rs = roster_slots or {}
@@ -135,6 +139,8 @@ def _compute_vor(players: list[dict], num_teams: int, roster_slots: dict | None 
         "K":   max(1, round(num_teams * k)),
         "DEF": max(1, round(num_teams * dfn)),
     }
+    _last_replacement_n.clear()
+    _last_replacement_n.update(replacement_n)
 
     by_pos: dict[str, list[int]] = {}
     for p in players:
@@ -383,6 +389,7 @@ async def get_espn_draft_state(
         "recent_picks": list(reversed(enriched_picks[-10:])),
         "available": available,
         "roster_slots": roster_slots,
+        "debug_replacement_n": dict(_last_replacement_n),
         "idp_available": idp_available,
         "idp_load_error": _ESPN_PLAYER_MAP_ERROR.get((league_id, season)),
         "teams": teams_out,
