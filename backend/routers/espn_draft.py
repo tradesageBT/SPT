@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 router = APIRouter(prefix="/api/espn-draft")
 
-ESPN_BASE = "https://fantasy.espn.com/apis/v3/games/ffl"
+ESPN_BASE = "https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl"
 ESPN_TIMEOUT = 15.0
 
 # Per-process cache: (league_id, season) -> {espn_id: {name, position}}
