@@ -1,8 +1,29 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { api } from '../api/client'
 
-const STORAGE_KEY = 'espn_draft_config'
+const STORAGE_KEY = 'espn_draft_config'  // legacy single-league key
+const LEAGUES_KEY = 'espn_saved_leagues'  // new: array of saved leagues
 const POLL_MS = 5000
+
+function getSavedLeagues() {
+  try {
+    const arr = JSON.parse(localStorage.getItem(LEAGUES_KEY) || '[]')
+    if (arr.length) return arr
+    // migrate legacy single-league config
+    const old = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}')
+    if (old.leagueId) return [{ ...old, savedAt: 0, name: `League ${old.leagueId}` }]
+    return []
+  } catch { return [] }
+}
+
+function saveLeague(cfg) {
+  const leagues = getSavedLeagues()
+  const idx = leagues.findIndex(l => l.leagueId === cfg.leagueId && String(l.season) === String(cfg.season))
+  const entry = { ...cfg, savedAt: Date.now(), name: cfg.name || `League ${cfg.leagueId} (${cfg.season})` }
+  if (idx >= 0) leagues[idx] = entry
+  else leagues.unshift(entry)
+  localStorage.setItem(LEAGUES_KEY, JSON.stringify(leagues.slice(0, 5)))
+}
 
 const POS_COLORS = {
   QB: '#e05c5c', RB: '#5cb8e0', WR: '#01d9ac', TE: '#e0a45c', K: '#8b90b0', DEF: '#666c8a',
@@ -93,18 +114,21 @@ function TeamNeeds({ player, teams, rosterSlots }) {
   )
 }
 
-function SetupForm({ onConnect }) {
-  const saved = (() => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') } catch { return {} } })()
+function SetupForm({ onConnect, savedLeagues, onDeleteLeague }) {
+  const leagues = savedLeagues || []
+  const prefill = leagues[0] || {}
   const [form, setForm] = useState({
-    leagueId: saved.leagueId || '',
-    espnS2: saved.espnS2 || '',
-    swid: saved.swid || '',
-    mySlot: saved.mySlot || '1',
-    budget: saved.budget || '200',
-    season: saved.season || '2025',
-    posBudget: saved.posBudget || { ...DEFAULT_POS_BUDGET },
+    name: prefill.name || '',
+    leagueId: prefill.leagueId || '',
+    espnS2: prefill.espnS2 || '',
+    swid: prefill.swid || '',
+    mySlot: prefill.mySlot || '1',
+    budget: prefill.budget || '200',
+    season: prefill.season || '2026',
+    posBudget: prefill.posBudget || { ...DEFAULT_POS_BUDGET },
   })
   const [loading, setLoading] = useState(false)
+  const [loadingIdx, setLoadingIdx] = useState(null)
   const [error, setError] = useState(null)
   const [cookieHint, setCookieHint] = useState(false)
   const [budgetPlan, setBudgetPlan] = useState(false)
@@ -114,23 +138,28 @@ function SetupForm({ onConnect }) {
 
   const posBudgetTotal = Object.values(form.posBudget).reduce((a, b) => a + b, 0)
 
+  async function connectWith(cfg, idx = null) {
+    if (idx !== null) setLoadingIdx(idx); else setLoading(true)
+    setError(null)
+    try {
+      const data = await api.getEspnDraftState(cfg.leagueId, cfg.espnS2, cfg.swid, cfg.season, cfg.mySlot, cfg.budget)
+      saveLeague(cfg)
+      onConnect(cfg, data)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setLoading(false)
+      setLoadingIdx(null)
+    }
+  }
+
   async function handleConnect(e) {
     e.preventDefault()
     if (!form.leagueId || !form.espnS2 || !form.swid) {
       setError('League ID, espn_s2, and SWID are required.')
       return
     }
-    setLoading(true)
-    setError(null)
-    try {
-      const data = await api.getEspnDraftState(form.leagueId, form.espnS2, form.swid, form.season, form.mySlot, form.budget)
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(form))
-      onConnect(form, data)
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setLoading(false)
-    }
+    connectWith(form)
   }
 
   return (
@@ -139,7 +168,44 @@ function SetupForm({ onConnect }) {
         <h2 className="rd-setup-title">ESPN Auction Draft Room</h2>
         <p className="rd-setup-sub">Connect to your ESPN auction league for real-time rankings, tier breaks, VOR, and budget tracking.</p>
 
+        {leagues.length > 0 && (
+          <div className="rd-saved-leagues">
+            <div className="rd-saved-section-title">Saved Leagues</div>
+            {leagues.map((lg, i) => (
+              <div key={i} className="rd-saved-row">
+                <div className="rd-saved-info">
+                  <span className="rd-saved-name">{lg.name || `League ${lg.leagueId}`}</span>
+                  <span className="rd-saved-meta">Season {lg.season} · Slot #{lg.mySlot} · ${lg.budget} budget</span>
+                </div>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  disabled={loadingIdx === i}
+                  onClick={() => connectWith(lg, i)}
+                >
+                  {loadingIdx === i ? '…' : 'Connect'}
+                </button>
+                <button
+                  type="button"
+                  className="rd-saved-delete"
+                  onClick={() => onDeleteLeague(i)}
+                  title="Remove saved league"
+                >×</button>
+              </div>
+            ))}
+            <div className="rd-saved-divider"><span>Or connect to a different league</span></div>
+          </div>
+        )}
+
         <form className="rd-setup-form" onSubmit={handleConnect}>
+          <div className="rd-setup-row">
+            <label className="rd-label" style={{ flex: 2 }}>League Name (optional)
+              <input className="rd-input" type="text" placeholder="e.g. Main League" value={form.name} onChange={e => set('name', e.target.value)} />
+            </label>
+            <label className="rd-label" style={{ flex: 1 }}>Season
+              <input className="rd-input" type="number" min="2020" max="2030" value={form.season} onChange={e => set('season', e.target.value)} />
+            </label>
+          </div>
           <label className="rd-label">ESPN League ID
             <input className="rd-input" type="text" placeholder="e.g. 1234567" value={form.leagueId} onChange={e => set('leagueId', e.target.value)} />
           </label>
@@ -155,9 +221,6 @@ function SetupForm({ onConnect }) {
             </label>
             <label className="rd-label" style={{ flex: 1 }}>Budget ($)
               <input className="rd-input" type="number" min="1" max="10000" value={form.budget} onChange={e => set('budget', e.target.value)} />
-            </label>
-            <label className="rd-label" style={{ flex: 1 }}>Season
-              <input className="rd-input" type="number" min="2020" max="2030" value={form.season} onChange={e => set('season', e.target.value)} />
             </label>
           </div>
 
@@ -535,21 +598,56 @@ function DraftBoard({ config, initialData }) {
 export default function RedraftDraftRoom() {
   const [config, setConfig] = useState(null)
   const [initialData, setInitialData] = useState(null)
+  const [autoConnecting, setAutoConnecting] = useState(false)
+  const [savedLeagues, setSavedLeagues] = useState(() => getSavedLeagues())
+
+  // Auto-connect to most recently used league on first load
+  useEffect(() => {
+    const leagues = getSavedLeagues()
+    if (!leagues.length) return
+    const last = leagues[0]
+    setAutoConnecting(true)
+    api.getEspnDraftState(last.leagueId, last.espnS2, last.swid, last.season, last.mySlot, last.budget)
+      .then(data => { setConfig(last); setInitialData(data) })
+      .catch(() => {})  // silent — fall through to setup form
+      .finally(() => setAutoConnecting(false))
+  }, [])
 
   function handleConnect(cfg, data) {
+    setSavedLeagues(getSavedLeagues())
     setConfig(cfg)
     setInitialData(data)
   }
 
+  function handleDeleteLeague(idx) {
+    const leagues = getSavedLeagues()
+    leagues.splice(idx, 1)
+    localStorage.setItem(LEAGUES_KEY, JSON.stringify(leagues))
+    setSavedLeagues([...leagues])
+  }
+
+  if (autoConnecting) {
+    return (
+      <div className="rd-setup">
+        <div className="rd-auto-connecting">
+          <div className="rd-spinner" />
+          Reconnecting to last league…
+        </div>
+      </div>
+    )
+  }
+
   if (!config || !initialData) {
-    return <SetupForm onConnect={handleConnect} />
+    return <SetupForm onConnect={handleConnect} savedLeagues={savedLeagues} onDeleteLeague={handleDeleteLeague} />
   }
 
   return (
     <div>
       <div className="rd-topbar">
         <button className="btn btn-secondary btn-sm" onClick={() => { setConfig(null); setInitialData(null) }}>← Back</button>
-        <span className="rd-topbar-title">ESPN Auction · League {config.leagueId} · Season {config.season} · ${config.budget} budget</span>
+        <span className="rd-topbar-title">
+          ESPN Auction · {config.name || `League ${config.leagueId}`} · Season {config.season} · ${config.budget} budget
+        </span>
       </div>
       <DraftBoard config={config} initialData={initialData} />
     </div>
