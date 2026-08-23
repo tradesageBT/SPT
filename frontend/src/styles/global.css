@@ -2378,16 +2378,19 @@ img { display: block; }
 
 .rd-player-list { overflow-y: auto; max-height: 70vh; }
 .rd-player-header {
-  display: grid; grid-template-columns: 30px 1fr 56px 64px 52px; gap: 6px;
+  display: grid; grid-template-columns: 30px 1fr 52px 52px 52px 52px; gap: 6px;
   padding: 6px 12px; font-size: 0.7rem; font-weight: 600; color: var(--text-muted);
   text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border);
   background: var(--surface2); position: sticky; top: 0; z-index: 1;
 }
 .rd-player-row {
-  display: grid; grid-template-columns: 30px 1fr 56px 64px 52px; gap: 6px;
-  align-items: center; padding: 7px 12px; border-bottom: 1px solid var(--border); transition: background 0.1s;
+  display: grid; grid-template-columns: 30px 1fr 52px 52px 52px 52px; gap: 6px;
+  align-items: center; padding: 7px 12px; border-bottom: 1px solid var(--border); transition: background 0.1s; cursor: pointer;
 }
 .rd-player-row:hover { background: var(--surface2); }
+.rd-player-row-selected { background: var(--surface2) !important; }
+.rd-player-header-idp { display: grid !important; grid-template-columns: 52px 1fr !important; }
+.rd-player-row-idp { display: grid !important; grid-template-columns: 52px 1fr !important; align-items: center; padding: 7px 12px; border-bottom: 1px solid var(--border); }
 .rd-player-info { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .rd-player-name { font-size: 0.88rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rd-player-team { font-size: 0.72rem; color: var(--text-muted); white-space: nowrap; }
@@ -2437,6 +2440,29 @@ img { display: block; }
 .rd-recent-name { font-size: 0.8rem; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rd-recent-team { font-size: 0.72rem; color: var(--text-muted); white-space: nowrap; }
 .rd-empty-sm { font-size: 0.78rem; color: var(--text-muted); font-style: italic; }
+
+/* Auction value */
+.rd-auction-val { font-size: 0.82rem; }
+
+/* Comparables */
+.rd-comparables-row { padding: 8px 12px 10px 42px; background: #1e2235; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
+.rd-comparables-label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+.rd-comparables-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.rd-comparable-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 0.78rem; padding: 3px 8px 3px 4px; border-radius: 5px; border: 1px solid var(--border); background: var(--surface2); white-space: nowrap; }
+
+/* Per-position budget grid (sidebar) */
+.rd-pos-budget-grid { display: grid; grid-template-columns: 36px 1fr 1fr 1fr; gap: 3px 6px; font-size: 0.76rem; align-items: center; }
+.rd-pbg-hdr { font-size: 0.65rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.rd-pbg-right { text-align: right; }
+.rd-pbg-pos { font-weight: 700; font-size: 0.75rem; }
+.rd-pbg-num { font-size: 0.77rem; }
+
+/* Budget plan in setup form */
+.rd-budget-plan-note { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 10px; }
+.rd-budget-plan-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.rd-budget-plan-item { display: flex; flex-direction: column; gap: 4px; font-size: 0.75rem; }
+.rd-budget-plan-pos { font-weight: 700; }
+.rd-budget-plan-input { padding: 4px 8px !important; font-size: 0.8rem !important; }
 
 @media (max-width: 860px) {
   .rd-board-body { grid-template-columns: 1fr; }

@@ -4,10 +4,17 @@ import { api } from '../api/client'
 const STORAGE_KEY = 'espn_draft_config'
 const POLL_MS = 5000
 
-const POS_COLORS = { QB: '#e05c5c', RB: '#5cb8e0', WR: '#01d9ac', TE: '#e0a45c', K: '#8b90b0', DEF: '#666c8a' }
+const POS_COLORS = {
+  QB: '#e05c5c', RB: '#5cb8e0', WR: '#01d9ac', TE: '#e0a45c', K: '#8b90b0', DEF: '#666c8a',
+  LB: '#c084fc', DL: '#fb923c', DB: '#60a5fa',
+}
 const TIER_COLORS = ['#01d9ac', '#5cb8e0', '#e0a45c', '#e05c5c', '#a05ce0', '#8b90b0']
+const IDP_POSITIONS = ['LB', 'DL', 'DB']
+const ALL_POS_TABS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K', 'DEF', ...IDP_POSITIONS]
+const DEFAULT_POS_BUDGET = { QB: 20, RB: 75, WR: 65, TE: 25, K: 1, DEF: 1, LB: 5, DL: 5, DB: 3 }
 
 function TierBadge({ tier }) {
+  if (tier == null) return <span className="rd-tier-badge" style={{ background: 'transparent', borderColor: 'transparent', color: 'transparent' }}>—</span>
   const color = TIER_COLORS[(tier - 1) % TIER_COLORS.length]
   return (
     <span className="rd-tier-badge" style={{ background: color + '22', color, borderColor: color + '66' }}>
@@ -17,9 +24,19 @@ function TierBadge({ tier }) {
 }
 
 function VorChip({ vor }) {
-  if (vor == null) return null
+  if (vor == null) return <span className="rd-vor-chip rd-col-center" style={{ color: 'var(--text-muted)' }}>—</span>
   const pos = vor >= 0
-  return <span className="rd-vor-chip" style={{ color: pos ? '#01d9ac' : '#e05c5c' }}>{pos ? '+' : ''}{Math.round(vor)}</span>
+  return <span className="rd-vor-chip rd-col-center" style={{ color: pos ? '#01d9ac' : '#e05c5c' }}>{pos ? '+' : ''}{Math.round(vor)}</span>
+}
+
+function AuctionChip({ value, maxBid }) {
+  if (value == null) return <span className="rd-col-center" style={{ color: 'var(--text-muted)' }}>—</span>
+  const affordable = maxBid == null || value <= maxBid
+  return (
+    <span className="rd-col-center rd-auction-val" style={{ color: affordable ? '#01d9ac' : '#e05c5c', fontWeight: 600 }}>
+      ${value}
+    </span>
+  )
 }
 
 function PosPill({ pos }) {
@@ -39,12 +56,17 @@ function SetupForm({ onConnect }) {
     mySlot: saved.mySlot || '1',
     budget: saved.budget || '200',
     season: saved.season || '2025',
+    posBudget: saved.posBudget || { ...DEFAULT_POS_BUDGET },
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const [cookieHint, setCookieHint] = useState(false)
+  const [budgetPlan, setBudgetPlan] = useState(false)
 
   function set(k, v) { setForm(f => ({ ...f, [k]: v })) }
+  function setPosBudget(pos, v) { setForm(f => ({ ...f, posBudget: { ...f.posBudget, [pos]: parseInt(v) || 0 } })) }
+
+  const posBudgetTotal = Object.values(form.posBudget).reduce((a, b) => a + b, 0)
 
   async function handleConnect(e) {
     e.preventDefault()
@@ -106,6 +128,30 @@ function SetupForm({ onConnect }) {
             </div>
           )}
 
+          <button type="button" className="rd-cookie-toggle" onClick={() => setBudgetPlan(v => !v)}>
+            Budget plan by position {budgetPlan ? '▲' : '▼'}
+          </button>
+          {budgetPlan && (
+            <div className="rd-cookie-hint">
+              <div className="rd-budget-plan-note">
+                Target spend per position — Total: <strong style={{ color: posBudgetTotal === parseInt(form.budget) ? '#01d9ac' : '#e0a45c' }}>${posBudgetTotal}</strong> / ${form.budget}
+              </div>
+              <div className="rd-budget-plan-grid">
+                {Object.entries(form.posBudget).map(([pos, val]) => (
+                  <label key={pos} className="rd-budget-plan-item">
+                    <span className="rd-budget-plan-pos" style={{ color: POS_COLORS[pos] || 'inherit' }}>{pos}</span>
+                    <input
+                      className="rd-input rd-budget-plan-input"
+                      type="number" min="0" max={parseInt(form.budget)}
+                      value={val}
+                      onChange={e => setPosBudget(pos, e.target.value)}
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
           {error && <div className="rd-error">{error}</div>}
 
           <button className="btn btn-primary rd-connect-btn" type="submit" disabled={loading}>
@@ -122,7 +168,10 @@ function DraftBoard({ config, initialData }) {
   const [posTab, setPosTab] = useState('ALL')
   const [search, setSearch] = useState('')
   const [error, setError] = useState(null)
+  const [selectedId, setSelectedId] = useState(null)
   const intervalRef = useRef(null)
+
+  const isIdpTab = IDP_POSITIONS.includes(posTab)
 
   const refresh = useCallback(async () => {
     try {
@@ -142,14 +191,33 @@ function DraftBoard({ config, initialData }) {
   const myTeam = (data.teams || []).find(t => t.is_me)
   const myPicks = myTeam?.players || []
 
-  const available = (data.available || []).filter(p => {
-    if (posTab !== 'ALL' && p.position !== posTab) return false
-    if (search && !p.name.toLowerCase().includes(search.toLowerCase())) return false
-    return true
+  const posBudget = config.posBudget || DEFAULT_POS_BUDGET
+  const posSpent = {}
+  myPicks.forEach(p => {
+    const pos = p.position || 'OTHER'
+    posSpent[pos] = (posSpent[pos] || 0) + (p.bid_amount || 0)
   })
+
+  const allAvailable = data.available || []
+  const idpAvailable = data.idp_available || []
+
+  const available = (isIdpTab
+    ? idpAvailable.filter(p => p.position === posTab)
+    : allAvailable.filter(p => posTab === 'ALL' || p.position === posTab)
+  ).filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase()))
 
   const budgetPct = data.budget > 0 ? Math.min(100, (data.my_budget_spent / data.budget) * 100) : 0
   const budgetColor = budgetPct > 85 ? '#e05c5c' : budgetPct > 60 ? '#e0a45c' : '#01d9ac'
+
+  function getComparables(player) {
+    if (!player) return []
+    return allAvailable.filter(p =>
+      p.sleeper_id !== player.sleeper_id &&
+      p.position === player.position &&
+      p.tier != null && player.tier != null &&
+      Math.abs(p.tier - player.tier) <= 1
+    ).slice(0, 4)
+  }
 
   return (
     <div className="rd-board">
@@ -169,12 +237,12 @@ function DraftBoard({ config, initialData }) {
         <div className="rd-available">
           <div className="rd-available-header">
             <div className="rd-pos-tabs">
-              {['ALL', 'QB', 'RB', 'WR', 'TE', 'K', 'DEF'].map(pos => (
+              {ALL_POS_TABS.map(pos => (
                 <button
                   key={pos}
                   className={`rd-pos-tab${posTab === pos ? ' active' : ''}`}
-                  style={posTab === pos && pos !== 'ALL' ? { background: POS_COLORS[pos] + '22', color: POS_COLORS[pos], borderColor: POS_COLORS[pos] + '88' } : {}}
-                  onClick={() => setPosTab(pos)}
+                  style={posTab === pos && pos !== 'ALL' ? { background: (POS_COLORS[pos] || '#8b90b0') + '22', color: POS_COLORS[pos] || '#8b90b0', borderColor: (POS_COLORS[pos] || '#8b90b0') + '88' } : {}}
+                  onClick={() => { setPosTab(pos); setSelectedId(null) }}
                 >
                   {pos}
                 </button>
@@ -197,34 +265,74 @@ function DraftBoard({ config, initialData }) {
           )}
 
           <div className="rd-player-list">
-            <div className="rd-player-header">
-              <span></span>
-              <span>Player</span>
-              <span className="rd-col-center">Rank</span>
-              <span className="rd-col-center">Value</span>
-              <span className="rd-col-center">VOR</span>
-            </div>
-            {available.length === 0 && <div className="rd-empty">No available players matching filters.</div>}
-            {available.map((p, i) => {
-              const prevTier = i > 0 ? available[i - 1].tier : p.tier
-              const tierBreak = i > 0 && p.tier !== prevTier
-              return (
-                <div key={p.sleeper_id}>
-                  {tierBreak && <div className="rd-tier-break">— Tier {p.tier} —</div>}
-                  <div className="rd-player-row">
-                    <TierBadge tier={p.tier} />
-                    <div className="rd-player-info">
-                      <PosPill pos={p.position} />
-                      <span className="rd-player-name">{p.name}</span>
-                      <span className="rd-player-team">{p.nfl_team}</span>
-                    </div>
-                    <span className="rd-col-center rd-rank">{p.redraft_pos_rank ? `${p.position}${p.redraft_pos_rank}` : '—'}</span>
-                    <span className="rd-col-center rd-value">{p.redraft_value?.toLocaleString() ?? '—'}</span>
-                    <VorChip vor={p.vor} />
-                  </div>
+            {isIdpTab ? (
+              <>
+                <div className="rd-player-header rd-player-header-idp">
+                  <span>Pos</span>
+                  <span>Player</span>
                 </div>
-              )
-            })}
+                {available.length === 0 && <div className="rd-empty">No available IDP players.</div>}
+                {available.map((p, i) => (
+                  <div key={p.espn_id || i} className="rd-player-row rd-player-row-idp">
+                    <PosPill pos={p.position} />
+                    <span className="rd-player-name">{p.name}</span>
+                  </div>
+                ))}
+              </>
+            ) : (
+              <>
+                <div className="rd-player-header">
+                  <span></span>
+                  <span>Player</span>
+                  <span className="rd-col-center">Rank</span>
+                  <span className="rd-col-center">$ Est</span>
+                  <span className="rd-col-center">VOR</span>
+                  <span className="rd-col-center">Val</span>
+                </div>
+                {available.length === 0 && <div className="rd-empty">No available players matching filters.</div>}
+                {available.map((p, i) => {
+                  const prevTier = i > 0 ? available[i - 1].tier : p.tier
+                  const tierBreak = i > 0 && p.tier !== prevTier
+                  const pid = p.sleeper_id || p.name
+                  const isSelected = selectedId === pid
+                  const comparables = isSelected ? getComparables(p) : []
+                  return (
+                    <div key={pid || i}>
+                      {tierBreak && <div className="rd-tier-break">— Tier {p.tier} —</div>}
+                      <div
+                        className={`rd-player-row${isSelected ? ' rd-player-row-selected' : ''}`}
+                        onClick={() => setSelectedId(isSelected ? null : pid)}
+                      >
+                        <TierBadge tier={p.tier} />
+                        <div className="rd-player-info">
+                          <PosPill pos={p.position} />
+                          <span className="rd-player-name">{p.name}</span>
+                          <span className="rd-player-team">{p.nfl_team}</span>
+                        </div>
+                        <span className="rd-col-center rd-rank">{p.redraft_pos_rank ? `${p.position}${p.redraft_pos_rank}` : '—'}</span>
+                        <AuctionChip value={p.auction_value} maxBid={data.max_bid} />
+                        <VorChip vor={p.vor} />
+                        <span className="rd-col-center rd-value">{p.redraft_value?.toLocaleString() ?? '—'}</span>
+                      </div>
+                      {isSelected && comparables.length > 0 && (
+                        <div className="rd-comparables-row">
+                          <span className="rd-comparables-label">Similar on board:</span>
+                          <div className="rd-comparables-chips">
+                            {comparables.map((c, ci) => (
+                              <span key={ci} className="rd-comparable-chip">
+                                <PosPill pos={c.position} />
+                                <span>{c.name}</span>
+                                {c.auction_value != null && <span className="rd-bid-tag">${c.auction_value}</span>}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </>
+            )}
           </div>
         </div>
 
@@ -246,6 +354,29 @@ function DraftBoard({ config, initialData }) {
             )}
           </div>
 
+          {/* Per-position budget */}
+          <div className="rd-sidebar-section">
+            <div className="rd-sidebar-title">Budget by Position</div>
+            <div className="rd-pos-budget-grid">
+              <span className="rd-pbg-hdr">Pos</span>
+              <span className="rd-pbg-hdr rd-pbg-right">Target</span>
+              <span className="rd-pbg-hdr rd-pbg-right">Spent</span>
+              <span className="rd-pbg-hdr rd-pbg-right">Left</span>
+              {Object.entries(posBudget).map(([pos, target]) => {
+                const spent = posSpent[pos] || 0
+                const left = target - spent
+                const overBudget = left < 0
+                const nearBudget = !overBudget && left < target * 0.25
+                return [
+                  <span key={pos + '-p'} className="rd-pbg-pos" style={{ color: POS_COLORS[pos] || 'inherit' }}>{pos}</span>,
+                  <span key={pos + '-t'} className="rd-pbg-right rd-pbg-num">${target}</span>,
+                  <span key={pos + '-s'} className="rd-pbg-right rd-pbg-num">${spent}</span>,
+                  <span key={pos + '-l'} className="rd-pbg-right rd-pbg-num" style={{ color: overBudget ? '#e05c5c' : nearBudget ? '#e0a45c' : 'inherit' }}>${left}</span>,
+                ]
+              })}
+            </div>
+          </div>
+
           {/* My Picks */}
           <div className="rd-sidebar-section">
             <div className="rd-sidebar-title">My Team ({myPicks.length} players)</div>
@@ -253,7 +384,7 @@ function DraftBoard({ config, initialData }) {
               <div className="rd-empty-sm">No picks yet</div>
             ) : (
               <div className="rd-my-picks">
-                {['QB', 'RB', 'WR', 'TE', 'K', 'DEF'].map(pos => {
+                {Object.keys(POS_COLORS).map(pos => {
                   const forPos = myPicks.filter(p => p.position === pos)
                   if (forPos.length === 0) return null
                   return (

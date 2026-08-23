@@ -14,8 +14,13 @@ ESPN_TIMEOUT = 15.0
 # Per-process cache: (league_id, season) -> {espn_id: {name, position}}
 _ESPN_PLAYER_MAP: dict[tuple, dict] = {}
 
-# ESPN position ID → our position label
-_ESPN_POS = {1: "QB", 2: "RB", 3: "WR", 4: "TE", 5: "K", 16: "DEF"}
+# ESPN position ID → our position label (skill + kicker/dst + IDP)
+_ESPN_POS = {
+    1: "QB", 2: "RB", 3: "WR", 4: "TE", 5: "K", 16: "DEF",
+    9: "DL", 10: "LB", 11: "DB", 12: "DB",
+}
+
+IDP_POSITIONS = {"DL", "LB", "DB"}
 
 
 def _normalize(name: str) -> str:
@@ -100,6 +105,16 @@ def _compute_vor(players: list[dict], num_teams: int) -> list[dict]:
     return players
 
 
+def _compute_auction_values(players: list[dict], budget: int, num_teams: int, rounds: int) -> list[dict]:
+    """Add projected auction $ to each player by scaling redraft values."""
+    # Total usable dollars above the $1-per-pick floor
+    usable = max(1, (budget - rounds) * num_teams)
+    total_val = sum(p["redraft_value"] for p in players) or 1
+    for p in players:
+        p["auction_value"] = max(1, round(p["redraft_value"] / total_val * usable))
+    return players
+
+
 @router.get("/state")
 async def get_espn_draft_state(
     league_id: str = Query(...),
@@ -123,7 +138,7 @@ async def get_espn_draft_state(
     draft_settings = settings.get("draftSettings", {})
     num_teams = settings.get("size", 10)
     rounds = draft_settings.get("rounds", 15)
-    pick_order = draft_settings.get("pickOrder", [])  # teamIds in slot order
+    pick_order = draft_settings.get("pickOrder", [])
 
     # --- Parse teams ---
     espn_teams = data.get("teams", [])
@@ -138,7 +153,6 @@ async def get_espn_draft_state(
         for i, tid in enumerate(pick_order)
     }
 
-    # My team id from slot
     my_team_id = pick_order[my_slot - 1] if my_slot <= len(pick_order) else None
 
     # --- Parse picks ---
@@ -161,8 +175,11 @@ async def get_espn_draft_state(
     team_picks: dict[int, list] = {t.get("id"): [] for t in espn_teams}
 
     enriched_picks = []
+    taken_espn_ids: set[int] = set()
     for pk in raw_picks:
         eid = int(pk.get("playerId", 0))
+        if eid:
+            taken_espn_ids.add(eid)
         ep = espn_player_map.get(eid, {})
         team_id = pk.get("teamId")
         bid_amount = pk.get("bidAmount", 0)
@@ -192,7 +209,7 @@ async def get_espn_draft_state(
     my_slots_remaining = max(0, rounds - my_picks_count)
     max_bid = max(1, my_budget_remaining - max(0, my_slots_remaining - 1))
 
-    # --- Available players from our cache ---
+    # --- Skill position available players from our cache ---
     players_cache = get_cached_players()
 
     taken_names: set[str] = {_normalize(pk["player_name"]) for pk in enriched_picks if pk["player_name"]}
@@ -217,11 +234,35 @@ async def get_espn_draft_state(
             "redraft_pos_rank": p.get("redraft_pos_rank"),
             "tier": 0,
             "vor": 0,
+            "auction_value": 0,
         }
         for p in available_raw
     ]
     available = _compute_tiers(available)
     available = _compute_vor(available, num_teams)
+    available = _compute_auction_values(available, budget, num_teams, rounds)
+
+    # --- IDP available players from ESPN's player map ---
+    idp_available = sorted(
+        [
+            {
+                "espn_id": eid,
+                "name": ep["name"],
+                "position": ep["position"],
+                "nfl_team": "",
+                "tier": None,
+                "vor": None,
+                "auction_value": None,
+                "redraft_value": None,
+                "redraft_pos_rank": None,
+            }
+            for eid, ep in espn_player_map.items()
+            if ep.get("position") in IDP_POSITIONS
+            and eid not in taken_espn_ids
+            and ep.get("name")
+        ],
+        key=lambda x: x["name"],
+    )
 
     # --- Per-team summary ---
     teams_out = []
@@ -250,5 +291,6 @@ async def get_espn_draft_state(
         "max_bid": max_bid,
         "recent_picks": list(reversed(enriched_picks[-10:])),
         "available": available,
+        "idp_available": idp_available,
         "teams": teams_out,
     }
