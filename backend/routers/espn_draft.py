@@ -26,7 +26,9 @@ IDP_POSITIONS = {"DL", "LB", "DB"}
 # ESPN lineup slot ID → position (for roster config parsing)
 _ESPN_SLOT_TO_POS = {
     0: "QB", 2: "RB", 4: "WR", 6: "TE",
-    17: "FLEX", 23: "WTTE",
+    17: "FLEX",   # RB/WR/TE flex
+    23: "WTTE",   # WR/TE flex
+    24: "SFLEX",  # Offensive Player / Superflex (QB eligible)
     5: "K", 16: "DEF",
     9: "DL", 10: "LB", 11: "DB",
 }
@@ -110,9 +112,30 @@ def _compute_tiers(players: list[dict]) -> list[dict]:
     return players
 
 
-def _compute_vor(players: list[dict], num_teams: int) -> list[dict]:
-    """Add vor (value over replacement) to each player."""
-    replacement_n = {"QB": max(1, num_teams // 2), "RB": num_teams, "WR": num_teams, "TE": max(1, num_teams // 2), "K": num_teams, "DEF": num_teams}
+def _compute_vor(players: list[dict], num_teams: int, roster_slots: dict | None = None) -> list[dict]:
+    """Add vor (value over replacement) using actual starting slots per position."""
+    rs = roster_slots or {}
+    qb = rs.get("QB", 1)
+    rb = rs.get("RB", 2)
+    wr = rs.get("WR", 2)
+    te = rs.get("TE", 1)
+    flex = rs.get("FLEX", 0)    # RB/WR/TE flex
+    wtte = rs.get("WTTE", 0)    # WR/TE flex
+    sf = rs.get("SFLEX", 0)     # superflex / OP (QB eligible)
+    k = rs.get("K", 1)
+    dfn = rs.get("DEF", 1)
+
+    # Estimate effective starters per position across the league
+    # SFLEX mostly goes to QB (85%), remainder splits among skill positions
+    replacement_n = {
+        "QB":  max(1, round(num_teams * (qb + sf * 0.85))),
+        "RB":  max(1, round(num_teams * (rb + flex * 0.40 + sf * 0.06))),
+        "WR":  max(1, round(num_teams * (wr + flex * 0.40 + wtte * 0.55 + sf * 0.06))),
+        "TE":  max(1, round(num_teams * (te + flex * 0.20 + wtte * 0.45 + sf * 0.03))),
+        "K":   max(1, round(num_teams * k)),
+        "DEF": max(1, round(num_teams * dfn)),
+    }
+
     by_pos: dict[str, list[int]] = {}
     for p in players:
         by_pos.setdefault(p["position"], []).append(p["redraft_value"])
@@ -293,7 +316,7 @@ async def get_espn_draft_state(
         for p in available_raw
     ]
     available = _compute_tiers(available)
-    available = _compute_vor(available, num_teams)
+    available = _compute_vor(available, num_teams, roster_slots)
     available = _compute_auction_values(available, budget, num_teams, rounds)
 
     # --- IDP available players from ESPN's player map ---
