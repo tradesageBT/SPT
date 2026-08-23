@@ -46,7 +46,8 @@ async def _fetch_espn(url: str, espn_s2: str, swid: str, params: dict | None = N
     async with httpx.AsyncClient(timeout=ESPN_TIMEOUT, verify=False, follow_redirects=False) as client:
         r = await client.get(url, headers=_espn_headers(espn_s2, swid), params=params)
     if r.status_code in (301, 302, 303, 307, 308):
-        raise HTTPException(status_code=401, detail="ESPN rejected the request — your espn_s2 or SWID cookie is invalid. Copy them again from fantasy.espn.com in a desktop browser (F12 → Application → Cookies).")
+        location = r.headers.get("location", "unknown")
+        raise HTTPException(status_code=401, detail=f"ESPN redirected ({r.status_code}) → {location}")
     if r.status_code == 401:
         raise HTTPException(status_code=401, detail="ESPN credentials invalid or expired. Re-enter your espn_s2 and SWID cookies.")
     if r.status_code == 404:
