@@ -5,6 +5,7 @@ import TeamProfile from './pages/TeamProfile'
 import TradeIdeas from './pages/TradeIdeas'
 import TradeEvaluator from './pages/TradeEvaluator'
 import DraftRoom from './pages/DraftRoom'
+import RedraftDraftRoom from './pages/RedraftDraftRoom'
 
 export default function App() {
   return (
@@ -15,7 +16,7 @@ export default function App() {
           <span className="logo-pass">PASS</span>
           <span className="logo-trash">TRASH</span>
         </Link>
-        <span className="logo-sub">Dynasty Value Engine</span>
+        <span className="logo-sub">Fantasy Value Engine</span>
       </header>
 
       <main className="main-content">
@@ -26,6 +27,7 @@ export default function App() {
           <Route path="/league/:leagueId/trades" element={<TradeIdeas />} />
           <Route path="/league/:leagueId/evaluate" element={<TradeEvaluator />} />
           <Route path="/league/:leagueId/draft" element={<DraftRoom />} />
+          <Route path="/redraft-draft" element={<RedraftDraftRoom />} />
         </Routes>
       </main>
     </div>
