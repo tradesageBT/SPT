@@ -23,6 +23,15 @@ _ESPN_POS = {
 
 IDP_POSITIONS = {"DL", "LB", "DB"}
 
+# ESPN lineup slot ID → position (for roster config parsing)
+_ESPN_SLOT_TO_POS = {
+    0: "QB", 2: "RB", 4: "WR", 6: "TE",
+    17: "FLEX", 23: "WTTE",
+    5: "K", 16: "DEF",
+    9: "DL", 10: "LB", 11: "DB",
+}
+_BENCH_SLOTS = {20, 21}  # bench and IR — excluded from starting slot counts
+
 
 def _normalize(name: str) -> str:
     name = name.lower()
@@ -151,6 +160,17 @@ async def get_espn_draft_state(
     pick_order = draft_settings.get("pickOrder", [])
     num_teams = len(pick_order) if pick_order else settings.get("size", 10)
 
+    # --- Parse roster slot config (starting slots only, no bench/IR) ---
+    lineup_counts = settings.get("rosterSettings", {}).get("lineupSlotCounts", {})
+    roster_slots: dict[str, int] = {}
+    for sid_str, cnt in lineup_counts.items():
+        sid = int(sid_str)
+        if sid in _BENCH_SLOTS or not cnt:
+            continue
+        pos = _ESPN_SLOT_TO_POS.get(sid)
+        if pos:
+            roster_slots[pos] = roster_slots.get(pos, 0) + cnt
+
     # --- Parse members (owners) ---
     member_map: dict[str, str] = {}
     for m in data.get("members", []):
@@ -218,6 +238,8 @@ async def get_espn_draft_state(
         player_name = ep.get("name") or inline_name or f"Player {eid}"
         position = ep.get("position") or _ESPN_POS.get(inline_pos_id, "")
 
+        is_keeper = bool(pk.get("isKeeper") or pk.get("keeper") or pk.get("reservedForKeeper"))
+
         enriched_pick = {
             "overall": pk.get("overallPickNumber"),
             "round": pk.get("roundId"),
@@ -228,6 +250,7 @@ async def get_espn_draft_state(
             "position": position,
             "espn_id": eid,
             "bid_amount": bid_amount,
+            "is_keeper": is_keeper,
         }
         enriched_picks.append(enriched_pick)
         if team_id:
@@ -299,14 +322,28 @@ async def get_espn_draft_state(
     teams_out = []
     for i, team_id in enumerate(pick_order):
         slot = i + 1
+        picks_for_team = team_picks.get(team_id, [])
         spent = team_budget_spent.get(team_id, 0)
+        remaining = budget - spent
+        slots_rem = max(0, rounds - len(picks_for_team))
+        t_max_bid = max(1, remaining - max(0, slots_rem - 1))
+
+        pos_counts: dict[str, int] = {}
+        for pk in picks_for_team:
+            pos = pk.get("position", "")
+            if pos:
+                pos_counts[pos] = pos_counts.get(pos, 0) + 1
+
         teams_out.append({
             "slot": slot,
             "team_name": slot_to_team.get(slot, f"Team {slot}"),
             "is_me": team_id == my_team_id,
             "budget_spent": spent,
-            "budget_remaining": budget - spent,
-            "players": team_picks.get(team_id, []),
+            "budget_remaining": remaining,
+            "slots_remaining": slots_rem,
+            "max_bid": t_max_bid,
+            "pos_counts": pos_counts,
+            "players": picks_for_team,
         })
 
     return {
@@ -322,6 +359,7 @@ async def get_espn_draft_state(
         "max_bid": max_bid,
         "recent_picks": list(reversed(enriched_picks[-10:])),
         "available": available,
+        "roster_slots": roster_slots,
         "idp_available": idp_available,
         "idp_load_error": _ESPN_PLAYER_MAP_ERROR.get((league_id, season)),
         "teams": teams_out,

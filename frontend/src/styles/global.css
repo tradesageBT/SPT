@@ -2471,6 +2471,18 @@ img { display: block; }
 .rd-budget-plan-pos { font-weight: 700; }
 .rd-budget-plan-input { padding: 4px 8px !important; font-size: 0.8rem !important; }
 
+/* Team needs expansion (who needs this position?) */
+.rd-expansion-block { border-bottom: 1px solid var(--border); }
+.rd-team-needs { padding: 8px 12px 10px 42px; background: #1a1e30; }
+.rd-tn-header { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 6px; }
+.rd-tn-grid { display: grid; grid-template-columns: 1fr 64px 64px 64px; gap: 3px 8px; align-items: center; }
+.rd-tn-col-hdr { font-size: 0.64rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-muted); }
+.rd-tn-right { text-align: right; font-size: 0.75rem; }
+.rd-tn-name { font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Keeper badge */
+.rd-keeper-badge { display: inline-block; margin-left: 4px; font-size: 0.6rem; font-weight: 800; padding: 1px 4px; border-radius: 3px; background: #e0a45c33; color: #e0a45c; border: 1px solid #e0a45c55; vertical-align: middle; letter-spacing: 0.03em; }
+
 @media (max-width: 860px) {
   .rd-board-body { grid-template-columns: 1fr; }
   .rd-player-list { max-height: none; }

@@ -47,6 +47,52 @@ function PosPill({ pos }) {
   )
 }
 
+function TeamNeeds({ player, teams, rosterSlots }) {
+  if (!player || !rosterSlots) return null
+  const pos = player.position
+  const directSlots = rosterSlots[pos] || 0
+  const flexSlots = ['RB', 'WR', 'TE'].includes(pos)
+    ? (rosterSlots['FLEX'] || 0) + (rosterSlots['WTTE'] || 0)
+    : 0
+  const effectiveSlots = directSlots + flexSlots
+  if (effectiveSlots === 0) return null
+
+  const rows = [...teams]
+    .filter(t => !t.is_me)
+    .map(t => {
+      const filled = (t.pos_counts || {})[pos] || 0
+      const needs = filled < effectiveSlots
+      const canAfford = (t.budget_remaining || 0) > (t.slots_remaining || 0) + 5
+      return { ...t, filled, needs, canAfford, threat: needs && canAfford }
+    })
+    .sort((a, b) => {
+      if (a.threat !== b.threat) return b.threat - a.threat
+      if (a.needs !== b.needs) return b.needs - a.needs
+      return (b.budget_remaining || 0) - (a.budget_remaining || 0)
+    })
+
+  return (
+    <div className="rd-team-needs">
+      <div className="rd-tn-header">Who needs {pos}?</div>
+      <div className="rd-tn-grid">
+        <span className="rd-tn-col-hdr">Team</span>
+        <span className="rd-tn-col-hdr rd-tn-right">{pos} filled</span>
+        <span className="rd-tn-col-hdr rd-tn-right">$ left</span>
+        <span className="rd-tn-col-hdr rd-tn-right">max bid</span>
+        {rows.map((t, i) => {
+          const color = t.threat ? '#e05c5c' : t.needs ? '#e0a45c' : 'var(--text-muted)'
+          return [
+            <span key={i + 'n'} className="rd-tn-name" style={{ color }}>{t.team_name}</span>,
+            <span key={i + 'f'} className="rd-tn-right" style={{ color }}>{t.filled}/{effectiveSlots}</span>,
+            <span key={i + 'b'} className="rd-tn-right">${t.budget_remaining ?? '?'}</span>,
+            <span key={i + 'm'} className="rd-tn-right" style={{ color }}>${t.max_bid ?? '?'}</span>,
+          ]
+        })}
+      </div>
+    </div>
+  )
+}
+
 function SetupForm({ onConnect }) {
   const saved = (() => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') } catch { return {} } })()
   const [form, setForm] = useState({
@@ -327,18 +373,23 @@ function DraftBoard({ config, initialData }) {
                         <VorChip vor={p.vor} />
                         <span className="rd-col-center rd-value">{p.redraft_value?.toLocaleString() ?? '—'}</span>
                       </div>
-                      {isSelected && comparables.length > 0 && (
-                        <div className="rd-comparables-row">
-                          <span className="rd-comparables-label">Similar on board:</span>
-                          <div className="rd-comparables-chips">
-                            {comparables.map((c, ci) => (
-                              <span key={ci} className="rd-comparable-chip">
-                                <PosPill pos={c.position} />
-                                <span>{c.name}</span>
-                                {c.auction_value != null && <span className="rd-bid-tag">${c.auction_value}</span>}
-                              </span>
-                            ))}
-                          </div>
+                      {isSelected && (
+                        <div className="rd-expansion-block">
+                          {comparables.length > 0 && (
+                            <div className="rd-comparables-row">
+                              <span className="rd-comparables-label">Similar on board:</span>
+                              <div className="rd-comparables-chips">
+                                {comparables.map((c, ci) => (
+                                  <span key={ci} className="rd-comparable-chip">
+                                    <PosPill pos={c.position} />
+                                    <span>{c.name}</span>
+                                    {c.auction_value != null && <span className="rd-bid-tag">${c.auction_value}</span>}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          <TeamNeeds player={p} teams={data.teams || []} rosterSlots={data.roster_slots} />
                         </div>
                       )}
                     </div>
@@ -465,7 +516,10 @@ function DraftBoard({ config, initialData }) {
                   <div key={i} className="rd-recent-row">
                     {pk.bid_amount > 0 && <span className="rd-recent-bid">${pk.bid_amount}</span>}
                     <PosPill pos={pk.position} />
-                    <span className="rd-recent-name">{pk.player_name}</span>
+                    <span className="rd-recent-name">
+                      {pk.player_name}
+                      {pk.is_keeper && <span className="rd-keeper-badge">K</span>}
+                    </span>
                     <span className="rd-recent-team">{pk.team_name}</span>
                   </div>
                 ))}
