@@ -55,9 +55,10 @@ def _espn_headers(espn_s2: str, swid: str) -> dict:
     }
 
 
-async def _fetch_espn(url: str, espn_s2: str, swid: str, params: dict | None = None) -> dict:
+async def _fetch_espn(url: str, espn_s2: str, swid: str, params: dict | None = None, extra_headers: dict | None = None) -> dict:
+    headers = {**_espn_headers(espn_s2, swid), **(extra_headers or {})}
     async with httpx.AsyncClient(timeout=ESPN_TIMEOUT, verify=False, follow_redirects=False) as client:
-        r = await client.get(url, headers=_espn_headers(espn_s2, swid), params=params)
+        r = await client.get(url, headers=headers, params=params)
     if r.status_code in (301, 302, 303, 307, 308):
         location = r.headers.get("location", "unknown")
         raise HTTPException(status_code=401, detail=f"ESPN redirected ({r.status_code}) → {location}")
@@ -79,50 +80,51 @@ async def _load_espn_players(league_id: str, season: int, espn_s2: str, swid: st
     player_map = {}
     last_err = None
 
-    # Try 1: league-specific kona_player_info via lm-api-reads (same base that works for draft data)
+    # Try 1: kona_player_info — requires X-Fantasy-Filter header or ESPN returns empty list
+    _kona_filter = '{"players":{"filterStatus":{"value":["FREEAGENT","WAIVERS","ONTEAM"]},"limit":2000,"offset":0}}'
     try:
         url = f"{ESPN_BASE}/seasons/{season}/segments/0/leagues/{league_id}"
-        data = await _fetch_espn(url, espn_s2, swid, params={"view": "kona_player_info"})
-        raw_players = data.get("players", []) if isinstance(data, dict) else []
+        data = await _fetch_espn(url, espn_s2, swid,
+                                  params={"view": "kona_player_info"},
+                                  extra_headers={"X-Fantasy-Filter": _kona_filter})
+        raw_players = data.get("players", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
         for entry in raw_players:
             pid = entry.get("id")
-            pool = entry.get("playerPoolEntry", {})
-            profile = pool.get("player", pool.get("playerProfile", {}))
+            pool = entry.get("playerPoolEntry") or {}
+            profile = pool.get("player") or pool.get("playerProfile") or {}
             pos_id = profile.get("defaultPositionId") or pool.get("defaultPositionId")
             name = profile.get("fullName") or profile.get("name", "")
             if pid and name:
-                player_map[int(pid)] = {
-                    "name": name,
-                    "position": _ESPN_POS.get(pos_id, ""),
-                }
+                player_map[int(pid)] = {"name": name, "position": _ESPN_POS.get(pos_id, "")}
         if player_map:
             _ESPN_PLAYER_MAP[key] = player_map
             _ESPN_PLAYER_MAP_ERROR.pop(key, None)
             return
+        last_err = f"kona_player_info returned 0 players (filter may be wrong)"
     except Exception as e:
         last_err = f"kona_player_info: {e}"
 
-    # Try 2: players_wl on lm-api-reads (the players endpoint also moved from fantasy.espn.com)
+    # Try 2: players_wl on lm-api-reads (ESPN migrated this endpoint too)
     try:
         url = f"{ESPN_BASE}/seasons/{season}/players"
         data = await _fetch_espn(url, espn_s2, swid, params={"view": "players_wl", "scoringPeriodId": 0})
-        for entry in (data if isinstance(data, list) else []):
+        # Response may be a raw list or {"players": [...]}
+        entries = data if isinstance(data, list) else (data.get("players") or data.get("items") or []) if isinstance(data, dict) else []
+        for entry in entries:
             pid = entry.get("id")
-            pool = entry.get("playerPoolEntry", {})
-            profile = pool.get("playerProfile", pool.get("player", {}))
+            pool = entry.get("playerPoolEntry") or {}
+            profile = pool.get("playerProfile") or pool.get("player") or {}
             pos_id = profile.get("defaultPositionId") or pool.get("defaultPositionId")
             name = profile.get("fullName") or profile.get("name", "")
             if pid and name:
-                player_map[int(pid)] = {
-                    "name": name,
-                    "position": _ESPN_POS.get(pos_id, ""),
-                }
+                player_map[int(pid)] = {"name": name, "position": _ESPN_POS.get(pos_id, "")}
         if player_map:
             _ESPN_PLAYER_MAP[key] = player_map
             _ESPN_PLAYER_MAP_ERROR.pop(key, None)
             return
+        last_err = f"{last_err} | players_wl returned 0 players"
     except Exception as e:
-        last_err = f"{last_err or ''} | players_wl: {e}"
+        last_err = f"{last_err} | players_wl: {e}"
 
     # Both attempts failed — record error so frontend can display it
     _ESPN_PLAYER_MAP[key] = {}
