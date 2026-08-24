@@ -2524,3 +2524,85 @@ img { display: block; }
   .rd-col-val       { display: none; }
   .rd-player-team   { display: none; }
 }
+
+/* ── Site Nav ────────────────────────────────────────────────────────────── */
+.site-nav { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.site-nav-link { font-size: 0.78rem; font-weight: 600; color: var(--text-muted); padding: 4px 10px; border-radius: var(--radius-sm); border: 1px solid transparent; transition: color 0.15s, border-color 0.15s; }
+.site-nav-link:hover { color: var(--accent); border-color: var(--accent); }
+
+/* ── Redraft Trade Evaluator ─────────────────────────────────────────────── */
+.rt-page { display: flex; flex-direction: column; gap: 24px; }
+.rt-topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.rt-topbar-title { font-size: 1.25rem; font-weight: 700; color: var(--text); }
+
+.rt-body { display: grid; grid-template-columns: 1fr 280px; gap: 20px; align-items: start; }
+
+/* Builder */
+.rt-builder { display: flex; flex-direction: column; gap: 16px; }
+.rt-sides { display: grid; grid-template-columns: 1fr 100px 1fr; gap: 12px; align-items: start; }
+.rt-side { display: flex; flex-direction: column; gap: 10px; }
+
+/* Slot */
+.rt-slot { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; display: flex; flex-direction: column; gap: 8px; min-height: 100px; }
+.rt-slot-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.rt-slot-label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
+.rt-slot-total { font-size: 0.8rem; font-weight: 700; color: var(--accent); }
+
+.rt-player-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.rt-player-row:last-child { border-bottom: none; }
+.rt-player-info { flex: 1; min-width: 0; }
+.rt-player-name { display: block; font-size: 0.82rem; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rt-player-meta { display: block; font-size: 0.68rem; color: var(--text-muted); }
+.rt-player-val { font-size: 0.78rem; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
+.rt-remove { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.75rem; padding: 2px 4px; border-radius: 3px; line-height: 1; }
+.rt-remove:hover { color: var(--danger); background: #e05c5c18; }
+
+/* Divider / grade */
+.rt-divider { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding-top: 36px; }
+.rt-grade { font-size: 2rem; font-weight: 900; border: 2px solid; border-radius: 8px; padding: 4px 12px; line-height: 1.2; }
+.rt-grade-label { font-size: 0.72rem; font-weight: 600; text-align: center; }
+.rt-diff { font-size: 0.78rem; font-weight: 700; text-align: center; }
+
+/* Value bar */
+.rt-bar-wrap { display: flex; align-items: center; gap: 10px; }
+.rt-bar-label { font-size: 0.68rem; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
+.rt-value-bar { flex: 1; height: 10px; background: #5cb8e044; border-radius: 5px; overflow: hidden; }
+.rt-value-bar-a { height: 100%; background: #e05c5c; border-radius: 5px; transition: width 0.3s ease; }
+
+/* Search */
+.rt-search-wrap { position: relative; }
+.rd-search { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); padding: 7px 10px; font-size: 0.82rem; outline: none; }
+.rd-search:focus { border-color: var(--accent); }
+.rt-search-loading { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 0.75rem; color: var(--text-muted); }
+.rt-dropdown { position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); box-shadow: var(--shadow); z-index: 50; max-height: 240px; overflow-y: auto; }
+.rt-dropdown-row { display: flex; align-items: center; gap: 8px; padding: 7px 10px; cursor: pointer; font-size: 0.8rem; }
+.rt-dropdown-row:hover { background: var(--surface2); }
+.rt-drop-name { flex: 1; font-weight: 600; color: var(--text); }
+.rt-drop-team { font-size: 0.7rem; color: var(--text-muted); }
+.rt-drop-val { font-size: 0.7rem; color: var(--accent); font-weight: 700; }
+
+/* Top players sidebar */
+.rt-top-players { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; }
+.rt-top-header { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.rt-top-list { display: flex; flex-direction: column; gap: 2px; max-height: 560px; overflow-y: auto; }
+.rt-top-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--border); font-size: 0.78rem; }
+.rt-top-row:last-child { border-bottom: none; }
+.rt-top-rank { width: 20px; text-align: right; color: var(--text-muted); font-size: 0.68rem; font-weight: 600; flex-shrink: 0; }
+.rt-top-name { flex: 1; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rt-top-team { font-size: 0.68rem; color: var(--text-muted); }
+.rt-top-val { font-size: 0.72rem; font-weight: 700; color: var(--accent); white-space: nowrap; }
+
+/* Pos pills (rd-*) used in RedraftTrades too */
+.rd-pos-pill { display: inline-flex; align-items: center; font-size: 0.62rem; font-weight: 800; padding: 1px 5px; border-radius: 4px; border: 1px solid; white-space: nowrap; flex-shrink: 0; }
+.rd-sidebar-title { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
+.rd-pos-tabs { display: flex; gap: 4px; }
+.rd-pos-tab { background: var(--surface2); border: 1px solid var(--border); color: var(--text-muted); border-radius: 4px; font-size: 0.68rem; font-weight: 700; padding: 2px 8px; cursor: pointer; transition: all 0.15s; }
+.rd-pos-tab.active { background: var(--surface); color: var(--text); border-color: var(--accent); }
+.rd-pos-tab:hover:not(.active) { border-color: var(--text-muted); color: var(--text); }
+.rd-empty-sm { font-size: 0.75rem; color: var(--text-muted); text-align: center; padding: 16px 0; }
+
+@media (max-width: 860px) {
+  .rt-body { grid-template-columns: 1fr; }
+  .rt-sides { grid-template-columns: 1fr; }
+  .rt-divider { flex-direction: row; padding-top: 0; padding: 4px 0; }
+}

@@ -537,3 +537,28 @@ async def get_espn_draft_state(
         "idp_load_error": _ESPN_PLAYER_MAP_ERROR.get((league_id, season)) or _SLEEPER_ESPN_MAP_ERROR or None,
         "teams": teams_out,
     }
+
+
+@router.get("/players/search")
+async def search_redraft_players(q: str = Query(""), limit: int = Query(20)):
+    """Search redraft player cache by name — used by the trade evaluator."""
+    from cache_manager import get_cached_players
+    players = get_cached_players()
+    q_norm = _normalize(q)
+    results = []
+    for p in players.values():
+        if not p.get("redraft_value", 0):
+            continue
+        if q_norm and q_norm not in _normalize(p["name"]):
+            continue
+        results.append({
+            "sleeper_id": p["sleeper_id"],
+            "name": p["name"],
+            "position": p["position"],
+            "nfl_team": p.get("nfl_team", ""),
+            "redraft_value": p.get("redraft_value", 0),
+            "redraft_overall_rank": p.get("redraft_overall_rank"),
+            "redraft_pos_rank": p.get("redraft_pos_rank"),
+        })
+    results.sort(key=lambda x: x["redraft_value"], reverse=True)
+    return results[:limit]
