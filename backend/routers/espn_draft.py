@@ -80,15 +80,21 @@ async def _load_espn_players(league_id: str, season: int, espn_s2: str, swid: st
     player_map = {}
     last_err = None
 
-    # Try 1: kona_player_info — requires X-Fantasy-Filter header or ESPN returns empty list
-    _kona_filter = '{"players":{"filterStatus":{"value":["FREEAGENT","WAIVERS","ONTEAM"]},"limit":2000,"offset":0}}'
-    try:
-        url = f"{ESPN_BASE}/seasons/{season}/segments/0/leagues/{league_id}"
-        data = await _fetch_espn(url, espn_s2, swid,
-                                  params={"view": "kona_player_info"},
-                                  extra_headers={"X-Fantasy-Filter": _kona_filter})
-        raw_players = data.get("players", []) if isinstance(data, dict) else (data if isinstance(data, list) else [])
-        for entry in raw_players:
+    async def _player_fetch(url: str, params: dict, extra_headers: dict | None = None) -> list:
+        """Fetch with follow_redirects=True since player endpoints may CDN-redirect."""
+        hdrs = {**_espn_headers(espn_s2, swid), **(extra_headers or {})}
+        async with httpx.AsyncClient(timeout=ESPN_TIMEOUT, verify=False, follow_redirects=True) as client:
+            r = await client.get(url, headers=hdrs, params=params)
+        r.raise_for_status()
+        data = r.json()
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            return data.get("players") or data.get("items") or []
+        return []
+
+    def _parse_player_entries(entries: list):
+        for entry in entries:
             pid = entry.get("id")
             pool = entry.get("playerPoolEntry") or {}
             profile = pool.get("player") or pool.get("playerProfile") or {}
@@ -96,37 +102,48 @@ async def _load_espn_players(league_id: str, season: int, espn_s2: str, swid: st
             name = profile.get("fullName") or profile.get("name", "")
             if pid and name:
                 player_map[int(pid)] = {"name": name, "position": _ESPN_POS.get(pos_id, "")}
+
+    # Try 1: kona_player_info with X-Fantasy-Filter (follow redirects for CDN)
+    _kona_filter = '{"players":{"filterStatus":{"value":["FREEAGENT","WAIVERS","ONTEAM"]},"limit":2000,"offset":0}}'
+    try:
+        url = f"{ESPN_BASE}/seasons/{season}/segments/0/leagues/{league_id}"
+        entries = await _player_fetch(url, {"view": "kona_player_info"}, {"X-Fantasy-Filter": _kona_filter})
+        _parse_player_entries(entries)
         if player_map:
             _ESPN_PLAYER_MAP[key] = player_map
             _ESPN_PLAYER_MAP_ERROR.pop(key, None)
             return
-        last_err = f"kona_player_info returned 0 players (filter may be wrong)"
+        last_err = f"kona_player_info: 0 players returned"
     except Exception as e:
         last_err = f"kona_player_info: {e}"
 
-    # Try 2: players_wl on lm-api-reads (ESPN migrated this endpoint too)
+    # Try 2: players_wl on lm-api-reads with follow_redirects
     try:
         url = f"{ESPN_BASE}/seasons/{season}/players"
-        data = await _fetch_espn(url, espn_s2, swid, params={"view": "players_wl", "scoringPeriodId": 0})
-        # Response may be a raw list or {"players": [...]}
-        entries = data if isinstance(data, list) else (data.get("players") or data.get("items") or []) if isinstance(data, dict) else []
-        for entry in entries:
-            pid = entry.get("id")
-            pool = entry.get("playerPoolEntry") or {}
-            profile = pool.get("playerProfile") or pool.get("player") or {}
-            pos_id = profile.get("defaultPositionId") or pool.get("defaultPositionId")
-            name = profile.get("fullName") or profile.get("name", "")
-            if pid and name:
-                player_map[int(pid)] = {"name": name, "position": _ESPN_POS.get(pos_id, "")}
+        entries = await _player_fetch(url, {"view": "players_wl", "scoringPeriodId": 0})
+        _parse_player_entries(entries)
         if player_map:
             _ESPN_PLAYER_MAP[key] = player_map
             _ESPN_PLAYER_MAP_ERROR.pop(key, None)
             return
-        last_err = f"{last_err} | players_wl returned 0 players"
+        last_err = f"{last_err} | players_wl lm-api-reads: 0 players"
     except Exception as e:
-        last_err = f"{last_err} | players_wl: {e}"
+        last_err = f"{last_err} | players_wl lm-api-reads: {e}"
 
-    # Both attempts failed — record error so frontend can display it
+    # Try 3: players_wl on original fantasy.espn.com with follow_redirects
+    try:
+        url = f"{ESPN_PLAYERS_BASE}/seasons/{season}/players"
+        entries = await _player_fetch(url, {"view": "players_wl", "scoringPeriodId": 0})
+        _parse_player_entries(entries)
+        if player_map:
+            _ESPN_PLAYER_MAP[key] = player_map
+            _ESPN_PLAYER_MAP_ERROR.pop(key, None)
+            return
+        last_err = f"{last_err} | players_wl fantasy.espn.com: 0 players"
+    except Exception as e:
+        last_err = f"{last_err} | players_wl fantasy.espn.com: {e}"
+
+    # All attempts failed
     _ESPN_PLAYER_MAP[key] = {}
     _ESPN_PLAYER_MAP_ERROR[key] = last_err or "Unknown error loading ESPN player list"
 
