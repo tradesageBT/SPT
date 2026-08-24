@@ -290,8 +290,9 @@ function DraftBoard({ config, initialData }) {
     const val = parseInt(budgetInput)
     if (val > 0) {
       setBudget(val)
-      const saved = (() => { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') } catch { return {} } })()
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...saved, budget: String(val) }))
+      const leagues = getSavedLeagues()
+      const idx = leagues.findIndex(l => l.leagueId === config.leagueId && String(l.season) === String(config.season))
+      if (idx >= 0) { leagues[idx].budget = String(val); localStorage.setItem(LEAGUES_KEY, JSON.stringify(leagues)) }
     }
     setEditingBudget(false)
   }
@@ -302,6 +303,14 @@ function DraftBoard({ config, initialData }) {
     const idx = leagues.findIndex(l => l.leagueId === config.leagueId && String(l.season) === String(config.season))
     if (idx >= 0) { leagues[idx].mySlot = String(slot); localStorage.setItem(LEAGUES_KEY, JSON.stringify(leagues)) }
   }
+
+  // Auto-correct corrupted mySlot (e.g. a stored team-ID instead of a 1-based slot number)
+  const numTeams = (data.teams || []).length
+  useEffect(() => {
+    if (numTeams > 0 && (mySlot < 1 || mySlot > numTeams)) {
+      changeMyTeam(1)
+    }
+  }, [numTeams, mySlot])
 
   const refresh = useCallback(async () => {
     try {
@@ -401,7 +410,8 @@ function DraftBoard({ config, initialData }) {
                   <span>Pos</span>
                   <span>Player</span>
                 </div>
-                {available.length === 0 && <div className="rd-empty">No available IDP players.</div>}
+                {data.idp_load_error && <div className="rd-empty" style={{ color: '#e0a45c' }}>IDP load error: {data.idp_load_error}</div>}
+                {!data.idp_load_error && available.length === 0 && <div className="rd-empty">No available IDP players.</div>}
                 {available.map((p, i) => (
                   <div key={p.espn_id || i} className="rd-player-row rd-player-row-idp">
                     <PosPill pos={p.position} />

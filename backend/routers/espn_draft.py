@@ -75,26 +75,58 @@ async def _load_espn_players(league_id: str, season: int, espn_s2: str, swid: st
     # Only skip if we have actual data; retry if previous attempt errored
     if key in _ESPN_PLAYER_MAP and key not in _ESPN_PLAYER_MAP_ERROR:
         return
-    # Use the original fantasy.espn.com for the global player pool — it hasn't moved to lm-api-reads
-    url = f"{ESPN_PLAYERS_BASE}/seasons/{season}/players"
-    try:
-        data = await _fetch_espn(url, espn_s2, swid, params={"view": "players_wl", "scoringPeriodId": 0})
-    except Exception as e:
-        _ESPN_PLAYER_MAP[key] = {}
-        _ESPN_PLAYER_MAP_ERROR[key] = str(e)
-        return
+
     player_map = {}
-    for entry in (data if isinstance(data, list) else []):
-        pid = entry.get("id")
-        pool = entry.get("playerPoolEntry", {})
-        profile = pool.get("playerProfile", pool.get("player", {}))
-        pos_id = profile.get("defaultPositionId") or pool.get("defaultPositionId")
-        if pid:
-            player_map[int(pid)] = {
-                "name": profile.get("fullName", profile.get("name", "")),
-                "position": _ESPN_POS.get(pos_id, ""),
-            }
-    _ESPN_PLAYER_MAP[key] = player_map
+    last_err = None
+
+    # Try 1: league-specific kona_player_info via lm-api-reads (same base that works for draft data)
+    try:
+        url = f"{ESPN_BASE}/seasons/{season}/segments/0/leagues/{league_id}"
+        data = await _fetch_espn(url, espn_s2, swid, params={"view": "kona_player_info"})
+        raw_players = data.get("players", []) if isinstance(data, dict) else []
+        for entry in raw_players:
+            pid = entry.get("id")
+            pool = entry.get("playerPoolEntry", {})
+            profile = pool.get("player", pool.get("playerProfile", {}))
+            pos_id = profile.get("defaultPositionId") or pool.get("defaultPositionId")
+            name = profile.get("fullName") or profile.get("name", "")
+            if pid and name:
+                player_map[int(pid)] = {
+                    "name": name,
+                    "position": _ESPN_POS.get(pos_id, ""),
+                }
+        if player_map:
+            _ESPN_PLAYER_MAP[key] = player_map
+            _ESPN_PLAYER_MAP_ERROR.pop(key, None)
+            return
+    except Exception as e:
+        last_err = f"kona_player_info: {e}"
+
+    # Try 2: global players endpoint on fantasy.espn.com (may have IDP that kona misses)
+    try:
+        url = f"{ESPN_PLAYERS_BASE}/seasons/{season}/players"
+        data = await _fetch_espn(url, espn_s2, swid, params={"view": "players_wl", "scoringPeriodId": 0})
+        for entry in (data if isinstance(data, list) else []):
+            pid = entry.get("id")
+            pool = entry.get("playerPoolEntry", {})
+            profile = pool.get("playerProfile", pool.get("player", {}))
+            pos_id = profile.get("defaultPositionId") or pool.get("defaultPositionId")
+            name = profile.get("fullName") or profile.get("name", "")
+            if pid and name:
+                player_map[int(pid)] = {
+                    "name": name,
+                    "position": _ESPN_POS.get(pos_id, ""),
+                }
+        if player_map:
+            _ESPN_PLAYER_MAP[key] = player_map
+            _ESPN_PLAYER_MAP_ERROR.pop(key, None)
+            return
+    except Exception as e:
+        last_err = f"{last_err or ''} | players_wl: {e}"
+
+    # Both attempts failed — record error so frontend can display it
+    _ESPN_PLAYER_MAP[key] = {}
+    _ESPN_PLAYER_MAP_ERROR[key] = last_err or "Unknown error loading ESPN player list"
 
 
 def _compute_tiers(players: list[dict]) -> list[dict]:
