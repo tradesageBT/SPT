@@ -260,34 +260,39 @@ async def get_espn_draft_state(
     from cache_manager import get_cached_players
 
     url = f"{ESPN_BASE}/seasons/{season}/segments/0/leagues/{league_id}"
-    # mRoster adds full player details (names, positions) to each team's roster entries
-    data = await _fetch_espn(url, espn_s2, swid, params={"view": ["mDraftDetail", "mSettings", "mTeam", "mMembers", "mRoster"]})
-
-    # Load Sleeper's ESPN-ID map (global, once per process — Sleeper has espn_id for every player)
-    # Also try ESPN's own endpoints as fallback
     import asyncio as _asyncio
+
+    # Fetch main data + standalone mRoster in parallel (standalone returns full playerPoolEntry)
+    data, roster_data = await _asyncio.gather(
+        _fetch_espn(url, espn_s2, swid, params={"view": ["mDraftDetail", "mSettings", "mTeam", "mMembers"]}),
+        _fetch_espn(url, espn_s2, swid, params={"view": "mRoster"}),
+    )
+
+    # Load Sleeper ESPN-ID map (global, once per process) in parallel with ESPN fallback
     await _asyncio.gather(
         _load_sleeper_espn_map(),
         _load_espn_players(league_id, season, espn_s2, swid),
     )
 
-    # Merge: Sleeper map first, then ESPN-specific map (more precise), then mRoster inline data
+    # Build player map: Sleeper first, ESPN-specific map on top
     espn_player_map: dict[int, dict] = {**_SLEEPER_ESPN_MAP}
     espn_player_map.update(_ESPN_PLAYER_MAP.get((league_id, season), {}))
 
-    # Also try mRoster inline data
-    for team in data.get("teams", []):
-        roster = team.get("roster") or {}
-        for entry in roster.get("entries", []):
-            pid = entry.get("playerId")
-            pool = entry.get("playerPoolEntry") or {}
-            player = pool.get("player") or {}
-            name = player.get("fullName") or player.get("name", "")
-            pos_id = player.get("defaultPositionId") or pool.get("defaultPositionId")
-            if pid and name:
-                espn_player_map[int(pid)] = {"name": name, "position": _ESPN_POS.get(pos_id, "")}
+    # Add names from standalone mRoster response (full playerPoolEntry returned when fetched alone)
+    def _extract_roster_names(response: dict):
+        for team in response.get("teams", []):
+            for entry in (team.get("roster") or {}).get("entries", []):
+                pid = entry.get("playerId")
+                pool = entry.get("playerPoolEntry") or {}
+                player = pool.get("player") or {}
+                name = player.get("fullName") or player.get("name", "")
+                pos_id = player.get("defaultPositionId") or pool.get("defaultPositionId")
+                if pid and name:
+                    espn_player_map[int(pid)] = {"name": name, "position": _ESPN_POS.get(pos_id, "")}
 
-    # Don't clear the per-league error; it's diagnostic. Sleeper map error is separate.
+    _extract_roster_names(roster_data)
+    # Also try the main data's roster entries as additional fallback
+    _extract_roster_names(data)
 
     # --- Parse draft settings ---
     settings = data.get("settings", {})
