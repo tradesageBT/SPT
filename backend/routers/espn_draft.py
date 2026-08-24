@@ -102,9 +102,9 @@ async def _load_espn_players(league_id: str, season: int, espn_s2: str, swid: st
     except Exception as e:
         last_err = f"kona_player_info: {e}"
 
-    # Try 2: global players endpoint on fantasy.espn.com (may have IDP that kona misses)
+    # Try 2: players_wl on lm-api-reads (the players endpoint also moved from fantasy.espn.com)
     try:
-        url = f"{ESPN_PLAYERS_BASE}/seasons/{season}/players"
+        url = f"{ESPN_BASE}/seasons/{season}/players"
         data = await _fetch_espn(url, espn_s2, swid, params={"view": "players_wl", "scoringPeriodId": 0})
         for entry in (data if isinstance(data, list) else []):
             pid = entry.get("id")
@@ -215,16 +215,23 @@ async def get_espn_draft_state(
     await _load_espn_players(league_id, season, espn_s2, swid)
     espn_player_map: dict[int, dict] = dict(_ESPN_PLAYER_MAP.get((league_id, season), {}))
 
-    # Supplement player map from mRoster — team rosters always include full player data inline
+    # Supplement player map from mRoster — team rosters include full player data inline
+    # Use `or {}` instead of default= because ESPN sometimes returns roster: null (not missing key)
     for team in data.get("teams", []):
-        for entry in team.get("roster", {}).get("entries", []):
+        roster = team.get("roster") or {}
+        for entry in roster.get("entries", []):
             pid = entry.get("playerId")
-            pool = entry.get("playerPoolEntry", {})
-            player = pool.get("player", {})
+            pool = entry.get("playerPoolEntry") or {}
+            player = pool.get("player") or {}
             name = player.get("fullName") or player.get("name", "")
             pos_id = player.get("defaultPositionId") or pool.get("defaultPositionId")
             if pid and name:
                 espn_player_map[int(pid)] = {"name": name, "position": _ESPN_POS.get(pos_id, "")}
+
+    # Also expose how many players we resolved for debugging
+    _ESPN_PLAYER_MAP_ERROR.pop((league_id, season), None)  # clear stale error once we have roster data
+    if espn_player_map:
+        _ESPN_PLAYER_MAP[(league_id, season)] = espn_player_map
 
     # --- Parse draft settings ---
     settings = data.get("settings", {})
@@ -438,6 +445,7 @@ async def get_espn_draft_state(
         "available": available,
         "roster_slots": roster_slots,
         "debug_replacement_n": dict(_last_replacement_n),
+        "debug_player_map_size": len(espn_player_map),
         "idp_available": idp_available,
         "idp_load_error": _ESPN_PLAYER_MAP_ERROR.get((league_id, season)),
         "teams": teams_out,
