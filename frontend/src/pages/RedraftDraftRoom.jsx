@@ -665,7 +665,9 @@ export default function RedraftDraftRoom() {
       <div className="rd-topbar">
         <button className="btn btn-secondary btn-sm" onClick={() => { setConfig(null); setInitialData(null) }}>← Back</button>
         <span className="rd-topbar-title">
-          ESPN Auction · {config.name || `League ${config.leagueId}`} · Season {config.season} · ${config.budget} budget
+          ESPN Auction · {config.name || `League ${config.leagueId}`} ·{' '}
+          <span style={{ color: '#e0a45c', fontWeight: 700 }}>Season {config.season}</span>
+          {' '}· ${config.budget} budget
         </span>
       </div>
       <DraftBoard config={config} initialData={initialData} />
