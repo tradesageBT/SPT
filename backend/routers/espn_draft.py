@@ -3,6 +3,7 @@ ESPN Fantasy Football auction draft assistant.
 Proxies to ESPN's unofficial API using the user's session cookies.
 """
 import re
+import json
 import httpx
 from fastapi import APIRouter, HTTPException, Query
 
@@ -347,6 +348,25 @@ async def get_espn_draft_state(
     # In ESPN auction drafts, nominations in-progress have playerId/teamId = -1.
     # Filter these out — they're not completed picks.
     raw_picks = [pk for pk in all_picks if pk.get("playerId", -1) > 0 and pk.get("teamId", -1) > 0]
+
+    # Fetch names for any pick IDs not yet in our map (targeted kona_player_info with filterIds)
+    missing_ids = [int(pk["playerId"]) for pk in raw_picks if int(pk.get("playerId", 0)) not in espn_player_map]
+    if missing_ids:
+        try:
+            _filter = json.dumps({"players": {"filterIds": {"value": missing_ids[:200]}, "limit": 200}})
+            targeted = await _fetch_espn(url, espn_s2, swid,
+                                         params={"view": "kona_player_info"},
+                                         extra_headers={"X-Fantasy-Filter": _filter})
+            for entry in (targeted.get("players") or []):
+                pid = entry.get("id")
+                pool = entry.get("playerPoolEntry") or {}
+                profile = pool.get("player") or pool.get("playerProfile") or {}
+                name = profile.get("fullName") or profile.get("name", "")
+                pos_id = profile.get("defaultPositionId") or pool.get("defaultPositionId")
+                if pid and name:
+                    espn_player_map[int(pid)] = {"name": name, "position": _ESPN_POS.get(pos_id, "")}
+        except Exception:
+            pass
 
     picks_made = len(raw_picks)
     total_picks = num_teams * rounds
