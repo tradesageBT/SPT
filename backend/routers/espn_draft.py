@@ -540,14 +540,18 @@ async def get_espn_draft_state(
 
 
 @router.get("/players/search")
-async def search_redraft_players(q: str = Query(""), limit: int = Query(20)):
-    """Search redraft player cache by name — used by the trade evaluator."""
+async def search_redraft_players(q: str = Query(""), limit: int = Query(20), mode: str = Query("redraft")):
+    """Search player cache by name — used by the trade evaluator. mode=redraft|dynasty."""
     from cache_manager import get_cached_players
     players = get_cached_players()
     q_norm = _normalize(q)
+    is_dynasty = mode == "dynasty"
     results = []
     for p in players.values():
-        if not p.get("redraft_value", 0):
+        redraft_val = p.get("redraft_value", 0) or 0
+        dynasty_val = p.get("fc_value", 0) or 0
+        primary_val = dynasty_val if is_dynasty else redraft_val
+        if not primary_val:
             continue
         if q_norm and q_norm not in _normalize(p["name"]):
             continue
@@ -556,9 +560,11 @@ async def search_redraft_players(q: str = Query(""), limit: int = Query(20)):
             "name": p["name"],
             "position": p["position"],
             "nfl_team": p.get("nfl_team", ""),
-            "redraft_value": p.get("redraft_value", 0),
-            "redraft_overall_rank": p.get("redraft_overall_rank"),
+            "redraft_value": redraft_val,
+            "fc_value": dynasty_val,
+            "overall_rank": p.get("overall_rank") if is_dynasty else p.get("redraft_overall_rank"),
+            "pos_rank": p.get("pos_rank") if is_dynasty else p.get("redraft_pos_rank"),
             "redraft_pos_rank": p.get("redraft_pos_rank"),
         })
-    results.sort(key=lambda x: x["redraft_value"], reverse=True)
+    results.sort(key=lambda x: x["fc_value"] if is_dynasty else x["redraft_value"], reverse=True)
     return results[:limit]

@@ -20,7 +20,7 @@ export default function App() {
         <span className="logo-sub">Fantasy Value Engine</span>
         <nav className="site-nav">
           <Link to="/redraft-draft" className="site-nav-link">Redraft Draft</Link>
-          <Link to="/redraft-trades" className="site-nav-link">Redraft Trades</Link>
+          <Link to="/redraft-trades" className="site-nav-link">Trade Evaluator</Link>
         </nav>
       </header>
 

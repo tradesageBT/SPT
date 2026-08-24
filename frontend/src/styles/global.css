@@ -2601,6 +2601,12 @@ img { display: block; }
 .rd-pos-tab:hover:not(.active) { border-color: var(--text-muted); color: var(--text); }
 .rd-empty-sm { font-size: 0.75rem; color: var(--text-muted); text-align: center; padding: 16px 0; }
 
+/* Mode toggle */
+.rt-mode-toggle { display: flex; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
+.rt-mode-btn { background: none; border: none; color: var(--text-muted); font-size: 0.78rem; font-weight: 700; padding: 5px 14px; cursor: pointer; transition: all 0.15s; }
+.rt-mode-btn.active { background: var(--accent); color: #000; }
+.rt-mode-btn:not(.active):hover { color: var(--text); }
+
 @media (max-width: 860px) {
   .rt-body { grid-template-columns: 1fr; }
   .rt-sides { grid-template-columns: 1fr; }

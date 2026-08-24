@@ -36,7 +36,11 @@ function tradeFairness(aVal, bVal) {
   return { grade, label: `${label} — ${winner}`, color: gradeColor(grade), pct: aPct }
 }
 
-function PlayerSearch({ onAdd, exclude = [] }) {
+function playerValue(p, mode) {
+  return mode === 'dynasty' ? (p.fc_value || 0) : (p.redraft_value || 0)
+}
+
+function PlayerSearch({ onAdd, exclude = [], mode }) {
   const [q, setQ] = useState('')
   const [results, setResults] = useState([])
   const [loading, setLoading] = useState(false)
@@ -50,13 +54,13 @@ function PlayerSearch({ onAdd, exclude = [] }) {
     debounce.current = setTimeout(async () => {
       setLoading(true)
       try {
-        const data = await api.searchRedraftPlayers(q, 12)
+        const data = await api.searchPlayers(q, 12, mode)
         setResults(data.filter(p => !exclude.includes(p.sleeper_id)))
         setOpen(true)
       } catch { setResults([]) }
       finally { setLoading(false) }
     }, 250)
-  }, [q])
+  }, [q, mode])
 
   function pick(p) {
     onAdd(p)
@@ -85,7 +89,7 @@ function PlayerSearch({ onAdd, exclude = [] }) {
               <PosPill pos={p.position} />
               <span className="rt-drop-name">{p.name}</span>
               <span className="rt-drop-team">{p.nfl_team}</span>
-              <span className="rt-drop-val">{p.redraft_value?.toLocaleString()}</span>
+              <span className="rt-drop-val">{playerValue(p, mode)?.toLocaleString()}</span>
             </div>
           ))}
         </div>
@@ -95,9 +99,6 @@ function PlayerSearch({ onAdd, exclude = [] }) {
 }
 
 function TradeSlot({ label, players, onRemove, totalValue }) {
-  const posGroups = {}
-  players.forEach(p => { posGroups[p.position] = (posGroups[p.position] || 0) + p.redraft_value })
-
   return (
     <div className="rt-slot">
       <div className="rt-slot-header">
@@ -110,9 +111,9 @@ function TradeSlot({ label, players, onRemove, totalValue }) {
           <PosPill pos={p.position} />
           <div className="rt-player-info">
             <span className="rt-player-name">{p.name}</span>
-            <span className="rt-player-meta">{p.nfl_team} · {p.position}{p.redraft_pos_rank ?? ''}</span>
+            <span className="rt-player-meta">{p.nfl_team} · {p.position}{p.pos_rank ?? ''}</span>
           </div>
-          <span className="rt-player-val">{p.redraft_value?.toLocaleString()}</span>
+          <span className="rt-player-val">{p._val?.toLocaleString()}</span>
           <button className="rt-remove" onClick={() => onRemove(p.sleeper_id)}>✕</button>
         </div>
       ))}
@@ -120,18 +121,20 @@ function TradeSlot({ label, players, onRemove, totalValue }) {
   )
 }
 
-function TopPlayers() {
+function TopPlayers({ mode }) {
   const [players, setPlayers] = useState([])
   const [pos, setPos] = useState('ALL')
+
   useEffect(() => {
-    api.searchRedraftPlayers('', 100).then(setPlayers).catch(() => {})
-  }, [])
+    setPlayers([])
+    api.searchPlayers('', 100, mode).then(setPlayers).catch(() => {})
+  }, [mode])
 
   const filtered = pos === 'ALL' ? players : players.filter(p => p.position === pos)
   return (
     <div className="rt-top-players">
       <div className="rt-top-header">
-        <span className="rd-sidebar-title">Top Redraft Values</span>
+        <span className="rd-sidebar-title">Top {mode === 'dynasty' ? 'Dynasty' : 'Redraft'} Values</span>
         <div className="rd-pos-tabs" style={{ flexWrap: 'wrap' }}>
           {['ALL', 'QB', 'RB', 'WR', 'TE'].map(p => (
             <button
@@ -150,7 +153,7 @@ function TopPlayers() {
             <PosPill pos={p.position} />
             <span className="rt-top-name">{p.name}</span>
             <span className="rt-top-team">{p.nfl_team}</span>
-            <span className="rt-top-val">{p.redraft_value?.toLocaleString()}</span>
+            <span className="rt-top-val">{playerValue(p, mode)?.toLocaleString()}</span>
           </div>
         ))}
       </div>
@@ -158,12 +161,37 @@ function TopPlayers() {
   )
 }
 
-export default function RedraftTrades() {
-  const [sideA, setSideA] = useState([])   // you give
-  const [sideB, setSideB] = useState([])   // you get
+function ModeToggle({ mode, setMode }) {
+  return (
+    <div className="rt-mode-toggle">
+      <button
+        className={`rt-mode-btn${mode === 'redraft' ? ' active' : ''}`}
+        onClick={() => setMode('redraft')}
+      >
+        Redraft
+      </button>
+      <button
+        className={`rt-mode-btn${mode === 'dynasty' ? ' active' : ''}`}
+        onClick={() => setMode('dynasty')}
+      >
+        Dynasty
+      </button>
+    </div>
+  )
+}
 
-  const totalA = sideA.reduce((s, p) => s + (p.redraft_value || 0), 0)
-  const totalB = sideB.reduce((s, p) => s + (p.redraft_value || 0), 0)
+export default function TradeEvaluator() {
+  const [mode, setMode] = useState('redraft')
+  const [sideA, setSideA] = useState([])
+  const [sideB, setSideB] = useState([])
+
+  // Attach current value when mode changes so totals stay in sync
+  const enriched = (list) => list.map(p => ({ ...p, _val: playerValue(p, mode) }))
+  const enrichedA = enriched(sideA)
+  const enrichedB = enriched(sideB)
+
+  const totalA = enrichedA.reduce((s, p) => s + p._val, 0)
+  const totalB = enrichedB.reduce((s, p) => s + p._val, 0)
   const fairness = tradeFairness(totalA, totalB)
 
   const excludeA = sideA.map(p => p.sleeper_id)
@@ -182,8 +210,11 @@ export default function RedraftTrades() {
   return (
     <div className="rt-page">
       <div className="rt-topbar">
-        <div className="rt-topbar-title">Redraft Trade Evaluator</div>
-        <button className="btn btn-secondary btn-sm" onClick={reset}>Reset</button>
+        <div className="rt-topbar-title">Trade Evaluator</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <ModeToggle mode={mode} setMode={setMode} />
+          <button className="btn btn-secondary btn-sm" onClick={reset}>Reset</button>
+        </div>
       </div>
 
       <div className="rt-body">
@@ -191,8 +222,8 @@ export default function RedraftTrades() {
         <div className="rt-builder">
           <div className="rt-sides">
             <div className="rt-side">
-              <TradeSlot label="You Give" players={sideA} onRemove={removeA} totalValue={totalA} />
-              <PlayerSearch onAdd={addA} exclude={allExclude} />
+              <TradeSlot label="You Give" players={enrichedA} onRemove={removeA} totalValue={totalA} />
+              <PlayerSearch onAdd={addA} exclude={allExclude} mode={mode} />
             </div>
 
             <div className="rt-divider">
@@ -208,8 +239,8 @@ export default function RedraftTrades() {
             </div>
 
             <div className="rt-side">
-              <TradeSlot label="You Get" players={sideB} onRemove={removeB} totalValue={totalB} />
-              <PlayerSearch onAdd={addB} exclude={allExclude} />
+              <TradeSlot label="You Get" players={enrichedB} onRemove={removeB} totalValue={totalB} />
+              <PlayerSearch onAdd={addB} exclude={allExclude} mode={mode} />
             </div>
           </div>
 
@@ -226,7 +257,7 @@ export default function RedraftTrades() {
         </div>
 
         {/* Top players reference */}
-        <TopPlayers />
+        <TopPlayers mode={mode} />
       </div>
     </div>
   )

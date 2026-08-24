@@ -44,6 +44,8 @@ export const api = {
     const p = new URLSearchParams({ league_id: leagueId, espn_s2: espnS2, swid, season, my_slot: mySlot, budget })
     return request(`/espn-draft/state?${p}`)
   },
+  searchPlayers: (q = '', limit = 20, mode = 'redraft') =>
+    request(`/espn-draft/players/search?q=${encodeURIComponent(q)}&limit=${limit}&mode=${mode}`),
   searchRedraftPlayers: (q = '', limit = 20) =>
     request(`/espn-draft/players/search?q=${encodeURIComponent(q)}&limit=${limit}`),
   evaluateTrade: (leagueId, body) =>
