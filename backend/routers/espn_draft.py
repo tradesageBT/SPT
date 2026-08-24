@@ -208,11 +208,23 @@ async def get_espn_draft_state(
     from cache_manager import get_cached_players
 
     url = f"{ESPN_BASE}/seasons/{season}/segments/0/leagues/{league_id}"
-    data = await _fetch_espn(url, espn_s2, swid, params={"view": ["mDraftDetail", "mSettings", "mTeam", "mMembers"]})
+    # mRoster adds full player details (names, positions) to each team's roster entries
+    data = await _fetch_espn(url, espn_s2, swid, params={"view": ["mDraftDetail", "mSettings", "mTeam", "mMembers", "mRoster"]})
 
-    # Load ESPN player name map (once per session per league)
+    # Load ESPN player name map (once per session per league) — may fail, supplemented below
     await _load_espn_players(league_id, season, espn_s2, swid)
-    espn_player_map = _ESPN_PLAYER_MAP.get((league_id, season), {})
+    espn_player_map: dict[int, dict] = dict(_ESPN_PLAYER_MAP.get((league_id, season), {}))
+
+    # Supplement player map from mRoster — team rosters always include full player data inline
+    for team in data.get("teams", []):
+        for entry in team.get("roster", {}).get("entries", []):
+            pid = entry.get("playerId")
+            pool = entry.get("playerPoolEntry", {})
+            player = pool.get("player", {})
+            name = player.get("fullName") or player.get("name", "")
+            pos_id = player.get("defaultPositionId") or pool.get("defaultPositionId")
+            if pid and name:
+                espn_player_map[int(pid)] = {"name": name, "position": _ESPN_POS.get(pos_id, "")}
 
     # --- Parse draft settings ---
     settings = data.get("settings", {})
