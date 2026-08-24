@@ -504,6 +504,10 @@ async def get_espn_draft_state(
         "debug_player_map_size": len(espn_player_map),
         "debug_sleeper_map_size": len(_SLEEPER_ESPN_MAP),
         "debug_sleeper_error": _SLEEPER_ESPN_MAP_ERROR or None,
+        "debug_sample_picks": [
+            {"espn_id": pk.get("playerId"), "resolved": espn_player_map.get(int(pk.get("playerId") or 0), {}).get("name", "NOT_FOUND")}
+            for pk in raw_picks[:5]
+        ],
         "idp_available": idp_available,
         "idp_load_error": _ESPN_PLAYER_MAP_ERROR.get((league_id, season)) or _SLEEPER_ESPN_MAP_ERROR or None,
         "teams": teams_out,
