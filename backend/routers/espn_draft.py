@@ -9,8 +9,13 @@ from fastapi import APIRouter, HTTPException, Query
 router = APIRouter(prefix="/api/espn-draft")
 
 ESPN_BASE = "https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl"   # league-specific endpoints
-ESPN_PLAYERS_BASE = "https://fantasy.espn.com/apis/v3/games/ffl"          # global player pool (hasn't moved)
+ESPN_PLAYERS_BASE = "https://fantasy.espn.com/apis/v3/games/ffl"          # global player pool
 ESPN_TIMEOUT = 15.0
+
+# Global ESPN ID → {name, position} map built from Sleeper (loaded once per process)
+_SLEEPER_ESPN_MAP: dict[int, dict] = {}
+_SLEEPER_ESPN_MAP_LOADED: bool = False
+_SLEEPER_ESPN_MAP_ERROR: str = ""
 
 # Per-process cache: (league_id, season) -> {espn_id: {name, position}}
 _ESPN_PLAYER_MAP: dict[tuple, dict] = {}
@@ -68,6 +73,34 @@ async def _fetch_espn(url: str, espn_s2: str, swid: str, params: dict | None = N
         raise HTTPException(status_code=404, detail="ESPN league not found. Check your league ID and season year.")
     r.raise_for_status()
     return r.json()
+
+
+async def _load_sleeper_espn_map():
+    """Build ESPN-ID → {name, position} from Sleeper's player list (includes espn_id for each player)."""
+    global _SLEEPER_ESPN_MAP, _SLEEPER_ESPN_MAP_LOADED, _SLEEPER_ESPN_MAP_ERROR
+    if _SLEEPER_ESPN_MAP_LOADED:
+        return
+    try:
+        async with httpx.AsyncClient(timeout=30.0, follow_redirects=True) as client:
+            r = await client.get("https://api.sleeper.app/v1/players/nfl")
+        r.raise_for_status()
+        sleeper_data = r.json()
+        result: dict[int, dict] = {}
+        for _sid, player in sleeper_data.items():
+            espn_id = player.get("espn_id")
+            if not espn_id:
+                continue
+            first = player.get("first_name") or ""
+            last = player.get("last_name") or ""
+            name = f"{first} {last}".strip()
+            pos = player.get("position") or ""
+            if name:
+                result[int(espn_id)] = {"name": name, "position": pos}
+        _SLEEPER_ESPN_MAP = result
+        _SLEEPER_ESPN_MAP_LOADED = True
+        _SLEEPER_ESPN_MAP_ERROR = ""
+    except Exception as e:
+        _SLEEPER_ESPN_MAP_ERROR = str(e)
 
 
 async def _load_espn_players(league_id: str, season: int, espn_s2: str, swid: str):
@@ -230,12 +263,19 @@ async def get_espn_draft_state(
     # mRoster adds full player details (names, positions) to each team's roster entries
     data = await _fetch_espn(url, espn_s2, swid, params={"view": ["mDraftDetail", "mSettings", "mTeam", "mMembers", "mRoster"]})
 
-    # Load ESPN player name map (once per session per league) — may fail, supplemented below
-    await _load_espn_players(league_id, season, espn_s2, swid)
-    espn_player_map: dict[int, dict] = dict(_ESPN_PLAYER_MAP.get((league_id, season), {}))
+    # Load Sleeper's ESPN-ID map (global, once per process — Sleeper has espn_id for every player)
+    # Also try ESPN's own endpoints as fallback
+    import asyncio as _asyncio
+    await _asyncio.gather(
+        _load_sleeper_espn_map(),
+        _load_espn_players(league_id, season, espn_s2, swid),
+    )
 
-    # Supplement player map from mRoster — team rosters include full player data inline
-    # Use `or {}` instead of default= because ESPN sometimes returns roster: null (not missing key)
+    # Merge: Sleeper map first, then ESPN-specific map (more precise), then mRoster inline data
+    espn_player_map: dict[int, dict] = {**_SLEEPER_ESPN_MAP}
+    espn_player_map.update(_ESPN_PLAYER_MAP.get((league_id, season), {}))
+
+    # Also try mRoster inline data
     for team in data.get("teams", []):
         roster = team.get("roster") or {}
         for entry in roster.get("entries", []):
@@ -247,10 +287,7 @@ async def get_espn_draft_state(
             if pid and name:
                 espn_player_map[int(pid)] = {"name": name, "position": _ESPN_POS.get(pos_id, "")}
 
-    # Also expose how many players we resolved for debugging
-    _ESPN_PLAYER_MAP_ERROR.pop((league_id, season), None)  # clear stale error once we have roster data
-    if espn_player_map:
-        _ESPN_PLAYER_MAP[(league_id, season)] = espn_player_map
+    # Don't clear the per-league error; it's diagnostic. Sleeper map error is separate.
 
     # --- Parse draft settings ---
     settings = data.get("settings", {})
@@ -465,7 +502,9 @@ async def get_espn_draft_state(
         "roster_slots": roster_slots,
         "debug_replacement_n": dict(_last_replacement_n),
         "debug_player_map_size": len(espn_player_map),
+        "debug_sleeper_map_size": len(_SLEEPER_ESPN_MAP),
+        "debug_sleeper_error": _SLEEPER_ESPN_MAP_ERROR or None,
         "idp_available": idp_available,
-        "idp_load_error": _ESPN_PLAYER_MAP_ERROR.get((league_id, season)),
+        "idp_load_error": _ESPN_PLAYER_MAP_ERROR.get((league_id, season)) or _SLEEPER_ESPN_MAP_ERROR or None,
         "teams": teams_out,
     }
