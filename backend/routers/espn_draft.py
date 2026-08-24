@@ -262,7 +262,11 @@ async def get_espn_draft_state(
     draft_detail = data.get("draftDetail", {})
     in_progress = draft_detail.get("inProgress", False)
     drafted = draft_detail.get("drafted", False)
-    raw_picks = draft_detail.get("picks", [])
+    all_picks = draft_detail.get("picks", [])
+
+    # In ESPN auction drafts, nominations in-progress have playerId/teamId = -1.
+    # Filter these out — they're not completed picks.
+    raw_picks = [pk for pk in all_picks if pk.get("playerId", -1) > 0 and pk.get("teamId", -1) > 0]
 
     picks_made = len(raw_picks)
     total_picks = num_teams * rounds
