@@ -2605,6 +2605,62 @@ img { display: block; }
 .rd-pos-tab:hover:not(.active) { border-color: var(--text-muted); color: var(--text); }
 .rd-empty-sm { font-size: 0.75rem; color: var(--text-muted); text-align: center; padding: 16px 0; }
 
+/* ── Yahoo Draft Room ────────────────────────────────────────────────────────── */
+.yd-page { display: flex; flex-direction: column; gap: 16px; }
+
+.yd-setup-card {
+  max-width: 480px; margin: 40px auto;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 28px 24px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.yd-setup-title { font-size: 1.15rem; font-weight: 700; margin-bottom: 4px; }
+.yd-setup-sub { font-size: 0.82rem; color: var(--text-muted); }
+.yd-setup-hint { font-size: 0.72rem; color: var(--text-muted); line-height: 1.5; margin-top: 6px; }
+.yd-setup-hint code { background: var(--surface2); padding: 1px 4px; border-radius: 3px; font-size: 0.68rem; }
+.yd-connect-btn { display: block; text-align: center; margin-top: 6px; }
+.yd-label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+.yd-select { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text); padding: 8px 10px; font-size: 0.85rem; cursor: pointer; }
+.yd-select:focus { outline: none; border-color: var(--accent); }
+
+/* OTC card */
+.yd-otc-card { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; text-align: center; }
+.yd-otc-card.yd-otc-you { border-color: var(--accent); background: rgba(1,217,172,0.08); }
+.yd-otc-you-banner { font-size: 0.85rem; font-weight: 800; color: var(--accent); margin-bottom: 4px; }
+.yd-otc-label { font-size: 0.68rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+.yd-otc-team { font-size: 1rem; font-weight: 700; color: var(--text); margin: 4px 0 2px; }
+.yd-otc-pick { font-size: 0.72rem; color: var(--text-muted); }
+
+/* Sidebar sections */
+.yd-sidebar-section { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; display: flex; flex-direction: column; gap: 5px; }
+
+/* My team picks */
+.yd-my-pick { display: flex; align-items: center; gap: 7px; font-size: 0.78rem; padding: 2px 0; }
+.yd-my-pick-name { flex: 1; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.yd-my-pick-round { font-size: 0.68rem; color: var(--text-muted); flex-shrink: 0; }
+.yd-my-pick-cost { font-size: 0.72rem; font-weight: 700; color: var(--accent); flex-shrink: 0; }
+
+/* Recent picks */
+.yd-recent-pick { display: flex; align-items: center; gap: 6px; font-size: 0.72rem; padding: 2px 0; border-bottom: 1px solid var(--border); }
+.yd-recent-pick:last-child { border-bottom: none; }
+.yd-recent-pick-round { color: var(--text-muted); flex-shrink: 0; font-size: 0.64rem; }
+.yd-recent-pick-name { flex: 1; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.yd-recent-pick-team { color: var(--text-muted); font-size: 0.65rem; flex-shrink: 0; }
+.yd-recent-pick-cost { font-size: 0.68rem; font-weight: 700; color: var(--accent); flex-shrink: 0; }
+
+/* Player row (5-col: tier | info | rank | value | vor) */
+.yd-player-row {
+  display: grid;
+  grid-template-columns: 28px 1fr 60px 60px 52px;
+  align-items: center; gap: 6px;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.8rem;
+  cursor: default;
+}
+.yd-player-row:last-child { border-bottom: none; }
+.yd-player-row:hover { background: var(--surface2); }
+
 /* Mode toggle */
 .rt-mode-toggle { display: flex; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; }
 .rt-mode-btn { background: none; border: none; color: var(--text-muted); font-size: 0.78rem; font-weight: 700; padding: 5px 14px; cursor: pointer; transition: all 0.15s; }

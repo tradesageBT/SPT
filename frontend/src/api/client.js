@@ -48,6 +48,11 @@ export const api = {
     request(`/espn-draft/players/search?q=${encodeURIComponent(q)}&limit=${limit}&mode=${mode}`),
   searchRedraftPlayers: (q = '', limit = 20) =>
     request(`/espn-draft/players/search?q=${encodeURIComponent(q)}&limit=${limit}`),
+  getYahooStatus: () => request('/yahoo-draft/status'),
+  getYahooLeagues: () => request('/yahoo-draft/leagues'),
+  getYahooDraftState: (leagueKey) => request(`/yahoo-draft/state?league_key=${encodeURIComponent(leagueKey)}`),
+  disconnectYahoo: () =>
+    fetch(`${BASE}/yahoo-draft/auth`, { method: 'DELETE' }).then(r => r.json()),
   evaluateTrade: (leagueId, body) =>
     fetch(`${BASE}/leagues/${leagueId}/evaluate-trade`, {
       method: 'POST',

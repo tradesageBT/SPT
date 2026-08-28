@@ -151,4 +151,11 @@ def init_db():
             ALTER TABLE players_cache ADD COLUMN IF NOT EXISTS pos_rank INTEGER DEFAULT NULL;
             ALTER TABLE players_cache ADD COLUMN IF NOT EXISTS redraft_overall_rank INTEGER DEFAULT NULL;
             ALTER TABLE players_cache ADD COLUMN IF NOT EXISTS redraft_pos_rank INTEGER DEFAULT NULL;
+
+            CREATE TABLE IF NOT EXISTS yahoo_tokens (
+                id              INTEGER PRIMARY KEY DEFAULT 1,
+                access_token    TEXT,
+                refresh_token   TEXT,
+                expires_at      TEXT
+            );
         """)
