@@ -48,6 +48,7 @@ export const api = {
     request(`/espn-draft/players/search?q=${encodeURIComponent(q)}&limit=${limit}&mode=${mode}`),
   searchRedraftPlayers: (q = '', limit = 20) =>
     request(`/espn-draft/players/search?q=${encodeURIComponent(q)}&limit=${limit}`),
+  getSleeperDraftState: (leagueId) => request(`/sleeper-draft/state?league_id=${encodeURIComponent(leagueId)}`),
   getYahooStatus: () => request('/yahoo-draft/status'),
   getYahooLeagues: () => request('/yahoo-draft/leagues'),
   getYahooDraftState: (leagueKey) => request(`/yahoo-draft/state?league_key=${encodeURIComponent(leagueKey)}`),

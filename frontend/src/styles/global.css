@@ -2605,6 +2605,25 @@ img { display: block; }
 .rd-pos-tab:hover:not(.active) { border-color: var(--text-muted); color: var(--text); }
 .rd-empty-sm { font-size: 0.75rem; color: var(--text-muted); text-align: center; padding: 16px 0; }
 
+/* ── Draft Assistant Landing ─────────────────────────────────────────────────── */
+.da-page { display: flex; flex-direction: column; align-items: center; padding: 48px 16px; gap: 24px; }
+.da-title { font-size: 1.6rem; font-weight: 800; color: var(--text); }
+.da-sub { font-size: 0.85rem; color: var(--text-muted); margin-top: -12px; }
+.da-cards { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
+.da-card {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 32px 40px;
+  text-decoration: none; color: var(--text);
+  transition: border-color 0.15s, box-shadow 0.15s;
+  min-width: 180px;
+}
+.da-card:hover { border-color: var(--accent); box-shadow: 0 0 0 2px rgba(1,217,172,0.15); }
+.da-card-icon { font-size: 2.2rem; line-height: 1; }
+.da-yahoo-icon { font-size: 2rem; font-weight: 900; color: #6001d2; }
+.da-card-name { font-size: 1rem; font-weight: 700; color: var(--text); }
+.da-card-modes { font-size: 0.72rem; color: var(--text-muted); }
+
 /* ── Yahoo Draft Room ────────────────────────────────────────────────────────── */
 .yd-page { display: flex; flex-direction: column; gap: 16px; }
 

@@ -8,6 +8,8 @@ import DraftRoom from './pages/DraftRoom'
 import RedraftDraftRoom from './pages/RedraftDraftRoom'
 import RedraftTrades from './pages/RedraftTrades'
 import YahooDraftRoom from './pages/YahooDraftRoom'
+import DraftAssistant from './pages/DraftAssistant'
+import SleeperDraftRoom from './pages/SleeperDraftRoom'
 
 export default function App() {
   return (
@@ -20,7 +22,7 @@ export default function App() {
         </Link>
         <span className="logo-sub">Fantasy Value Engine</span>
         <nav className="site-nav">
-          <Link to="/yahoo-draft" className="site-nav-link">Draft Assistant</Link>
+          <Link to="/draft-assistant" className="site-nav-link">Draft Assistant</Link>
           <Link to="/redraft-trades" className="site-nav-link">Trade Evaluator</Link>
         </nav>
       </header>
@@ -33,9 +35,10 @@ export default function App() {
           <Route path="/league/:leagueId/trades" element={<TradeIdeas />} />
           <Route path="/league/:leagueId/evaluate" element={<TradeEvaluator />} />
           <Route path="/league/:leagueId/draft" element={<DraftRoom />} />
-          <Route path="/redraft-draft" element={<RedraftDraftRoom />} />
-          <Route path="/redraft-trades" element={<RedraftTrades />} />
+          <Route path="/draft-assistant" element={<DraftAssistant />} />
+          <Route path="/sleeper-draft" element={<SleeperDraftRoom />} />
           <Route path="/yahoo-draft" element={<YahooDraftRoom />} />
+          <Route path="/redraft-trades" element={<RedraftTrades />} />
         </Routes>
       </main>
     </div>
