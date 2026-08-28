@@ -4,6 +4,7 @@ import { api } from '../api/client'
 
 const ROUND_LABEL = { 1: '1st', 2: '2nd', 3: '3rd', 4: '4th' }
 const POS_COLOR = { QB: '#e05c5c', RB: '#5cb8e0', WR: '#01d9ac', TE: '#e0a45c', PK: '#888' }
+const POS_ORDER = { QB: 0, RB: 1, WR: 2, TE: 3, K: 4, DEF: 5 }
 const fmt = (n) => n?.toLocaleString() ?? '—'
 const fmtDelta = (n) => (n >= 0 ? '+' : '') + n?.toLocaleString()
 
@@ -23,7 +24,7 @@ function pickAsset(pick) {
   }
 }
 
-function PlayerSearch({ leaguePlayers, addedIds, onAdd, searchablePicks = [] }) {
+function PlayerSearch({ leaguePlayers, addedIds, onAdd, searchablePicks = [], teamPlayers = [] }) {
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
   const inputRef = useRef(null)
@@ -37,6 +38,11 @@ function PlayerSearch({ leaguePlayers, addedIds, onAdd, searchablePicks = [] }) 
       .filter((p) => !addedIds.has(p.sleeper_id) && p.name.toLowerCase().includes(q))
     return [...picks, ...players].slice(0, 8)
   }, [query, leaguePlayers, addedIds, searchablePicks])
+
+  // When no query, show the selected team's roster; when typing, show search results
+  const displayList = query.trim()
+    ? suggestions
+    : teamPlayers.filter(p => !addedIds.has(p.sleeper_id))
 
   function handleSelect(player) {
     onAdd(
@@ -54,21 +60,21 @@ function PlayerSearch({ leaguePlayers, addedIds, onAdd, searchablePicks = [] }) 
       <input
         ref={inputRef}
         className="eval-search-input"
-        placeholder="Search player by name…"
+        placeholder={teamPlayers.length ? 'Pick from roster or type to search…' : 'Search player by name…'}
         value={query}
         onChange={(e) => { setQuery(e.target.value); setOpen(true) }}
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
       />
-      {open && suggestions.length > 0 && (
+      {open && displayList.length > 0 && (
         <div className="eval-search-dropdown">
-          {suggestions.map((p) => (
+          {displayList.map((p) => (
             <button key={p.sleeper_id} className="eval-suggestion" onMouseDown={() => handleSelect(p)}>
               <span className="eval-sug-pos" style={{ background: POS_COLOR[p.position] || '#666' }}>
                 {p.position}
               </span>
               <span className="eval-sug-name">{p.name}</span>
-              <span className="eval-sug-team">{p.display_name}</span>
+              {query.trim() && <span className="eval-sug-team">{p.display_name}</span>}
               <span className="eval-sug-val">{fmt(p.fc_value)}</span>
             </button>
           ))}
@@ -95,6 +101,18 @@ function SidePanel({ label, assets, teamContext, onAdd, onRemove, leaguePlayers,
   }, [effectiveTeam, teamsData])
 
   const availablePicks = teamPicks.filter((p) => !addedIds.has(pickUid(p)))
+
+  const teamPlayers = useMemo(() => {
+    if (!effectiveTeam) return []
+    return leaguePlayers
+      .filter(p => p.roster_id === effectiveTeam.roster_id)
+      .sort((a, b) => {
+        const pa = POS_ORDER[a.position] ?? 99
+        const pb = POS_ORDER[b.position] ?? 99
+        if (pa !== pb) return pa - pb
+        return (b.fc_value || 0) - (a.fc_value || 0)
+      })
+  }, [effectiveTeam, leaguePlayers])
   const total = assets.reduce((s, a) => s + (a.fc_value || 0), 0)
 
   return (
@@ -125,6 +143,7 @@ function SidePanel({ label, assets, teamContext, onAdd, onRemove, leaguePlayers,
         leaguePlayers={leaguePlayers}
         addedIds={addedIds}
         onAdd={onAdd}
+        teamPlayers={teamPlayers}
         searchablePicks={effectiveTeam ? availablePicks.map(p => ({
           ...pickAsset(p),
           roster_id: effectiveTeam.roster_id,

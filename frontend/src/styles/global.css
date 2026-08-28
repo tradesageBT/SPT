@@ -931,7 +931,8 @@ img { display: block; }
   background: var(--surface, #1e2138);
   border: 1px solid var(--border);
   border-radius: 8px;
-  overflow: hidden;
+  overflow-y: auto;
+  max-height: 320px;
   z-index: 100;
   box-shadow: 0 8px 24px rgba(0,0,0,0.5);
 }
