@@ -809,7 +809,7 @@ img { display: block; }
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: 10px;
-  padding: 12px 14px;
+  padding: 10px 12px;
 }
 .trade-feed-card-top {
   display: flex; align-items: center; justify-content: space-between;
@@ -823,19 +823,23 @@ img { display: block; }
 .trade-feed-delta { font-weight: 400; opacity: 0.8; }
 
 .trade-feed-sides {
-  display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;
 }
 @media (max-width: 480px) {
   .trade-feed-sides { grid-template-columns: 1fr !important; }
 }
-.trade-feed-side { display: flex; flex-direction: column; gap: 5px; }
-.trade-feed-side-header {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 6px;
+.trade-feed-side {
+  display: flex; flex-direction: column; gap: 5px;
+  background: var(--surface2); border-radius: 7px; padding: 9px 11px;
 }
-.trade-feed-team { font-size: 0.78rem; font-weight: 600; color: var(--text); }
-.trade-feed-side-total { font-size: 0.72rem; color: var(--accent); font-weight: 600; }
-.trade-feed-assets { display: flex; flex-direction: column; gap: 3px; }
-.trade-feed-asset { display: flex; align-items: center; gap: 5px; font-size: 0.8rem; }
+.trade-feed-side-header {
+  display: flex; align-items: center; gap: 6px;
+  border-bottom: 1px solid var(--border); padding-bottom: 7px; margin-bottom: 2px;
+}
+.trade-feed-team { font-size: 0.82rem; font-weight: 600; color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trade-feed-side-total { font-size: 0.72rem; color: var(--accent); font-weight: 700; margin-left: auto; white-space: nowrap; flex-shrink: 0; }
+.trade-feed-assets { display: flex; flex-direction: column; gap: 5px; }
+.trade-feed-asset { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; }
 .trade-feed-asset-name { color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .trade-feed-asset-val { color: var(--text-muted); font-size: 0.72rem; white-space: nowrap; flex-shrink: 0; }
 
