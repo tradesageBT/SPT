@@ -474,4 +474,25 @@ def compute_league_profiles(
                 hi = min(num_teams, rank + 1)
                 pick["projected_slot"] = f"{rnd}.{lo:02d}–{rnd}.{hi:02d}"
 
+    # Adjust pick fc_value based on projected draft position (earlier picks worth more)
+    mid_slot = (num_teams + 1) / 2  # e.g. 6.5 for 12-team league
+    for profile in profiles:
+        adj_pick_val = 0
+        for pick in profile["picks"]:
+            orig_id = pick.get("original_roster_id")
+            rank = roster_rank.get(orig_id) if orig_id else None
+            base_val = pick.get("fc_value", 0)
+            if rank is not None and base_val:
+                rnd = pick["round"]
+                lo = max(1, rank - 1)
+                hi = min(num_teams, rank + 1)
+                mid_pos = (lo + hi) / 2
+                # Spread: ~65% premium for 1st pick vs last in R1, shrinks each round
+                k = max(0.20, 0.65 - (rnd - 1) * 0.15)
+                adj = 1.0 + k * (mid_slot - mid_pos) / mid_slot
+                pick["fc_value"] = max(1, round(base_val * adj))
+            adj_pick_val += pick.get("fc_value", 0)
+        profile["pick_value"] = adj_pick_val
+        profile["total_value"] = profile.get("player_value", 0) + adj_pick_val
+
     return sorted(profiles, key=lambda t: t["total_value"], reverse=True)
