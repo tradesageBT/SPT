@@ -293,6 +293,63 @@ function positionNeed(byPos, settings, pos) {
   return { starterNeed, flexOpen: Math.max(0, Math.min(flexForPos, totalFlex - surplus)) }
 }
 
+// ── Player detail ─────────────────────────────────────────────────────────────
+//
+// Uses the app's existing modal shell (.modal-backdrop / .modal-sheet / …,
+// global.css:424) rather than a new pattern. A right-hand pane was considered
+// and rejected: .main-content caps at 1100px and .rd-board-body collapses to a
+// single column at 860px, so a third column would be unusable on a phone.
+
+function PlayerDetail({ player, adjPrice, onNominate, onClose }) {
+  useEffect(() => {
+    function onKey(e) { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const stats = [
+    ['Est $', `$${player.auction_value}`],
+    ['Adjusted $', `$${adjPrice}`],
+    ['Pos rank', player.pos_rank ? `${player.position}${player.pos_rank}` : '—'],
+    ['Tier', player.tier ? `T${player.tier}` : '—'],
+    ['VOR', player.vor > 0 ? `+${player.vor}` : `${player.vor ?? '—'}`],
+    ['Age', player.age ? Math.round(player.age) : '—'],
+  ]
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-sheet" onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <div>
+            <div className="modal-title">{player.name}</div>
+            <div className="modal-subtitle">
+              {player.position}{player.nfl_team ? ` · ${player.nfl_team}` : ''}
+            </div>
+          </div>
+          <button className="modal-close" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          <div className="au-detail-grid">
+            {stats.map(([label, val]) => (
+              <div key={label} className="au-detail-stat">
+                <span className="au-detail-label">{label}</span>
+                <span className="au-detail-val">{val}</span>
+              </div>
+            ))}
+          </div>
+          <button
+            className="btn btn-primary"
+            style={{ marginTop: 16, width: '100%' }}
+            onClick={() => { onNominate(player); onClose() }}
+          >
+            Nominate {player.name}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Competition panel ─────────────────────────────────────────────────────────
 
 function CompetitionPanel({ position, teamState, settings }) {
@@ -444,7 +501,10 @@ function AuctionBoard({ settings, onReset }) {
   const [purchases, setPurchases] = useState(() => {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEY + '_buys') || '[]') } catch { return [] }
   })
-  const [selected, setSelected] = useState(null)
+  // Who is up for bid — shared across the room. Distinct from `detail`, which is
+  // just "I tapped a row to look at someone" and never leaves this browser.
+  const [nominated, setNominated] = useState(null)
+  const [detail, setDetail] = useState(null)
   const [pos, setPos] = useState('ALL')
   const [search, setSearch] = useState('')
   const [syncedAt, setSyncedAt] = useState(null)
@@ -467,6 +527,7 @@ function AuctionBoard({ settings, onReset }) {
         const d = await api.getAuctionRoom(room)
         if (cancelled) return
         setPurchases(d.picks || [])
+        setNominated(d.nominated || null)
         setSyncedAt(new Date())
         setSyncErr('')
       } catch (e) {
@@ -537,17 +598,31 @@ function AuctionBoard({ settings, onReset }) {
     return c
   }, [me])
 
+  // Nomination is shared, so it round-trips through the room. Set optimistically
+  // first: the board must not wait on the network to show who's up.
+  async function nominate(player) {
+    setNominated(player)
+    if (!room) return
+    try {
+      await api.setAuctionNomination(room, player)
+      setSyncErr('')
+    } catch (e) {
+      setSyncErr(`Nomination not shared (${e.message}) — visible only to you`)
+    }
+  }
+
   async function addPurchase({ price, team, position }) {
     const pick = {
-      sleeper_id: selected.sleeper_id,
-      name: selected.name,
-      position: position || selected.position,
-      nfl_team: selected.nfl_team || '',
+      sleeper_id: nominated.sleeper_id,
+      name: nominated.name,
+      position: position || nominated.position,
+      nfl_team: nominated.nfl_team || '',
       // Manual entries aren't ranked, so they're never scored over/under value
-      auction_value: selected.auction_value || 0,
+      auction_value: nominated.auction_value || 0,
       price, team,
     }
-    setSelected(null)
+    // They're bought — clear the block for everyone
+    nominate(null)
     setSearch('')
 
     if (!room) {
@@ -567,10 +642,12 @@ function AuctionBoard({ settings, onReset }) {
     }
   }
 
+  // Kickers, defenses and unranked players aren't in the pool, so there's no row
+  // to nominate from — go straight up for bid.
   function addManual() {
     const name = search.trim()
     if (!name) return
-    setSelected({
+    nominate({
       sleeper_id: `manual_${Date.now()}`,
       name,
       position: '',
@@ -627,6 +704,14 @@ function AuctionBoard({ settings, onReset }) {
 
   return (
     <div className="rd-board">
+      {detail && (
+        <PlayerDetail
+          player={detail}
+          adjPrice={adj(detail.auction_value)}
+          onNominate={nominate}
+          onClose={() => setDetail(null)}
+        />
+      )}
       {/* Top stats */}
       <div className="au-stats">
         <div className="au-stat au-stat-hero">
@@ -680,18 +765,18 @@ function AuctionBoard({ settings, onReset }) {
         </div>
       )}
 
-      {selected && (
+      {nominated && (
         <>
           <EntryBar
-            player={selected}
+            player={nominated}
             settings={settings}
             teamState={teamState}
             onSubmit={addPurchase}
-            onCancel={() => setSelected(null)}
+            onCancel={() => nominate(null)}
           />
-          {!selected.isManual && selected.position && (
+          {!nominated.isManual && nominated.position && (
             <CompetitionPanel
-              position={selected.position}
+              position={nominated.position}
               teamState={teamState}
               settings={settings}
             />
@@ -725,6 +810,7 @@ function AuctionBoard({ settings, onReset }) {
             <span className="rd-col-center">Est</span>
             <span className="rd-col-center">Adj</span>
             <span className="rd-col-center">VOR</span>
+            <span />
           </div>
           <div className="rd-player-list">
             {filtered.length === 0 && (
@@ -738,10 +824,10 @@ function AuctionBoard({ settings, onReset }) {
                 : <div className="rd-empty">No players match</div>
             )}
             {filtered.slice(0, 200).map(p => (
-              <button
+              <div
                 key={p.sleeper_id}
-                className={`au-player-row${selected?.sleeper_id === p.sleeper_id ? ' active' : ''}`}
-                onClick={() => setSelected(p)}
+                className={`au-player-row${nominated?.sleeper_id === p.sleeper_id ? ' active' : ''}`}
+                onClick={() => setDetail(p)}
               >
                 <div className="rd-player-info">
                   <PosPill pos={p.position} />
@@ -751,7 +837,13 @@ function AuctionBoard({ settings, onReset }) {
                 <span className="rd-col-center au-val">${p.auction_value}</span>
                 <span className="rd-col-center au-val-adj">${adj(p.auction_value)}</span>
                 <span className="rd-col-center rd-col-muted">{p.vor > 0 ? `+${p.vor}` : p.vor}</span>
-              </button>
+                <button
+                  className="au-nom-btn"
+                  onClick={e => { e.stopPropagation(); nominate(p) }}
+                >
+                  Nom
+                </button>
+              </div>
             ))}
           </div>
         </div>

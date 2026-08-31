@@ -77,6 +77,8 @@ export const api = {
     send(`/auction-draft/room/${encodeURIComponent(code)}/pick`, 'POST', pick),
   deleteAuctionPick: (code, id) =>
     send(`/auction-draft/room/${encodeURIComponent(code)}/pick/${id}`, 'DELETE'),
+  setAuctionNomination: (code, player) =>
+    send(`/auction-draft/room/${encodeURIComponent(code)}/nominate`, 'POST', { player }),
   getYahooStatus: () => request('/yahoo-draft/status'),
   getYahooLeagues: () => request('/yahoo-draft/leagues'),
   getYahooDraftState: (leagueKey) => request(`/yahoo-draft/state?league_key=${encodeURIComponent(leagueKey)}`),

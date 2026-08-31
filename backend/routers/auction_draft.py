@@ -77,6 +77,7 @@ async def _load_values(num_qbs: int, ppr: float) -> list[dict]:
                 "name": player.get("name", ""),
                 "position": pos,
                 "nfl_team": player.get("nflTeamAbbr", ""),
+                "age": player.get("age"),
                 "value": entry.get("value", 0) or 0,
             })
         if out:
@@ -98,6 +99,7 @@ async def _load_values(num_qbs: int, ppr: float) -> list[dict]:
             "name": p["name"],
             "position": pos,
             "nfl_team": p.get("nfl_team", ""),
+            "age": p.get("age"),
             "value": val,
         })
     return out
@@ -267,7 +269,33 @@ async def get_room(code: str):
         settings = json.loads(room.get("settings") or "{}")
     except Exception:
         settings = {}
-    return {"code": code, "settings": settings, "picks": picks}
+    try:
+        nominated = json.loads(room.get("nominated") or "null")
+    except Exception:
+        nominated = None
+    return {"code": code, "settings": settings, "picks": picks, "nominated": nominated}
+
+
+@router.post("/room/{code}/nominate")
+async def set_nomination(code: str, body: dict = Body(...)):
+    """
+    Who is currently up for bid, shared with everyone in the room.
+
+    Rides the existing GET /room payload rather than adding a second poll, so
+    there is only one sync path to reason about. An empty body clears it.
+    """
+    code = _norm_code(code)
+    player = body.get("player")
+    with db() as conn:
+        if not conn.execute(
+            "SELECT code FROM auction_rooms WHERE code = ?", (code,)
+        ).fetchone():
+            raise HTTPException(status_code=404, detail=f"Room {code} not found.")
+        conn.execute(
+            "UPDATE auction_rooms SET nominated = ? WHERE code = ?",
+            (json.dumps(player) if player else None, code),
+        )
+    return {"nominated": player}
 
 
 @router.post("/room/{code}/pick")

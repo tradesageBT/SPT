@@ -2844,11 +2844,11 @@ img { display: block; }
 
 /* Player rows */
 .au-player-header {
-  grid-template-columns: 1fr 60px 60px 60px;
+  grid-template-columns: 1fr 54px 54px 46px 58px;
 }
 .au-player-row {
   display: grid;
-  grid-template-columns: 1fr 60px 60px 60px;
+  grid-template-columns: 1fr 54px 54px 46px 58px;
   align-items: center;
   gap: 8px;
   width: 100%;
@@ -3081,3 +3081,44 @@ img { display: block; }
 .au-room-bar-err .au-room-code { color: #e05c5c; }
 .au-room-sync { font-size: 0.72rem; color: var(--text-muted); margin-left: auto; }
 .yd-select:disabled, .au-ppr-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Auction: nominate button + player detail modal body */
+.au-nom-btn {
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 5px;
+  padding: 4px 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.03em;
+}
+.au-nom-btn:hover { background: var(--accent); color: #0b0d1a; }
+.au-player-row.active .au-nom-btn { background: var(--accent); color: #0b0d1a; }
+
+.au-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+@media (max-width: 420px) {
+  .au-detail-grid { grid-template-columns: repeat(2, 1fr); }
+}
+.au-detail-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+}
+.au-detail-label {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+.au-detail-val { font-size: 1.15rem; font-weight: 700; color: var(--text); }

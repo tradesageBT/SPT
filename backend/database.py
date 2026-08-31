@@ -189,6 +189,8 @@ def init_db():
                 );
 
                 CREATE INDEX IF NOT EXISTS auction_picks_room_idx ON auction_picks(room_code);
+
+                ALTER TABLE auction_rooms ADD COLUMN IF NOT EXISTS nominated TEXT;
             """)
     except Exception as exc:
         print(f"[STARTUP] auction room tables unavailable ({exc}); shared rooms disabled")
