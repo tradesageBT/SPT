@@ -318,12 +318,12 @@ function positionNeed(byPos, settings, pos) {
 // and rejected: .main-content caps at 1100px and .rd-board-body collapses to a
 // single column at 860px, so a third column would be unusable on a phone.
 
-// Which stat lines matter per position — a glanceable set, not a stat page
-const STAT_LINES = {
-  QB: [['Pass yd', 'pass_yd'], ['Pass TD', 'pass_td'], ['INT', 'pass_int'], ['Rush yd', 'rush_yd'], ['Rush TD', 'rush_td']],
-  RB: [['Rush att', 'rush_att'], ['Rush yd', 'rush_yd'], ['Rush TD', 'rush_td'], ['Rec', 'rec'], ['Rec yd', 'rec_yd']],
-  WR: [['Targets', 'rec_tgt'], ['Rec', 'rec'], ['Rec yd', 'rec_yd'], ['Rec TD', 'rec_td']],
-  TE: [['Targets', 'rec_tgt'], ['Rec', 'rec'], ['Rec yd', 'rec_yd'], ['Rec TD', 'rec_td']],
+// Columns per position — short headers so a season fits on one line
+const STAT_COLS = {
+  QB: [['PaYd', 'pass_yd'], ['PaTD', 'pass_td'], ['Int', 'pass_int'], ['RuYd', 'rush_yd'], ['RuTD', 'rush_td']],
+  RB: [['Att', 'rush_att'], ['RuYd', 'rush_yd'], ['RuTD', 'rush_td'], ['Rec', 'rec'], ['ReYd', 'rec_yd']],
+  WR: [['Tgt', 'rec_tgt'], ['Rec', 'rec'], ['Yds', 'rec_yd'], ['TD', 'rec_td']],
+  TE: [['Tgt', 'rec_tgt'], ['Rec', 'rec'], ['Yds', 'rec_yd'], ['TD', 'rec_td']],
 }
 
 function StatBlock({ player, seasons, ppr }) {
@@ -333,26 +333,35 @@ function StatBlock({ player, seasons, ppr }) {
   }
   // Match the fantasy-point figure to the league's scoring
   const ptsKey = ppr === 1 ? 'pts_ppr' : ppr === 0.5 ? 'pts_half_ppr' : 'pts_std'
-  const rows = [['Points', ptsKey], ['Games', 'gp'], ...(STAT_LINES[player.position] || STAT_LINES.WR)]
+  const cols = [['Pts', ptsKey], ['G', 'gp'], ...(STAT_COLS[player.position] || STAT_COLS.WR)]
   const fmt = (src, key) => {
     const v = src?.[key]
     if (v == null) return '—'
     return key.startsWith('pts') ? Math.round(v) : (Number.isInteger(v) ? v : Math.round(v))
   }
+  const rows = [
+    [seasons?.actual ?? 'Last', last, false],
+    [seasons?.projected ?? 'Proj', proj, true],
+  ]
   return (
-    <div className="au-stat-table">
-      <div className="au-stat-head">
-        <span />
-        <span>{seasons?.actual ?? 'Last yr'}</span>
-        <span>{seasons?.projected ?? 'Proj'}</span>
-      </div>
-      {rows.map(([label, key]) => (
-        <div key={key} className="au-stat-row">
-          <span className="au-stat-name">{label}</span>
-          <span>{fmt(last, key)}</span>
-          <span className="au-stat-proj">{fmt(proj, key)}</span>
-        </div>
-      ))}
+    // Scrolls rather than squishing — QB and RB carry more columns than a phone fits
+    <div className="au-stat-wrap">
+      <table className="au-stat-table">
+        <thead>
+          <tr>
+            <th className="au-stat-year">Year</th>
+            {cols.map(([label]) => <th key={label}>{label}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(([label, src, isProj]) => (
+            <tr key={label} className={isProj ? 'au-stat-projrow' : ''}>
+              <td className="au-stat-year">{label}{isProj ? ' proj' : ''}</td>
+              {cols.map(([, key]) => <td key={key}>{fmt(src, key)}</td>)}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }

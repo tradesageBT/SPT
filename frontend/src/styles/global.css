@@ -3202,35 +3202,42 @@ img { display: block; }
 .au-cheat-owner { color: var(--text-muted); font-size: 0.64rem; max-width: 66px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Auction: stats + projections in player detail */
-.au-stat-table {
+.au-stat-wrap {
   margin-top: 14px;
   border-top: 1px solid var(--border);
   padding-top: 10px;
+  overflow-x: auto;
 }
-.au-stat-head, .au-stat-row {
-  display: grid;
-  grid-template-columns: 1fr 64px 64px;
-  align-items: center;
-  gap: 8px;
+.au-stat-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  white-space: nowrap;
 }
-.au-stat-head {
-  font-size: 0.62rem;
+.au-stat-table th {
+  font-size: 0.6rem;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
   color: var(--text-muted);
   font-weight: 700;
-  padding-bottom: 6px;
+  text-align: right;
+  padding: 0 0 6px 10px;
   border-bottom: 1px solid var(--border);
-  text-align: right;
 }
-.au-stat-row {
-  font-size: 0.8rem;
-  padding: 5px 0;
+.au-stat-table td {
   text-align: right;
+  padding: 6px 0 6px 10px;
   color: var(--text);
 }
-.au-stat-name { text-align: left; color: var(--text-muted); }
-.au-stat-proj { color: var(--accent); font-weight: 700; }
+.au-stat-table th.au-stat-year,
+.au-stat-table td.au-stat-year {
+  text-align: left;
+  padding-left: 0;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.au-stat-projrow td { color: var(--accent); font-weight: 700; }
+.au-stat-projrow td.au-stat-year { color: var(--accent); }
 .au-stat-none {
   margin-top: 14px;
   padding-top: 12px;
