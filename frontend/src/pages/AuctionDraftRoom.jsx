@@ -28,6 +28,17 @@ const SLOT_FIELDS = [
 
 const PPR_OPTIONS = [[0, 'Standard'], [0.5, 'Half PPR'], [1, 'Full PPR']]
 
+// Which positions can fill each flex slot type
+const FLEX_ELIGIBLE = {
+  flex: ['RB', 'WR', 'TE'],
+  sflex: ['QB', 'RB', 'WR', 'TE'],
+  wr_rb_flex: ['RB', 'WR'],
+  rec_flex: ['WR', 'TE'],
+}
+const FLEX_TYPES = Object.keys(FLEX_ELIGIBLE)
+// Position -> the settings key holding its required starter count
+const STARTER_KEYS = { QB: 'qb', RB: 'rb', WR: 'wr', TE: 'te', K: 'k', DEF: 'dst' }
+
 function PosPill({ pos }) {
   const c = POS_COLORS[pos] || '#8b90b0'
   return (
@@ -137,6 +148,104 @@ function SetupForm({ onStart }) {
   )
 }
 
+/**
+ * What a team still needs at `pos`:
+ *   starterNeed — unfilled required starters at that position
+ *   flexOpen    — open flex slots this position is eligible to fill
+ * Flex slots are treated as consumed by players held beyond their starter
+ * requirement, so a team with 4 WR in a 3-WR league has already used one.
+ */
+function positionNeed(byPos, settings, pos) {
+  const owned = byPos[pos]?.count || 0
+  const required = settings[STARTER_KEYS[pos]] || 0
+  const starterNeed = Math.max(0, required - owned)
+
+  const flexForPos = FLEX_TYPES
+    .filter(ft => FLEX_ELIGIBLE[ft].includes(pos))
+    .reduce((n, ft) => n + (settings[ft] || 0), 0)
+  if (!flexForPos) return { starterNeed, flexOpen: 0 }
+
+  const totalFlex = FLEX_TYPES.reduce((n, ft) => n + (settings[ft] || 0), 0)
+  const surplus = Object.entries(STARTER_KEYS).reduce(
+    (n, [p, key]) => n + Math.max(0, (byPos[p]?.count || 0) - (settings[key] || 0)),
+    0,
+  )
+  return { starterNeed, flexOpen: Math.max(0, Math.min(flexForPos, totalFlex - surplus)) }
+}
+
+// ── Competition panel ─────────────────────────────────────────────────────────
+
+function CompetitionPanel({ position, teamState, settings }) {
+  const myMax = teamState[settings.myTeam]?.maxBid ?? 0
+
+  const rows = teamState
+    .map(t => {
+      const { starterNeed, flexOpen } = positionNeed(t.byPos, settings, position)
+      return {
+        ...t,
+        starterNeed,
+        flexOpen,
+        posSpent: t.byPos[position]?.spent || 0,
+        posCount: t.byPos[position]?.count || 0,
+        wants: starterNeed > 0 || flexOpen > 0,
+      }
+    })
+    // Teams that need the spot first, then by who can bid the most
+    .sort((a, b) => (b.wants - a.wants) || (b.maxBid - a.maxBid))
+
+  const threats = rows.filter(r => r.wants && r.i !== settings.myTeam && r.maxBid >= myMax).length
+
+  return (
+    <div className="au-comp">
+      <div className="au-comp-head">
+        <span className="au-comp-title">Competition for <PosPill pos={position} /></span>
+        <span className="au-comp-threats">
+          {threats === 0
+            ? 'No one who needs it can outbid you'
+            : `${threats} team${threats > 1 ? 's' : ''} need it and can match your $${myMax}`}
+        </span>
+      </div>
+      <div className="au-comp-header-row">
+        <span>Team</span>
+        <span className="rd-col-center">Needs</span>
+        <span className="rd-col-center">Has</span>
+        <span className="rd-col-center">Spent</span>
+        <span className="rd-col-center">Budget</span>
+        <span className="rd-col-center">Max</span>
+      </div>
+      <div className="au-comp-rows">
+        {rows.map(r => {
+          const canOutbid = r.wants && r.i !== settings.myTeam && r.maxBid >= myMax
+          return (
+            <div
+              key={r.i}
+              className={
+                'au-comp-row'
+                + (r.i === settings.myTeam ? ' au-comp-me' : '')
+                + (!r.wants ? ' au-comp-filled' : '')
+                + (canOutbid ? ' au-comp-threat' : '')
+              }
+            >
+              <span className="au-comp-name">
+                {r.name}{r.i === settings.myTeam ? ' (you)' : ''}
+              </span>
+              <span className="rd-col-center au-comp-need">
+                {r.starterNeed > 0
+                  ? `${r.starterNeed}`
+                  : r.flexOpen > 0 ? 'flex' : '—'}
+              </span>
+              <span className="rd-col-center au-comp-dim">{r.posCount}</span>
+              <span className="rd-col-center au-comp-dim">${r.posSpent}</span>
+              <span className="rd-col-center">${r.remaining}</span>
+              <span className="rd-col-center au-comp-max">${r.maxBid}</span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ── Purchase entry bar ────────────────────────────────────────────────────────
 
 function EntryBar({ player, settings, teamState, onSubmit, onCancel }) {
@@ -241,7 +350,14 @@ function AuctionBoard({ settings, onReset }) {
     const slotsLeft = size - bought.length
     // Must keep $1 in reserve for every slot after the one you're bidding on
     const maxBid = Math.max(0, remaining - Math.max(0, slotsLeft - 1))
-    return { name, i, bought, spent, remaining, slotsLeft, maxBid }
+    const byPos = {}
+    for (const b of bought) {
+      const e = byPos[b.position] || { count: 0, spent: 0 }
+      e.count += 1
+      e.spent += b.price
+      byPos[b.position] = e
+    }
+    return { name, i, bought, spent, remaining, slotsLeft, maxBid, byPos }
   }), [purchases, settings, size])
 
   const me = teamState[settings.myTeam]
@@ -359,13 +475,22 @@ function AuctionBoard({ settings, onReset }) {
       )}
 
       {selected && (
-        <EntryBar
-          player={selected}
-          settings={settings}
-          teamState={teamState}
-          onSubmit={addPurchase}
-          onCancel={() => setSelected(null)}
-        />
+        <>
+          <EntryBar
+            player={selected}
+            settings={settings}
+            teamState={teamState}
+            onSubmit={addPurchase}
+            onCancel={() => setSelected(null)}
+          />
+          {!selected.isManual && selected.position && (
+            <CompetitionPanel
+              position={selected.position}
+              teamState={teamState}
+              settings={settings}
+            />
+          )}
+        </>
       )}
 
       <div className="rd-board-body">
