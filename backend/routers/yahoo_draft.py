@@ -215,7 +215,6 @@ async def yahoo_auth(request: Request):
         "redirect_uri": YAHOO_REDIRECT_URI,
         "response_type": "code",
         "language": "en-us",
-        "scope": "fspt-r openid",
         "state": sid,
     })
     response = RedirectResponse(f"{YAHOO_AUTH_URL}?{params}")
