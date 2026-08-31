@@ -158,4 +158,7 @@ def init_db():
                 refresh_token   TEXT,
                 expires_at      TEXT
             );
+
+            ALTER TABLE yahoo_tokens ADD COLUMN IF NOT EXISTS session_id TEXT;
+            CREATE UNIQUE INDEX IF NOT EXISTS yahoo_tokens_session_id_idx ON yahoo_tokens(session_id);
         """)

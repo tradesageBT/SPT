@@ -8,17 +8,21 @@ Endpoints:
   DELETE /api/yahoo-draft/auth      → clear tokens (disconnect)
   GET    /api/yahoo-draft/leagues   → user's NFL fantasy leagues
   GET    /api/yahoo-draft/state?league_key=449.l.X → live draft state
+
+Multi-user: each browser gets a UUID session stored in an 'ysid' cookie.
+Tokens are keyed by session_id so multiple people can use simultaneously.
 """
 import os
 import re
+import uuid
 import asyncio
 import base64
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
 import httpx
-from fastapi import APIRouter, Query, HTTPException
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, Query, HTTPException, Request
+from fastapi.responses import RedirectResponse, JSONResponse
 
 from database import db
 
@@ -45,32 +49,35 @@ def _normalize(s: str) -> str:
     return _norm_re.sub("", s)
 
 
-# ── Token storage ─────────────────────────────────────────────────────────────
+# ── Token storage (keyed by session_id) ───────────────────────────────────────
 
-def _store_tokens(access: str, refresh: str, expires_in: int = 3600):
+def _store_tokens(session_id: str, access: str, refresh: str, expires_in: int = 3600):
     exp = (datetime.now(timezone.utc) + timedelta(seconds=expires_in)).isoformat()
     with db() as conn:
         conn.execute(
             """
-            INSERT INTO yahoo_tokens (id, access_token, refresh_token, expires_at)
-            VALUES (1, :a, :r, :e)
-            ON CONFLICT(id) DO UPDATE SET
+            INSERT INTO yahoo_tokens (session_id, access_token, refresh_token, expires_at)
+            VALUES (:sid, :a, :r, :e)
+            ON CONFLICT(session_id) DO UPDATE SET
                 access_token=excluded.access_token,
                 refresh_token=excluded.refresh_token,
                 expires_at=excluded.expires_at
             """,
-            {"a": access, "r": refresh, "e": exp},
+            {"sid": session_id, "a": access, "r": refresh, "e": exp},
         )
 
 
-def _get_tokens() -> dict | None:
+def _get_tokens(session_id: str) -> dict | None:
     with db() as conn:
-        return conn.execute("SELECT * FROM yahoo_tokens WHERE id=1").fetchone()
+        return conn.execute(
+            "SELECT * FROM yahoo_tokens WHERE session_id = :sid",
+            {"sid": session_id},
+        ).fetchone()
 
 
-def _clear_tokens():
+def _clear_tokens(session_id: str):
     with db() as conn:
-        conn.execute("DELETE FROM yahoo_tokens WHERE id=1")
+        conn.execute("DELETE FROM yahoo_tokens WHERE session_id = :sid", {"sid": session_id})
 
 
 def _is_expired(row: dict) -> bool:
@@ -81,6 +88,19 @@ def _is_expired(row: dict) -> bool:
         return True
 
 
+def _session_id(request: Request) -> str | None:
+    return request.cookies.get("ysid")
+
+
+def _set_session_cookie(response, session_id: str):
+    response.set_cookie(
+        "ysid", session_id,
+        max_age=86400 * 30,
+        httponly=True,
+        samesite="lax",
+    )
+
+
 # ── OAuth helpers ─────────────────────────────────────────────────────────────
 
 def _basic_auth() -> str:
@@ -89,7 +109,7 @@ def _basic_auth() -> str:
     ).decode()
 
 
-async def _do_refresh(refresh_token: str) -> dict:
+async def _do_refresh(session_id: str, refresh_token: str) -> dict:
     async with httpx.AsyncClient(timeout=YAHOO_TIMEOUT) as client:
         r = await client.post(
             YAHOO_TOKEN_URL,
@@ -102,24 +122,24 @@ async def _do_refresh(refresh_token: str) -> dict:
     if r.status_code != 200:
         raise HTTPException(status_code=401, detail="Yahoo token expired. Please reconnect.")
     data = r.json()
-    _store_tokens(data["access_token"], data.get("refresh_token", refresh_token), data.get("expires_in", 3600))
+    _store_tokens(session_id, data["access_token"], data.get("refresh_token", refresh_token), data.get("expires_in", 3600))
     return data
 
 
-async def _access_token() -> str:
-    row = _get_tokens()
+async def _access_token(session_id: str) -> str:
+    row = _get_tokens(session_id)
     if not row:
         raise HTTPException(status_code=401, detail="Not connected to Yahoo. Please connect first.")
     if _is_expired(row):
-        data = await _do_refresh(row["refresh_token"])
+        data = await _do_refresh(session_id, row["refresh_token"])
         return data["access_token"]
     return row["access_token"]
 
 
 # ── Yahoo API helper ──────────────────────────────────────────────────────────
 
-async def _yahoo_get(path: str) -> dict:
-    token = await _access_token()
+async def _yahoo_get(path: str, session_id: str) -> dict:
+    token = await _access_token(session_id)
     sep = "&" if "?" in path else "?"
     url = f"{YAHOO_API_BASE}/{path}{sep}format=json"
 
@@ -128,9 +148,9 @@ async def _yahoo_get(path: str) -> dict:
 
     if r.status_code == 401:
         # Auto-refresh once
-        row = _get_tokens()
+        row = _get_tokens(session_id)
         if row:
-            data = await _do_refresh(row["refresh_token"])
+            data = await _do_refresh(session_id, row["refresh_token"])
             async with httpx.AsyncClient(timeout=YAHOO_TIMEOUT) as client:
                 r = await client.get(url, headers={"Authorization": f"Bearer {data['access_token']}"})
 
@@ -182,25 +202,31 @@ def _parse_player_attrs(player_list) -> dict:
 # ── OAuth endpoints ───────────────────────────────────────────────────────────
 
 @router.get("/auth")
-async def yahoo_auth():
+async def yahoo_auth(request: Request):
     if not YAHOO_CLIENT_ID:
         raise HTTPException(
             status_code=503,
             detail="Yahoo OAuth not configured. Add YAHOO_CLIENT_ID and YAHOO_CLIENT_SECRET in Render environment variables.",
         )
+    # Reuse existing session or mint a new one
+    sid = _session_id(request) or str(uuid.uuid4())
     params = urlencode({
         "client_id": YAHOO_CLIENT_ID,
         "redirect_uri": YAHOO_REDIRECT_URI,
         "response_type": "code",
         "language": "en-us",
+        "state": sid,
     })
-    return RedirectResponse(f"{YAHOO_AUTH_URL}?{params}")
+    response = RedirectResponse(f"{YAHOO_AUTH_URL}?{params}")
+    _set_session_cookie(response, sid)
+    return response
 
 
 @router.get("/callback")
-async def yahoo_callback(code: str = Query(...)):
+async def yahoo_callback(code: str = Query(...), state: str = Query("")):
     if not YAHOO_CLIENT_ID:
         raise HTTPException(status_code=503, detail="Yahoo OAuth not configured.")
+    sid = state or str(uuid.uuid4())
     async with httpx.AsyncClient(timeout=YAHOO_TIMEOUT) as client:
         r = await client.post(
             YAHOO_TOKEN_URL,
@@ -217,28 +243,40 @@ async def yahoo_callback(code: str = Query(...)):
     if r.status_code != 200:
         raise HTTPException(status_code=401, detail=f"Yahoo OAuth failed: {r.text[:300]}")
     data = r.json()
-    _store_tokens(data["access_token"], data["refresh_token"], data.get("expires_in", 3600))
-    return RedirectResponse("/yahoo-draft?connected=true")
+    _store_tokens(sid, data["access_token"], data["refresh_token"], data.get("expires_in", 3600))
+    response = RedirectResponse("/yahoo-draft?connected=true")
+    _set_session_cookie(response, sid)
+    return response
 
 
 @router.get("/status")
-async def yahoo_status():
-    row = _get_tokens()
+async def yahoo_status(request: Request):
+    sid = _session_id(request)
     configured = bool(YAHOO_CLIENT_ID and YAHOO_CLIENT_SECRET)
+    if not sid:
+        return {"connected": False, "configured": configured}
+    row = _get_tokens(sid)
     return {"connected": bool(row), "configured": configured}
 
 
 @router.delete("/auth")
-async def yahoo_disconnect():
-    _clear_tokens()
-    return {"disconnected": True}
+async def yahoo_disconnect(request: Request):
+    sid = _session_id(request)
+    if sid:
+        _clear_tokens(sid)
+    response = JSONResponse({"disconnected": True})
+    response.delete_cookie("ysid")
+    return response
 
 
 # ── Leagues ───────────────────────────────────────────────────────────────────
 
 @router.get("/leagues")
-async def get_leagues():
-    data = await _yahoo_get("users;use_login=1/games;game_codes=nfl/leagues")
+async def get_leagues(request: Request):
+    sid = _session_id(request)
+    if not sid:
+        raise HTTPException(status_code=401, detail="Not connected to Yahoo.")
+    data = await _yahoo_get("users;use_login=1/games;game_codes=nfl/leagues", sid)
     leagues_out = []
     try:
         fc = data["fantasy_content"]
@@ -313,18 +351,22 @@ def _tiers(players: list) -> list:
 
 
 @router.get("/state")
-async def get_draft_state(league_key: str = Query(...)):
+async def get_draft_state(request: Request, league_key: str = Query(...)):
+    sid = _session_id(request)
+    if not sid:
+        raise HTTPException(status_code=401, detail="Not connected to Yahoo.")
+
     from cache_manager import get_cached_players
 
     # Parallel: settings, teams, draft results, and 6 pages of available players
     player_fetches = [
-        _yahoo_get(f"league/{league_key}/players;status=A;sort=AR;start={i * 25};count=25")
+        _yahoo_get(f"league/{league_key}/players;status=A;sort=AR;start={i * 25};count=25", sid)
         for i in range(6)
     ]
     results = await asyncio.gather(
-        _yahoo_get(f"league/{league_key}/settings"),
-        _yahoo_get(f"league/{league_key}/teams"),
-        _yahoo_get(f"league/{league_key}/draft_results;out=players"),
+        _yahoo_get(f"league/{league_key}/settings", sid),
+        _yahoo_get(f"league/{league_key}/teams", sid),
+        _yahoo_get(f"league/{league_key}/draft_results;out=players", sid),
         *player_fetches,
         return_exceptions=True,
     )
