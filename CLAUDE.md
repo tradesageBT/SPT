@@ -14,7 +14,8 @@
 
 - The app is hosted on Render at `spt-4g5a.onrender.com`
 - Render auto-deploys from `main` — push to main to deploy
-- Free tier takes ~2–5 minutes to redeploy
+- Takes ~2–5 minutes to redeploy. On the Starter tier the service does not spin
+  down, so there are no cold starts between deploys
 
 ## Stack
 

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import { api } from '../api/client'
 
 const STORAGE_KEY = 'auction_draft_state'
+const POLL_MS = 3000
 
 const POS_COLORS = {
   QB: '#e05c5c', RB: '#5cb8e0', WR: '#01d9ac', TE: '#e0a45c',
@@ -63,11 +64,55 @@ function rosterSize(s) {
 function SetupForm({ onStart }) {
   const [s, setS] = useState(DEFAULT_SETTINGS)
   const [names, setNames] = useState(DEFAULT_TEAM_NAMES)
+  const [mode, setMode] = useState('solo')   // solo | create | join
+  const [joinCode, setJoinCode] = useState('')
+  const [joined, setJoined] = useState(null) // room payload once a code loads
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
 
   function setNum(key, val) {
     const n = parseInt(val)
     setS(prev => ({ ...prev, [key]: isNaN(n) ? 0 : n }))
   }
+
+  // Pull a room's settings so every manager prices off identical numbers
+  async function loadRoom() {
+    const code = joinCode.trim().toUpperCase()
+    if (!code) return
+    setBusy(true); setError(''); setJoined(null)
+    try {
+      const room = await api.getAuctionRoom(code)
+      const rs = room.settings || {}
+      setS(prev => ({ ...prev, ...rs, myTeam: null }))
+      if (Array.isArray(rs.teamNames) && rs.teamNames.length) setNames(rs.teamNames)
+      setJoined(room)
+    } catch (e) {
+      setError(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function start() {
+    if (s.myTeam == null) return
+    const settings = { ...s, teamNames: names }
+    if (mode === 'create') {
+      setBusy(true); setError('')
+      try {
+        // myTeam is per-person, so it never goes into the shared room
+        const { myTeam, ...shared } = settings
+        const room = await api.createAuctionRoom(shared)
+        onStart({ ...settings, roomCode: room.code })
+      } catch (e) {
+        setError(`Could not create room: ${e.message}`)
+        setBusy(false)
+      }
+      return
+    }
+    onStart({ ...settings, roomCode: mode === 'join' ? joined?.code ?? null : null })
+  }
+
+  const locked = mode === 'join' && !!joined   // joiners inherit the room's settings
 
   function setTeamCount(val) {
     const n = Math.max(2, Math.min(32, parseInt(val) || 12))
@@ -93,14 +138,62 @@ function SetupForm({ onStart }) {
         Works on any platform — you enter each player as they're bought.
       </p>
 
+      <div className="au-mode-toggle">
+        {[['solo', 'Just me'], ['create', 'Create room'], ['join', 'Join room']].map(([m, label]) => (
+          <button
+            key={m}
+            className={`au-mode-btn${mode === m ? ' active' : ''}`}
+            onClick={() => { setMode(m); setError(''); setJoined(null) }}
+          >{label}</button>
+        ))}
+      </div>
+      <p className="yd-setup-hint" style={{ marginTop: 0 }}>
+        {mode === 'solo'
+          ? 'Tracked in this browser only. Nobody else sees your entries.'
+          : mode === 'create'
+            ? "You'll get a code to share. Anyone who joins sees every pick as it's entered."
+            : 'Enter the code from whoever created the room.'}
+      </p>
+
+      {error && <div className="rd-error" style={{ marginBottom: 10 }}>{error}</div>}
+
+      {mode === 'join' && (
+        <>
+          <label className="au-field">
+            <span>Room code</span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                className="yd-select au-code-input"
+                placeholder="e.g. K7M2Q"
+                value={joinCode}
+                onChange={e => setJoinCode(e.target.value.toUpperCase())}
+                onKeyDown={e => e.key === 'Enter' && loadRoom()}
+                style={{ flex: 1 }}
+              />
+              <button className="btn btn-secondary" onClick={loadRoom} disabled={busy || !joinCode.trim()}>
+                {busy ? '…' : 'Load'}
+              </button>
+            </div>
+          </label>
+          {joined && (
+            <p className="au-joined-note">
+              Joined <strong>{joined.code}</strong> — {joined.picks?.length ?? 0} picks so far.
+              Settings below come from the room and are locked so everyone prices the same.
+            </p>
+          )}
+        </>
+      )}
+
+      {(mode !== 'join' || joined) && (
+      <>
       <div className="au-setup-grid">
         <label className="au-field">
           <span>Teams</span>
-          <input className="yd-select" type="number" value={s.teams} onChange={e => setTeamCount(e.target.value)} />
+          <input className="yd-select" type="number" value={s.teams} disabled={locked} onChange={e => setTeamCount(e.target.value)} />
         </label>
         <label className="au-field">
           <span>Budget per team</span>
-          <input className="yd-select" type="number" value={s.budget} onChange={e => setNum('budget', e.target.value)} />
+          <input className="yd-select" type="number" value={s.budget} disabled={locked} onChange={e => setNum('budget', e.target.value)} />
         </label>
       </div>
 
@@ -110,6 +203,7 @@ function SetupForm({ onStart }) {
           <button
             key={val}
             className={`au-ppr-btn${s.ppr === val ? ' active' : ''}`}
+            disabled={locked}
             onClick={() => setS(prev => ({ ...prev, ppr: val }))}
           >{label}</button>
         ))}
@@ -120,7 +214,7 @@ function SetupForm({ onStart }) {
         {SLOT_FIELDS.map(([key, label]) => (
           <label key={key} className="au-field">
             <span>{label}</span>
-            <input className="yd-select" type="number" value={s[key]} onChange={e => setNum(key, e.target.value)} />
+            <input className="yd-select" type="number" value={s[key]} disabled={locked} onChange={e => setNum(key, e.target.value)} />
           </label>
         ))}
       </div>
@@ -136,6 +230,7 @@ function SetupForm({ onStart }) {
             key={i}
             className="yd-select au-name-input"
             value={n}
+            disabled={locked}
             onChange={e => setNames(prev => prev.map((x, j) => j === i ? e.target.value : x))}
           />
         ))}
@@ -159,11 +254,16 @@ function SetupForm({ onStart }) {
       <button
         className="btn btn-primary"
         style={{ marginTop: 18, width: '100%' }}
-        disabled={s.myTeam == null}
-        onClick={() => onStart({ ...s, teamNames: names })}
+        disabled={s.myTeam == null || busy}
+        onClick={start}
       >
-        Start Auction
+        {busy ? 'Creating room…'
+          : mode === 'create' ? 'Create Room & Start'
+          : mode === 'join' ? 'Join & Start'
+          : 'Start Auction'}
       </button>
+      </>
+      )}
     </div>
   )
 }
@@ -347,10 +447,36 @@ function AuctionBoard({ settings, onReset }) {
   const [selected, setSelected] = useState(null)
   const [pos, setPos] = useState('ALL')
   const [search, setSearch] = useState('')
+  const [syncedAt, setSyncedAt] = useState(null)
+  const [syncErr, setSyncErr] = useState('')
 
+  const room = settings.roomCode || null
+
+  // Always mirror locally, shared or not: if the network drops mid-draft the
+  // board keeps working from this copy.
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY + '_buys', JSON.stringify(purchases))
   }, [purchases])
+
+  // In a shared room the server is the source of truth for picks
+  useEffect(() => {
+    if (!room) return
+    let cancelled = false
+    const tick = async () => {
+      try {
+        const d = await api.getAuctionRoom(room)
+        if (cancelled) return
+        setPurchases(d.picks || [])
+        setSyncedAt(new Date())
+        setSyncErr('')
+      } catch (e) {
+        if (!cancelled) setSyncErr(e.message)
+      }
+    }
+    tick()
+    const t = setInterval(tick, POLL_MS)
+    return () => { cancelled = true; clearInterval(t) }
+  }, [room])
 
   useEffect(() => {
     setLoading(true)
@@ -411,8 +537,8 @@ function AuctionBoard({ settings, onReset }) {
     return c
   }, [me])
 
-  function addPurchase({ price, team, position }) {
-    setPurchases(prev => [...prev, {
+  async function addPurchase({ price, team, position }) {
+    const pick = {
       sleeper_id: selected.sleeper_id,
       name: selected.name,
       position: position || selected.position,
@@ -420,9 +546,25 @@ function AuctionBoard({ settings, onReset }) {
       // Manual entries aren't ranked, so they're never scored over/under value
       auction_value: selected.auction_value || 0,
       price, team,
-    }])
+    }
     setSelected(null)
     setSearch('')
+
+    if (!room) {
+      setPurchases(prev => [...prev, { ...pick, id: `local_${Date.now()}` }])
+      return
+    }
+    try {
+      // The server returns the full list, so there's nothing to merge
+      const d = await api.addAuctionPick(room, pick)
+      setPurchases(d.picks || [])
+      setSyncedAt(new Date())
+      setSyncErr('')
+    } catch (e) {
+      // Keep the entry rather than lose it; the next successful poll reconciles
+      setPurchases(prev => [...prev, { ...pick, id: `local_${Date.now()}` }])
+      setSyncErr(`Not saved to room (${e.message}) — kept locally`)
+    }
   }
 
   function addManual() {
@@ -438,13 +580,44 @@ function AuctionBoard({ settings, onReset }) {
     })
   }
 
-  function undo() {
+  async function undo() {
+    const last = purchases[purchases.length - 1]
+    if (!last) return
+    // Delete by id, not "the last row", so undo stays correct when two people
+    // are entering at once.
+    if (room && typeof last.id === 'number') {
+      try {
+        const d = await api.deleteAuctionPick(room, last.id)
+        setPurchases(d.picks || [])
+        setSyncedAt(new Date())
+        setSyncErr('')
+        return
+      } catch (e) {
+        setSyncErr(`Undo failed (${e.message})`)
+        return
+      }
+    }
     setPurchases(prev => prev.slice(0, -1))
   }
 
-  function clearAll() {
-    if (!window.confirm('Clear every purchase and start this auction over?')) return
-    setPurchases([])
+  async function clearAll() {
+    const msg = room
+      ? `Clear all ${purchases.length} picks for EVERYONE in room ${room}? This cannot be undone.`
+      : 'Clear every purchase and start this auction over?'
+    if (!window.confirm(msg)) return
+    if (!room) { setPurchases([]); return }
+    try {
+      let remaining = purchases
+      for (const p of purchases) {
+        if (typeof p.id === 'number') {
+          const d = await api.deleteAuctionPick(room, p.id)
+          remaining = d.picks || []
+        }
+      }
+      setPurchases(remaining)
+    } catch (e) {
+      setSyncErr(`Clear failed (${e.message})`)
+    }
   }
 
   if (loading) return <div className="rd-loading">Loading player values…</div>
@@ -483,6 +656,19 @@ function AuctionBoard({ settings, onReset }) {
           <button className="btn btn-secondary btn-sm" onClick={onReset}>Settings</button>
         </div>
       </div>
+
+      {room && (
+        <div className={`au-room-bar${syncErr ? ' au-room-bar-err' : ''}`}>
+          <span className="au-room-code">Room {room}</span>
+          <span className="au-room-sync">
+            {syncErr
+              ? syncErr
+              : syncedAt
+                ? `Shared · synced ${syncedAt.toLocaleTimeString()}`
+                : 'Connecting…'}
+          </span>
+        </div>
+      )}
 
       {inflation !== 1 && (
         <div className="au-inflation-note">

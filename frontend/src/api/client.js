@@ -9,6 +9,19 @@ async function request(path) {
   return res.json()
 }
 
+async function send(path, method, body) {
+  const res = await fetch(`${BASE}${path}`, {
+    method,
+    headers: body ? { 'Content-Type': 'application/json' } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail || 'Request failed')
+  }
+  return res.json()
+}
+
 export const api = {
   getLeague: (leagueId) => request(`/leagues/${leagueId}`),
   syncLeague: (leagueId) =>
@@ -58,6 +71,12 @@ export const api = {
     })
     return request(`/auction-draft/pool?${p}`)
   },
+  createAuctionRoom: (settings) => send('/auction-draft/room', 'POST', { settings }),
+  getAuctionRoom: (code) => request(`/auction-draft/room/${encodeURIComponent(code)}`),
+  addAuctionPick: (code, pick) =>
+    send(`/auction-draft/room/${encodeURIComponent(code)}/pick`, 'POST', pick),
+  deleteAuctionPick: (code, id) =>
+    send(`/auction-draft/room/${encodeURIComponent(code)}/pick/${id}`, 'DELETE'),
   getYahooStatus: () => request('/yahoo-draft/status'),
   getYahooLeagues: () => request('/yahoo-draft/leagues'),
   getYahooDraftState: (leagueKey) => request(`/yahoo-draft/state?league_key=${encodeURIComponent(leagueKey)}`),

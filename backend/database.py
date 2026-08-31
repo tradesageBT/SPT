@@ -162,3 +162,33 @@ def init_db():
             ALTER TABLE yahoo_tokens ADD COLUMN IF NOT EXISTS session_id TEXT;
             CREATE UNIQUE INDEX IF NOT EXISTS yahoo_tokens_session_id_idx ON yahoo_tokens(session_id);
         """)
+
+    # Shared auction rooms. Deliberately isolated in its own transaction and
+    # try/except: init_db() runs at startup and a raise here would stop the whole
+    # app from booting, taking down features that have nothing to do with this.
+    try:
+        with db() as conn:
+            conn.executescript("""
+                CREATE TABLE IF NOT EXISTS auction_rooms (
+                    code            TEXT PRIMARY KEY,
+                    settings        TEXT,
+                    created_at      TEXT
+                );
+
+                CREATE TABLE IF NOT EXISTS auction_picks (
+                    id              SERIAL PRIMARY KEY,
+                    room_code       TEXT NOT NULL,
+                    sleeper_id      TEXT,
+                    name            TEXT,
+                    position        TEXT,
+                    nfl_team        TEXT,
+                    auction_value   INTEGER DEFAULT 0,
+                    price           INTEGER DEFAULT 0,
+                    team            INTEGER DEFAULT 0,
+                    created_at      TEXT
+                );
+
+                CREATE INDEX IF NOT EXISTS auction_picks_room_idx ON auction_picks(room_code);
+            """)
+    except Exception as exc:
+        print(f"[STARTUP] auction room tables unavailable ({exc}); shared rooms disabled")

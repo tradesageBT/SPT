@@ -3027,3 +3027,57 @@ img { display: block; }
 .au-comp-filled .au-comp-need { color: var(--text-muted); }
 .au-comp-threat .au-comp-max { color: #e05c5c; }
 .au-comp-threat .au-comp-need { color: #e05c5c; }
+
+/* Auction: shared rooms */
+.au-mode-toggle { display: flex; gap: 6px; margin: 4px 0 6px; }
+.au-mode-btn {
+  flex: 1;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 6px;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.au-mode-btn:hover { color: var(--text); }
+.au-mode-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #0b0d1a;
+}
+.au-code-input {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-weight: 700;
+}
+.au-joined-note {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 8px 10px;
+  margin: 8px 0 4px;
+}
+.au-room-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface2);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 7px 12px;
+  margin-bottom: 10px;
+}
+.au-room-bar-err { border-color: #e05c5c; }
+.au-room-code {
+  font-weight: 700;
+  font-size: 0.82rem;
+  letter-spacing: 0.1em;
+  color: var(--accent);
+}
+.au-room-bar-err .au-room-code { color: #e05c5c; }
+.au-room-sync { font-size: 0.72rem; color: var(--text-muted); margin-left: auto; }
+.yd-select:disabled, .au-ppr-btn:disabled { opacity: 0.5; cursor: not-allowed; }

@@ -12,14 +12,22 @@ the last league sync happened to write. Nothing here writes to that cache.
 
   GET /api/auction-draft/pool?teams=12&budget=200&ppr=1&qb=1&rb=2&wr=2&te=1&flex=1&...
 """
+import json
+import random
 import logging
+from datetime import datetime, timezone
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, HTTPException, Body
 
 import fantasycalc_client
+from database import db
 
 router = APIRouter(prefix="/api/auction-draft")
 log = logging.getLogger(__name__)
+
+# Room codes are read aloud and typed on phones, so drop characters that get
+# confused with each other (0/O, 1/I/L).
+ROOM_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 
 POSITIONS = ("QB", "RB", "WR", "TE", "K", "DEF")
 
@@ -198,3 +206,108 @@ async def get_auction_pool(
             "bench": bench,
         },
     }
+
+
+# ── Shared rooms ──────────────────────────────────────────────────────────────
+#
+# Several managers in the same league run this at once, so picks are shared
+# rather than tracked separately in each browser. Picks are an append-only
+# table: two people entering at the same moment each insert a row instead of
+# overwriting a shared blob, so neither can clobber the other. Every mutation
+# returns the full authoritative list, which keeps the client from having to
+# merge anything.
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _picks(conn, code: str) -> list:
+    return conn.execute(
+        "SELECT * FROM auction_picks WHERE room_code = ? ORDER BY id", (code,)
+    ).fetchall()
+
+
+def _norm_code(code: str) -> str:
+    return (code or "").strip().upper()
+
+
+@router.post("/room")
+async def create_room(body: dict = Body(...)):
+    """Create a shared room. Settings are league-wide; each client keeps its own myTeam."""
+    settings = body.get("settings", {}) or {}
+    with db() as conn:
+        code = None
+        for _ in range(12):
+            candidate = "".join(random.choice(ROOM_CHARS) for _ in range(5))
+            if not conn.execute(
+                "SELECT code FROM auction_rooms WHERE code = ?", (candidate,)
+            ).fetchone():
+                code = candidate
+                break
+        if not code:
+            raise HTTPException(status_code=500, detail="Could not allocate a room code.")
+        conn.execute(
+            "INSERT INTO auction_rooms (code, settings, created_at) VALUES (?, ?, ?)",
+            (code, json.dumps(settings), _now()),
+        )
+    return {"code": code, "settings": settings, "picks": []}
+
+
+@router.get("/room/{code}")
+async def get_room(code: str):
+    code = _norm_code(code)
+    with db() as conn:
+        room = conn.execute(
+            "SELECT * FROM auction_rooms WHERE code = ?", (code,)
+        ).fetchone()
+        if not room:
+            raise HTTPException(status_code=404, detail=f"Room {code} not found. Check the code.")
+        picks = _picks(conn, code)
+    try:
+        settings = json.loads(room.get("settings") or "{}")
+    except Exception:
+        settings = {}
+    return {"code": code, "settings": settings, "picks": picks}
+
+
+@router.post("/room/{code}/pick")
+async def add_pick(code: str, body: dict = Body(...)):
+    code = _norm_code(code)
+    with db() as conn:
+        if not conn.execute(
+            "SELECT code FROM auction_rooms WHERE code = ?", (code,)
+        ).fetchone():
+            raise HTTPException(status_code=404, detail=f"Room {code} not found.")
+        conn.execute(
+            """
+            INSERT INTO auction_picks
+                (room_code, sleeper_id, name, position, nfl_team,
+                 auction_value, price, team, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                code,
+                str(body.get("sleeper_id") or ""),
+                str(body.get("name") or ""),
+                str(body.get("position") or ""),
+                str(body.get("nfl_team") or ""),
+                int(body.get("auction_value") or 0),
+                int(body.get("price") or 0),
+                int(body.get("team") or 0),
+                _now(),
+            ),
+        )
+        picks = _picks(conn, code)
+    return {"picks": picks}
+
+
+@router.delete("/room/{code}/pick/{pick_id}")
+async def delete_pick(code: str, pick_id: int):
+    """Undo. Deletes by id rather than 'the last one' so it stays correct with concurrent entry."""
+    code = _norm_code(code)
+    with db() as conn:
+        conn.execute(
+            "DELETE FROM auction_picks WHERE room_code = ? AND id = ?", (code, pick_id)
+        )
+        picks = _picks(conn, code)
+    return {"picks": picks}
