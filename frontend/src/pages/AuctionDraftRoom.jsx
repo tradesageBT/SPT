@@ -14,8 +14,6 @@ const DEFAULT_TEAM_NAMES = [
   'DannyFootball', 'Dayman', 'ElectricDreamMachine', 'Football Pharm',
   'Southcards', 'SteelCurtain', 'The Pack is Back!', 'Thicc Boiz',
 ]
-const MY_TEAM_INDEX = DEFAULT_TEAM_NAMES.indexOf('Football Pharm')
-
 const DEFAULT_SETTINGS = {
   teams: 12, budget: 200, ppr: 1,
   qb: 1, rb: 2, wr: 3, te: 1,
@@ -24,7 +22,8 @@ const DEFAULT_SETTINGS = {
   flex: 0, sflex: 1, wr_rb_flex: 0, rec_flex: 0,
   k: 1, dst: 1, bench: 7,
   teamNames: DEFAULT_TEAM_NAMES,
-  myTeam: MY_TEAM_INDEX,
+  // No default — everyone in the league uses this, so picking a team is explicit.
+  myTeam: null,
 }
 
 const SLOT_FIELDS = [
@@ -73,7 +72,11 @@ function SetupForm({ onStart }) {
   function setTeamCount(val) {
     const n = Math.max(2, Math.min(32, parseInt(val) || 12))
     // Keep myTeam in range if the league shrinks below its index
-    setS(prev => ({ ...prev, teams: n, myTeam: Math.min(prev.myTeam, n - 1) }))
+    setS(prev => ({
+      ...prev,
+      teams: n,
+      myTeam: prev.myTeam == null ? null : Math.min(prev.myTeam, n - 1),
+    }))
     setNames(prev => {
       const next = [...prev]
       while (next.length < n) next.push(`Team ${next.length + 1}`)
@@ -140,14 +143,23 @@ function SetupForm({ onStart }) {
 
       <label className="au-field" style={{ marginTop: 14 }}>
         <span>Which team is yours?</span>
-        <select className="yd-select" value={s.myTeam} onChange={e => setNum('myTeam', e.target.value)}>
-          {names.map((n, i) => <option key={i} value={i}>{n}</option>)}
+        <select
+          className="yd-select"
+          value={s.myTeam ?? ''}
+          onChange={e => setS(prev => ({
+            ...prev,
+            myTeam: e.target.value === '' ? null : parseInt(e.target.value),
+          }))}
+        >
+          <option value="">— Select your team —</option>
+          {names.slice(0, s.teams).map((n, i) => <option key={i} value={i}>{n}</option>)}
         </select>
       </label>
 
       <button
         className="btn btn-primary"
         style={{ marginTop: 18, width: '100%' }}
+        disabled={s.myTeam == null}
         onClick={() => onStart({ ...s, teamNames: names })}
       >
         Start Auction
