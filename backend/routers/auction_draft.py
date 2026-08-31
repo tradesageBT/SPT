@@ -68,6 +68,56 @@ STAT_KEYS = (
 
 _stats_cache: dict[str, tuple[float, dict]] = {}
 
+# ── Injury / depth-chart metadata ─────────────────────────────────────────────
+#
+# Lives in Sleeper's /players/nfl, which is a ~10MB download taking 10-30s —
+# cache_manager avoids it for exactly that reason. So it is loaded in the
+# BACKGROUND and never blocks a pool request: the board returns immediately and
+# the injury line appears once the fetch lands. Worst case it isn't there yet.
+
+META_TTL = 6 * 3600
+META_KEYS = (
+    "injury_status", "injury_notes", "practice_participation",
+    "depth_chart_order", "depth_chart_position", "status",
+)
+
+_meta: dict[str, dict] = {}
+_meta_at = 0.0
+_meta_loading = False
+
+
+def _meta_fresh() -> bool:
+    return bool(_meta) and (time.time() - _meta_at) < META_TTL
+
+
+async def _load_meta():
+    global _meta, _meta_at, _meta_loading
+    if _meta_loading:
+        return
+    _meta_loading = True
+    try:
+        import sleeper_client
+        data = await sleeper_client.get_all_players()
+        out: dict[str, dict] = {}
+        if isinstance(data, dict):
+            for pid, p in data.items():
+                if not isinstance(p, dict):
+                    continue
+                picked = {
+                    k: p[k] for k in META_KEYS
+                    if p.get(k) not in (None, "", [])
+                }
+                if picked:
+                    out[str(pid)] = picked
+        if out:
+            _meta = out
+            _meta_at = time.time()
+            log.info("Loaded injury metadata for %d players", len(out))
+    except Exception as e:
+        log.warning("Sleeper player metadata failed (%s); continuing without", e)
+    finally:
+        _meta_loading = False
+
 
 def _current_season() -> int:
     """NFL season is named for the year it starts; roll over in March."""
@@ -292,15 +342,21 @@ async def get_auction_pool(
 
     all_players.sort(key=lambda x: (x["auction_value"], x["value"]), reverse=True)
 
+    # Kick the 10MB metadata fetch off in the background — never awaited here
+    if not _meta_fresh() and not _meta_loading:
+        asyncio.create_task(_load_meta())
+
     for p in all_players:
         sid = p["sleeper_id"]
         p["proj"] = proj.get(sid) or None
         p["last"] = last.get(sid) or None
+        p["meta"] = _meta.get(sid) or None
 
     return {
         "players": all_players[:400],
         "seasons": {"projected": season, "actual": season - 1},
         "stats_available": bool(proj) or bool(last),
+        "meta_ready": _meta_fresh(),
         "settings": {
             "teams": teams,
             "budget": budget,

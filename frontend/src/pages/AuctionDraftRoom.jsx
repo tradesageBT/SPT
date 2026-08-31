@@ -55,6 +55,24 @@ function PosPill({ pos }) {
   )
 }
 
+// Short injury tag for the list rows — red for anything that means "not playing"
+const INJ_SHORT = {
+  Questionable: ['Q', '#e0a45c'], Doubtful: ['D', '#e05c5c'], Out: ['OUT', '#e05c5c'],
+  IR: ['IR', '#e05c5c'], PUP: ['PUP', '#e05c5c'], Sus: ['SUS', '#e05c5c'],
+  COV: ['COV', '#e0a45c'], NA: ['NA', '#e05c5c'],
+}
+
+function InjuryTag({ meta }) {
+  const status = meta?.injury_status
+  if (!status) return null
+  const [label, color] = INJ_SHORT[status] || [String(status).slice(0, 3).toUpperCase(), '#e0a45c']
+  return (
+    <span className="au-inj-tag" style={{ color, borderColor: color + '66', background: color + '1a' }}>
+      {label}
+    </span>
+  )
+}
+
 function rosterSize(s) {
   return SLOT_FIELDS.reduce((n, [key]) => n + (s[key] || 0), 0)
 }
@@ -375,6 +393,31 @@ function PlayerDetail({ player, adjPrice, seasons, ppr, onNominate, onClose }) {
               </div>
             ))}
           </div>
+          {player.meta && (
+            <div className="au-meta-block">
+              {player.meta.injury_status && (
+                <div className="au-meta-row">
+                  <InjuryTag meta={player.meta} />
+                  <span className="au-meta-status">
+                    {player.meta.injury_status}
+                    {player.meta.practice_participation ? ` · ${player.meta.practice_participation}` : ''}
+                  </span>
+                </div>
+              )}
+              {player.meta.injury_notes && (
+                <div className="au-meta-notes">{player.meta.injury_notes}</div>
+              )}
+              {player.meta.depth_chart_order != null && (
+                <div className="au-meta-depth">
+                  Depth chart: <strong>
+                    {player.meta.depth_chart_position || player.position}
+                    {player.meta.depth_chart_order}
+                  </strong>
+                  {player.meta.depth_chart_order === 1 ? ' — starter' : ''}
+                </div>
+              )}
+            </div>
+          )}
           <StatBlock player={player} seasons={seasons} ppr={ppr} />
           <button
             className="btn btn-primary"
@@ -472,6 +515,8 @@ const CHEAT_POS = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF']
 const CHEAT_DEPTH = 40   // deep enough to cover anything rosterable in a 12-team league
 
 function CheatSheet({ pool, purchases, settings, adj, onNominate }) {
+  const [posFilter, setPosFilter] = useState('ALL')
+
   const boughtById = useMemo(() => {
     const m = new Map()
     for (const b of purchases) m.set(b.sleeper_id, b)
@@ -481,7 +526,10 @@ function CheatSheet({ pool, purchases, settings, adj, onNominate }) {
   const groups = useMemo(() => {
     const out = {}
     for (const pos of CHEAT_POS) {
-      const players = pool.filter(p => p.position === pos).slice(0, CHEAT_DEPTH)
+      // A single position gets the full list; "all" stays shallow so the
+      // columns stay comparable side by side.
+      const depth = posFilter === 'ALL' ? CHEAT_DEPTH : CHEAT_DEPTH * 3
+      const players = pool.filter(p => p.position === pos).slice(0, depth)
       if (!players.length) continue
       const tiers = {}
       for (const p of players) {
@@ -491,13 +539,31 @@ function CheatSheet({ pool, purchases, settings, adj, onNominate }) {
       out[pos] = tiers
     }
     return out
-  }, [pool])
+  }, [pool, posFilter])
 
-  const positions = Object.keys(groups)
-  if (!positions.length) return <div className="rd-empty">No players loaded</div>
+  const allPositions = Object.keys(groups)
+  const positions = posFilter === 'ALL'
+    ? allPositions
+    : allPositions.filter(p => p === posFilter)
 
   return (
-    <div className="au-cheat">
+    <>
+      <div className="rd-pos-tabs au-cheat-tabs">
+        {['ALL', ...allPositions].map(p => (
+          <button
+            key={p}
+            className={`rd-pos-tab${posFilter === p ? ' active' : ''}`}
+            style={posFilter === p && p !== 'ALL'
+              ? { background: (POS_COLORS[p] || '#8b90b0') + '22', color: POS_COLORS[p] || '#8b90b0', borderColor: (POS_COLORS[p] || '#8b90b0') + '88' }
+              : {}}
+            onClick={() => setPosFilter(p)}
+          >{p}</button>
+        ))}
+      </div>
+      {!positions.length
+        ? <div className="rd-empty">No players loaded</div>
+        : (
+    <div className={`au-cheat${posFilter !== 'ALL' ? ' au-cheat-single' : ''}`}>
       {positions.map(pos => (
         <div key={pos} className="au-cheat-col">
           <div className="au-cheat-pos">
@@ -525,6 +591,7 @@ function CheatSheet({ pool, purchases, settings, adj, onNominate }) {
                       title={bought ? '' : `Nominate ${p.name}`}
                     >
                       <span className="au-cheat-name">{p.name}</span>
+                      <InjuryTag meta={p.meta} />
                       {bought ? (
                         <span className="au-cheat-prices">
                           <s className="au-cheat-est">${p.auction_value}</s>
@@ -550,6 +617,8 @@ function CheatSheet({ pool, purchases, settings, adj, onNominate }) {
         </div>
       ))}
     </div>
+        )}
+    </>
   )
 }
 
@@ -985,6 +1054,7 @@ function AuctionBoard({ settings, onReset }) {
                 <div className="rd-player-info">
                   <PosPill pos={p.position} />
                   <span className="rd-player-name">{p.name}</span>
+                  <InjuryTag meta={p.meta} />
                   <span className="rd-player-team">{p.nfl_team}{p.pos_rank ? ` · ${p.position}${p.pos_rank}` : ''}</span>
                 </div>
                 <span className="rd-col-center au-val">${p.auction_value}</span>
