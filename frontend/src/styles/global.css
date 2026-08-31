@@ -3122,3 +3122,81 @@ img { display: block; }
   font-weight: 700;
 }
 .au-detail-val { font-size: 1.15rem; font-weight: 700; color: var(--text); }
+
+/* Auction: board / cheat sheet toggle */
+.au-view-toggle { display: flex; gap: 6px; margin-bottom: 4px; }
+.au-view-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 7px 16px;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.au-view-btn:hover { color: var(--text); }
+.au-view-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #0b0d1a;
+}
+
+/* Auction: cheat sheet */
+.au-cheat {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+.au-cheat-col {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+}
+.au-cheat-pos {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.au-cheat-pos-name { font-weight: 700; font-size: 0.86rem; color: var(--text); }
+.au-cheat-tier { margin-bottom: 10px; }
+.au-cheat-tier-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  color: var(--text-muted);
+  padding: 4px 0;
+}
+.au-cheat-gone { color: #e05c5c; }
+.au-cheat-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.au-cheat-row:hover { background: var(--surface2); }
+.au-cheat-drafted { opacity: 0.55; cursor: default; }
+.au-cheat-drafted:hover { background: transparent; }
+.au-cheat-name {
+  flex: 1;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.au-cheat-drafted .au-cheat-name { text-decoration: line-through; }
+.au-cheat-prices { display: flex; align-items: baseline; gap: 5px; font-size: 0.74rem; }
+.au-cheat-est { color: var(--text-muted); }
+.au-cheat-est-live { color: var(--accent); font-weight: 700; }
+.au-cheat-owner { color: var(--text-muted); font-size: 0.64rem; max-width: 66px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

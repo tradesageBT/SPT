@@ -313,7 +313,6 @@ function PlayerDetail({ player, adjPrice, onNominate, onClose }) {
     ['Pos rank', player.pos_rank ? `${player.position}${player.pos_rank}` : '—'],
     ['Tier', player.tier ? `T${player.tier}` : '—'],
     ['VOR', player.vor > 0 ? `+${player.vor}` : `${player.vor ?? '—'}`],
-    ['Age', player.age ? Math.round(player.age) : '—'],
   ]
 
   return (
@@ -423,6 +422,97 @@ function CompetitionPanel({ position, teamState, settings }) {
   )
 }
 
+// ── Cheat sheet ───────────────────────────────────────────────────────────────
+//
+// Every player grouped position -> tier, drafted ones kept in place with the
+// estimate struck through and what they actually went for. The point is seeing
+// how much talent is left in a tier, so removing drafted players would defeat it.
+
+const CHEAT_POS = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF']
+const CHEAT_DEPTH = 40   // deep enough to cover anything rosterable in a 12-team league
+
+function CheatSheet({ pool, purchases, settings, adj, onNominate }) {
+  const boughtById = useMemo(() => {
+    const m = new Map()
+    for (const b of purchases) m.set(b.sleeper_id, b)
+    return m
+  }, [purchases])
+
+  const groups = useMemo(() => {
+    const out = {}
+    for (const pos of CHEAT_POS) {
+      const players = pool.filter(p => p.position === pos).slice(0, CHEAT_DEPTH)
+      if (!players.length) continue
+      const tiers = {}
+      for (const p of players) {
+        const t = p.tier || 1
+        ;(tiers[t] = tiers[t] || []).push(p)
+      }
+      out[pos] = tiers
+    }
+    return out
+  }, [pool])
+
+  const positions = Object.keys(groups)
+  if (!positions.length) return <div className="rd-empty">No players loaded</div>
+
+  return (
+    <div className="au-cheat">
+      {positions.map(pos => (
+        <div key={pos} className="au-cheat-col">
+          <div className="au-cheat-pos">
+            <PosPill pos={pos} />
+            <span className="au-cheat-pos-name">{pos}</span>
+          </div>
+          {Object.keys(groups[pos]).sort((a, b) => a - b).map(tier => {
+            const players = groups[pos][tier]
+            const left = players.filter(p => !boughtById.has(p.sleeper_id)).length
+            return (
+              <div key={tier} className="au-cheat-tier">
+                <div className="au-cheat-tier-head">
+                  <span>Tier {tier}</span>
+                  <span className={left === 0 ? 'au-cheat-gone' : ''}>
+                    {left} of {players.length} left
+                  </span>
+                </div>
+                {players.map(p => {
+                  const bought = boughtById.get(p.sleeper_id)
+                  return (
+                    <div
+                      key={p.sleeper_id}
+                      className={`au-cheat-row${bought ? ' au-cheat-drafted' : ''}`}
+                      onClick={() => !bought && onNominate(p)}
+                      title={bought ? '' : `Nominate ${p.name}`}
+                    >
+                      <span className="au-cheat-name">{p.name}</span>
+                      {bought ? (
+                        <span className="au-cheat-prices">
+                          <s className="au-cheat-est">${p.auction_value}</s>
+                          <strong className={
+                            bought.price > p.auction_value ? 'au-over'
+                              : bought.price < p.auction_value ? 'au-under' : ''
+                          }>${bought.price}</strong>
+                          <span className="au-cheat-owner">
+                            {settings.teamNames[bought.team] || `T${bought.team + 1}`}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="au-cheat-prices">
+                          <span className="au-cheat-est-live">${adj(p.auction_value)}</span>
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ── Purchase entry bar ────────────────────────────────────────────────────────
 
 function EntryBar({ player, settings, teamState, onSubmit, onCancel }) {
@@ -509,6 +599,7 @@ function AuctionBoard({ settings, onReset }) {
   const [search, setSearch] = useState('')
   const [syncedAt, setSyncedAt] = useState(null)
   const [syncErr, setSyncErr] = useState('')
+  const [view, setView] = useState('board')   // board | cheat
 
   const room = settings.roomCode || null
 
@@ -784,6 +875,25 @@ function AuctionBoard({ settings, onReset }) {
         </>
       )}
 
+      <div className="au-view-toggle">
+        {[['board', 'Board'], ['cheat', 'Cheat Sheet']].map(([v, label]) => (
+          <button
+            key={v}
+            className={`au-view-btn${view === v ? ' active' : ''}`}
+            onClick={() => setView(v)}
+          >{label}</button>
+        ))}
+      </div>
+
+      {view === 'cheat' ? (
+        <CheatSheet
+          pool={pool}
+          purchases={purchases}
+          settings={settings}
+          adj={adj}
+          onNominate={nominate}
+        />
+      ) : (
       <div className="rd-board-body">
         {/* Available players */}
         <div className="rd-player-list-wrap">
@@ -910,6 +1020,7 @@ function AuctionBoard({ settings, onReset }) {
           </div>
         </div>
       </div>
+      )}
     </div>
   )
 }
