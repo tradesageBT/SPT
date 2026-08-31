@@ -42,10 +42,11 @@ function ConnectScreen() {
         Connect Yahoo Account
       </a>
       <p className="yd-setup-hint">
-        Need credentials? Register a free app at{' '}
-        <strong>developer.yahoo.com</strong> → Fantasy Sports → Read scope, then
-        add <code>YAHOO_CLIENT_ID</code> and <code>YAHOO_CLIENT_SECRET</code> in
-        Render environment variables.
+        Yahoo no longer grants Fantasy Sports API access automatically. After
+        registering an app at <strong>developer.yahoo.com</strong>, you must also
+        apply at <strong>sports.yahoo.com/developer/access/</strong> with your
+        Client ID and wait for manual approval — until then the API returns
+        “additional authorization required”.
       </p>
     </div>
   )

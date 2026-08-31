@@ -34,6 +34,11 @@ YAHOO_REDIRECT_URI  = os.getenv(
     "YAHOO_REDIRECT_URI",
     "https://spt-4g5a.onrender.com/api/yahoo-draft/callback",
 )
+# Yahoo no longer self-serve provisions the Fantasy Sports API. Until an access
+# application at sports.yahoo.com/developer/access/ is approved, requesting the
+# "fspt-r" scope fails with invalid_scope and every API call 401s with
+# additional_authorization_required. Once approved, set YAHOO_SCOPE=fspt-r.
+YAHOO_SCOPE         = os.getenv("YAHOO_SCOPE", "")
 YAHOO_AUTH_URL  = "https://api.login.yahoo.com/oauth2/request_auth"
 YAHOO_TOKEN_URL = "https://api.login.yahoo.com/oauth2/get_token"
 YAHOO_API_BASE  = "https://fantasysports.yahooapis.com/fantasy/v2"
@@ -156,6 +161,16 @@ async def _yahoo_get(path: str, session_id: str) -> dict:
 
     if r.status_code == 404:
         raise HTTPException(status_code=404, detail="Yahoo league not found. Check your league key.")
+    if "additional_authorization_required" in r.text:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "This Yahoo app isn't approved for the Fantasy Sports API yet. "
+                "Yahoo no longer grants it automatically — apply at "
+                "sports.yahoo.com/developer/access/ with your Client ID. "
+                "Once approved, set YAHOO_SCOPE=fspt-r in the environment."
+            ),
+        )
     if not r.is_success:
         raise HTTPException(status_code=r.status_code, detail=f"Yahoo API error: {r.text[:300]}")
     return r.json()
@@ -210,13 +225,16 @@ async def yahoo_auth(request: Request):
         )
     # Reuse existing session or mint a new one
     sid = _session_id(request) or str(uuid.uuid4())
-    params = urlencode({
+    auth_params = {
         "client_id": YAHOO_CLIENT_ID,
         "redirect_uri": YAHOO_REDIRECT_URI,
         "response_type": "code",
         "language": "en-us",
         "state": sid,
-    })
+    }
+    if YAHOO_SCOPE:
+        auth_params["scope"] = YAHOO_SCOPE
+    params = urlencode(auth_params)
     response = RedirectResponse(f"{YAHOO_AUTH_URL}?{params}")
     _set_session_cookie(response, sid)
     return response
