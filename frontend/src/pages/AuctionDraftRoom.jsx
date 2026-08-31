@@ -300,7 +300,46 @@ function positionNeed(byPos, settings, pos) {
 // and rejected: .main-content caps at 1100px and .rd-board-body collapses to a
 // single column at 860px, so a third column would be unusable on a phone.
 
-function PlayerDetail({ player, adjPrice, onNominate, onClose }) {
+// Which stat lines matter per position — a glanceable set, not a stat page
+const STAT_LINES = {
+  QB: [['Pass yd', 'pass_yd'], ['Pass TD', 'pass_td'], ['INT', 'pass_int'], ['Rush yd', 'rush_yd'], ['Rush TD', 'rush_td']],
+  RB: [['Rush att', 'rush_att'], ['Rush yd', 'rush_yd'], ['Rush TD', 'rush_td'], ['Rec', 'rec'], ['Rec yd', 'rec_yd']],
+  WR: [['Targets', 'rec_tgt'], ['Rec', 'rec'], ['Rec yd', 'rec_yd'], ['Rec TD', 'rec_td']],
+  TE: [['Targets', 'rec_tgt'], ['Rec', 'rec'], ['Rec yd', 'rec_yd'], ['Rec TD', 'rec_td']],
+}
+
+function StatBlock({ player, seasons, ppr }) {
+  const { proj, last } = player
+  if (!proj && !last) {
+    return <div className="au-stat-none">No stats or projections available for this player.</div>
+  }
+  // Match the fantasy-point figure to the league's scoring
+  const ptsKey = ppr === 1 ? 'pts_ppr' : ppr === 0.5 ? 'pts_half_ppr' : 'pts_std'
+  const rows = [['Points', ptsKey], ['Games', 'gp'], ...(STAT_LINES[player.position] || STAT_LINES.WR)]
+  const fmt = (src, key) => {
+    const v = src?.[key]
+    if (v == null) return '—'
+    return key.startsWith('pts') ? Math.round(v) : (Number.isInteger(v) ? v : Math.round(v))
+  }
+  return (
+    <div className="au-stat-table">
+      <div className="au-stat-head">
+        <span />
+        <span>{seasons?.actual ?? 'Last yr'}</span>
+        <span>{seasons?.projected ?? 'Proj'}</span>
+      </div>
+      {rows.map(([label, key]) => (
+        <div key={key} className="au-stat-row">
+          <span className="au-stat-name">{label}</span>
+          <span>{fmt(last, key)}</span>
+          <span className="au-stat-proj">{fmt(proj, key)}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function PlayerDetail({ player, adjPrice, seasons, ppr, onNominate, onClose }) {
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', onKey)
@@ -336,6 +375,7 @@ function PlayerDetail({ player, adjPrice, onNominate, onClose }) {
               </div>
             ))}
           </div>
+          <StatBlock player={player} seasons={seasons} ppr={ppr} />
           <button
             className="btn btn-primary"
             style={{ marginTop: 16, width: '100%' }}
@@ -586,6 +626,7 @@ function EntryBar({ player, settings, teamState, onSubmit, onCancel }) {
 
 function AuctionBoard({ settings, onReset }) {
   const [pool, setPool] = useState([])
+  const [seasons, setSeasons] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [purchases, setPurchases] = useState(() => {
@@ -633,7 +674,7 @@ function AuctionBoard({ settings, onReset }) {
   useEffect(() => {
     setLoading(true)
     api.getAuctionPool(settings)
-      .then(d => { setPool(d.players || []); setError('') })
+      .then(d => { setPool(d.players || []); setSeasons(d.seasons || null); setError('') })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false))
   }, [settings])
@@ -799,6 +840,8 @@ function AuctionBoard({ settings, onReset }) {
         <PlayerDetail
           player={detail}
           adjPrice={adj(detail.auction_value)}
+          seasons={seasons}
+          ppr={settings.ppr}
           onNominate={nominate}
           onClose={() => setDetail(null)}
         />

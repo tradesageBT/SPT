@@ -3200,3 +3200,41 @@ img { display: block; }
 .au-cheat-est { color: var(--text-muted); }
 .au-cheat-est-live { color: var(--accent); font-weight: 700; }
 .au-cheat-owner { color: var(--text-muted); font-size: 0.64rem; max-width: 66px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Auction: stats + projections in player detail */
+.au-stat-table {
+  margin-top: 14px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+}
+.au-stat-head, .au-stat-row {
+  display: grid;
+  grid-template-columns: 1fr 64px 64px;
+  align-items: center;
+  gap: 8px;
+}
+.au-stat-head {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  font-weight: 700;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+}
+.au-stat-row {
+  font-size: 0.8rem;
+  padding: 5px 0;
+  text-align: right;
+  color: var(--text);
+}
+.au-stat-name { text-align: left; color: var(--text-muted); }
+.au-stat-proj { color: var(--accent); font-weight: 700; }
+.au-stat-none {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}

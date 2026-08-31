@@ -13,10 +13,13 @@ the last league sync happened to write. Nothing here writes to that cache.
   GET /api/auction-draft/pool?teams=12&budget=200&ppr=1&qb=1&rb=2&wr=2&te=1&flex=1&...
 """
 import json
+import time
 import random
+import asyncio
 import logging
 from datetime import datetime, timezone
 
+import httpx
 from fastapi import APIRouter, Query, HTTPException, Body
 
 import fantasycalc_client
@@ -42,6 +45,88 @@ FLEX_SHARES = {
 
 # A new tier starts when the drop from the previous player exceeds this
 TIER_BREAK = 0.08
+
+
+# ── Sleeper season stats + projections ────────────────────────────────────────
+#
+# Sleeper keys these on their own player_id and FantasyCalc gives us sleeperId,
+# so this joins directly with no name matching. Cached in memory rather than in
+# Postgres: it needs no migration, and on the Starter tier the service doesn't
+# spin down so the cache survives between requests. Worst case it refetches
+# after a deploy.
+
+SLEEPER_BASE = "https://api.sleeper.com"
+STATS_TTL = 6 * 3600
+
+# Kept deliberately small — this is a glanceable panel, not a stat page.
+STAT_KEYS = (
+    "pts_ppr", "pts_half_ppr", "pts_std", "gp", "gms_active",
+    "pass_yd", "pass_td", "pass_int",
+    "rush_att", "rush_yd", "rush_td",
+    "rec", "rec_tgt", "rec_yd", "rec_td",
+)
+
+_stats_cache: dict[str, tuple[float, dict]] = {}
+
+
+def _current_season() -> int:
+    """NFL season is named for the year it starts; roll over in March."""
+    now = datetime.now(timezone.utc)
+    return now.year if now.month >= 3 else now.year - 1
+
+
+def _normalize_sleeper(payload) -> dict:
+    """
+    Sleeper's shape isn't contractually guaranteed and differs between
+    endpoints/seasons, so accept both a list of entries and a dict keyed by
+    player_id, and tolerate stats being nested under "stats" or inlined.
+    """
+    entries = []
+    if isinstance(payload, list):
+        entries = payload
+    elif isinstance(payload, dict):
+        for pid, val in payload.items():
+            if isinstance(val, dict):
+                val = dict(val)
+                val.setdefault("player_id", pid)
+                entries.append(val)
+
+    out: dict[str, dict] = {}
+    for e in entries:
+        if not isinstance(e, dict):
+            continue
+        pid = e.get("player_id")
+        if pid is None and isinstance(e.get("player"), dict):
+            pid = e["player"].get("player_id")
+        if pid is None:
+            continue
+        stats = e.get("stats") if isinstance(e.get("stats"), dict) else e
+        picked = {k: stats[k] for k in STAT_KEYS if isinstance(stats.get(k), (int, float))}
+        if picked:
+            out[str(pid)] = picked
+    return out
+
+
+async def _sleeper_season(kind: str, season: int) -> dict:
+    """kind: 'projections' or 'stats'. Returns {sleeper_id: {stat: value}}."""
+    key = f"{kind}:{season}"
+    hit = _stats_cache.get(key)
+    if hit and (time.time() - hit[0]) < STATS_TTL:
+        return hit[1]
+
+    url = f"{SLEEPER_BASE}/{kind}/nfl/{season}?season_type=regular"
+    try:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            r = await client.get(url)
+        r.raise_for_status()
+        data = _normalize_sleeper(r.json())
+    except Exception as e:
+        log.warning("Sleeper %s for %s failed (%s); continuing without", kind, season, e)
+        data = {}
+
+    # Cache failures too, briefly, so a live draft doesn't retry on every load
+    _stats_cache[key] = (time.time(), data)
+    return data
 
 
 def _norm_pos(pos: str) -> str:
@@ -130,7 +215,21 @@ async def get_auction_pool(
     # A superflex slot means QBs are valued as in a 2QB league
     num_qbs = qb + sflex
 
-    players = await _load_values(num_qbs, ppr)
+    # Values and Sleeper stats are independent, so fetch them together.
+    # return_exceptions keeps a Sleeper outage from failing the whole pool.
+    season = _current_season()
+    players, proj, last = await asyncio.gather(
+        _load_values(num_qbs, ppr),
+        _sleeper_season("projections", season),
+        _sleeper_season("stats", season - 1),
+        return_exceptions=True,
+    )
+    if isinstance(players, Exception):
+        raise HTTPException(status_code=502, detail=f"Could not load player values: {players}")
+    if isinstance(proj, Exception):
+        proj = {}
+    if isinstance(last, Exception):
+        last = {}
 
     # ── Group by position ─────────────────────────────────────────────────────
     by_pos: dict[str, list] = {p: [] for p in POSITIONS}
@@ -193,8 +292,15 @@ async def get_auction_pool(
 
     all_players.sort(key=lambda x: (x["auction_value"], x["value"]), reverse=True)
 
+    for p in all_players:
+        sid = p["sleeper_id"]
+        p["proj"] = proj.get(sid) or None
+        p["last"] = last.get(sid) or None
+
     return {
         "players": all_players[:400],
+        "seasons": {"projected": season, "actual": season - 1},
+        "stats_available": bool(proj) or bool(last),
         "settings": {
             "teams": teams,
             "budget": budget,
