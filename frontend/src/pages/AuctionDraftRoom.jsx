@@ -9,6 +9,13 @@ const POS_COLORS = {
 }
 const POSITIONS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K', 'DEF']
 
+const DEFAULT_TEAM_NAMES = [
+  'Willie Cam', '2 Knuckles deepER', 'CollinStoner69ers', 'Dabolls Hurts',
+  'DannyFootball', 'Dayman', 'ElectricDreamMachine', 'Football Pharm',
+  'Southcards', 'SteelCurtain', 'The Pack is Back!', 'Thicc Boiz',
+]
+const MY_TEAM_INDEX = DEFAULT_TEAM_NAMES.indexOf('Football Pharm')
+
 const DEFAULT_SETTINGS = {
   teams: 12, budget: 200, ppr: 1,
   qb: 1, rb: 2, wr: 3, te: 1,
@@ -16,8 +23,8 @@ const DEFAULT_SETTINGS = {
   // IR slots are excluded: they aren't filled during the auction.
   flex: 0, sflex: 1, wr_rb_flex: 0, rec_flex: 0,
   k: 1, dst: 1, bench: 7,
-  teamNames: [],
-  myTeam: 0,
+  teamNames: DEFAULT_TEAM_NAMES,
+  myTeam: MY_TEAM_INDEX,
 }
 
 const SLOT_FIELDS = [
@@ -56,7 +63,7 @@ function rosterSize(s) {
 
 function SetupForm({ onStart }) {
   const [s, setS] = useState(DEFAULT_SETTINGS)
-  const [names, setNames] = useState(Array.from({ length: 12 }, (_, i) => `Team ${i + 1}`))
+  const [names, setNames] = useState(DEFAULT_TEAM_NAMES)
 
   function setNum(key, val) {
     const n = parseInt(val)
@@ -65,7 +72,8 @@ function SetupForm({ onStart }) {
 
   function setTeamCount(val) {
     const n = Math.max(2, Math.min(32, parseInt(val) || 12))
-    setS(prev => ({ ...prev, teams: n }))
+    // Keep myTeam in range if the league shrinks below its index
+    setS(prev => ({ ...prev, teams: n, myTeam: Math.min(prev.myTeam, n - 1) }))
     setNames(prev => {
       const next = [...prev]
       while (next.length < n) next.push(`Team ${next.length + 1}`)
