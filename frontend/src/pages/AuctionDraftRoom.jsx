@@ -10,12 +10,21 @@ const POS_COLORS = {
 const POSITIONS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K', 'DEF']
 
 const DEFAULT_SETTINGS = {
-  teams: 12, budget: 200,
-  qb: 1, rb: 2, wr: 2, te: 1, flex: 1, k: 1, dst: 1, bench: 7,
-  mode: 'redraft',
+  teams: 12, budget: 200, ppr: 1,
+  qb: 1, rb: 2, wr: 2, te: 1,
+  flex: 1, sflex: 0, wr_rb_flex: 0, rec_flex: 0,
+  k: 1, dst: 1, bench: 7,
   teamNames: [],
   myTeam: 0,
 }
+
+const SLOT_FIELDS = [
+  ['qb', 'QB'], ['rb', 'RB'], ['wr', 'WR'], ['te', 'TE'],
+  ['flex', 'FLEX'], ['sflex', 'SUPERFLEX'], ['wr_rb_flex', 'WR/RB'], ['rec_flex', 'WR/TE'],
+  ['k', 'K'], ['dst', 'DEF'], ['bench', 'Bench'],
+]
+
+const PPR_OPTIONS = [[0, 'Standard'], [0.5, 'Half PPR'], [1, 'Full PPR']]
 
 function PosPill({ pos }) {
   const c = POS_COLORS[pos] || '#8b90b0'
@@ -27,7 +36,7 @@ function PosPill({ pos }) {
 }
 
 function rosterSize(s) {
-  return s.qb + s.rb + s.wr + s.te + s.flex + s.k + s.dst + s.bench
+  return SLOT_FIELDS.reduce((n, [key]) => n + (s[key] || 0), 0)
 }
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
@@ -71,9 +80,20 @@ function SetupForm({ onStart }) {
         </label>
       </div>
 
+      <div className="au-setup-label">Scoring</div>
+      <div className="au-ppr-toggle">
+        {PPR_OPTIONS.map(([val, label]) => (
+          <button
+            key={val}
+            className={`au-ppr-btn${s.ppr === val ? ' active' : ''}`}
+            onClick={() => setS(prev => ({ ...prev, ppr: val }))}
+          >{label}</button>
+        ))}
+      </div>
+
       <div className="au-setup-label">Roster slots</div>
       <div className="au-setup-grid au-setup-grid-slots">
-        {[['qb', 'QB'], ['rb', 'RB'], ['wr', 'WR'], ['te', 'TE'], ['flex', 'FLEX'], ['k', 'K'], ['dst', 'DEF'], ['bench', 'Bench']].map(([key, label]) => (
+        {SLOT_FIELDS.map(([key, label]) => (
           <label key={key} className="au-field">
             <span>{label}</span>
             <input className="yd-select" type="number" value={s[key]} onChange={e => setNum(key, e.target.value)} />
@@ -82,6 +102,7 @@ function SetupForm({ onStart }) {
       </div>
       <p className="yd-setup-hint">
         Roster size: <strong>{size}</strong> · {s.teams * size} total slots · ${s.teams * s.budget} in the room
+        {s.sflex > 0 && <> · <strong>Superflex</strong> — QBs valued as 2QB</>}
       </p>
 
       <div className="au-setup-label">Team names</div>
@@ -119,18 +140,20 @@ function SetupForm({ onStart }) {
 function EntryBar({ player, settings, teamState, onSubmit, onCancel }) {
   const [price, setPrice] = useState('')
   const [team, setTeam] = useState(settings.myTeam)
+  const [manualPos, setManualPos] = useState('K')
   const priceRef = useRef(null)
 
   useEffect(() => {
     setPrice('')
     setTeam(settings.myTeam)
+    setManualPos('K')
     priceRef.current?.focus()
   }, [player, settings.myTeam])
 
   function submit() {
     const p = parseInt(price)
     if (isNaN(p) || p < 0) return
-    onSubmit({ price: p, team })
+    onSubmit({ price: p, team, position: player.isManual ? manualPos : player.position })
   }
 
   const t = teamState[team]
@@ -139,9 +162,22 @@ function EntryBar({ player, settings, teamState, onSubmit, onCancel }) {
   return (
     <div className="au-entry-bar">
       <div className="au-entry-player">
-        <PosPill pos={player.position} />
+        {player.isManual
+          ? (
+            <select
+              className="au-entry-pos-select"
+              value={manualPos}
+              onChange={e => setManualPos(e.target.value)}
+            >
+              {POSITIONS.filter(p => p !== 'ALL').map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          )
+          : <PosPill pos={player.position} />
+        }
         <span className="au-entry-name">{player.name}</span>
-        <span className="au-entry-est">est ${player.auction_value}</span>
+        <span className="au-entry-est">
+          {player.isManual ? 'not ranked' : `est $${player.auction_value}`}
+        </span>
       </div>
       <input
         ref={priceRef}
@@ -237,17 +273,31 @@ function AuctionBoard({ settings, onReset }) {
     return c
   }, [me])
 
-  function addPurchase({ price, team }) {
+  function addPurchase({ price, team, position }) {
     setPurchases(prev => [...prev, {
       sleeper_id: selected.sleeper_id,
       name: selected.name,
-      position: selected.position,
-      nfl_team: selected.nfl_team,
-      auction_value: selected.auction_value,
+      position: position || selected.position,
+      nfl_team: selected.nfl_team || '',
+      // Manual entries aren't ranked, so they're never scored over/under value
+      auction_value: selected.auction_value || 0,
       price, team,
     }])
     setSelected(null)
     setSearch('')
+  }
+
+  function addManual() {
+    const name = search.trim()
+    if (!name) return
+    setSelected({
+      sleeper_id: `manual_${Date.now()}`,
+      name,
+      position: '',
+      nfl_team: '',
+      auction_value: 0,
+      isManual: true,
+    })
   }
 
   function undo() {
@@ -334,6 +384,7 @@ function AuctionBoard({ settings, onReset }) {
             placeholder="Search player…"
             value={search}
             onChange={e => setSearch(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && filtered.length === 0) addManual() }}
             style={{ marginBottom: 8 }}
           />
           <div className="rd-player-header au-player-header">
@@ -343,7 +394,16 @@ function AuctionBoard({ settings, onReset }) {
             <span className="rd-col-center">VOR</span>
           </div>
           <div className="rd-player-list">
-            {filtered.length === 0 && <div className="rd-empty">No players match</div>}
+            {filtered.length === 0 && (
+              search.trim()
+                ? (
+                  <button className="au-add-manual" onClick={addManual}>
+                    <span className="au-add-manual-plus">+</span>
+                    Add “{search.trim()}” — kickers, defenses and unranked players
+                  </button>
+                )
+                : <div className="rd-empty">No players match</div>
+            )}
             {filtered.slice(0, 200).map(p => (
               <button
                 key={p.sleeper_id}
@@ -433,7 +493,12 @@ function AuctionBoard({ settings, onReset }) {
 
 export default function AuctionDraftRoom() {
   const [settings, setSettings] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null') } catch { return null }
+    try {
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null')
+      // Merge over defaults so settings saved before the ppr/flex fields existed
+      // don't send undefined to the API
+      return saved ? { ...DEFAULT_SETTINGS, ...saved } : null
+    } catch { return null }
   })
 
   function handleStart(s) {

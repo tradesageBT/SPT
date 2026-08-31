@@ -51,9 +51,10 @@ export const api = {
   getSleeperDraftState: (leagueId) => request(`/sleeper-draft/state?league_id=${encodeURIComponent(leagueId)}`),
   getAuctionPool: (s) => {
     const p = new URLSearchParams({
-      teams: s.teams, budget: s.budget, qb: s.qb, rb: s.rb, wr: s.wr,
-      te: s.te, flex: s.flex, k: s.k, dst: s.dst, bench: s.bench,
-      mode: s.mode || 'redraft',
+      teams: s.teams, budget: s.budget, ppr: s.ppr,
+      qb: s.qb, rb: s.rb, wr: s.wr, te: s.te,
+      flex: s.flex, sflex: s.sflex, wr_rb_flex: s.wr_rb_flex, rec_flex: s.rec_flex,
+      k: s.k, dst: s.dst, bench: s.bench,
     })
     return request(`/auction-draft/pool?${p}`)
   },

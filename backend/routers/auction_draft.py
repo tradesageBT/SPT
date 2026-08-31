@@ -3,19 +3,34 @@ Manual auction draft tracker — platform agnostic.
 
 You enter each purchase as it happens, so this works for Yahoo, ESPN, Sleeper,
 or an in-person auction with no API access at all. The server computes auction
-dollar values from the player cache; live budget/inflation state is held
-client-side so entry stays instant during a draft.
+dollar values from FantasyCalc redraft values; live budget/inflation state is
+held client-side so entry stays instant during a draft.
 
-  GET /api/auction-draft/pool?teams=12&budget=200&qb=1&rb=2&wr=2&te=1&flex=1&k=1&dst=1&bench=7
+Values are fetched for the auction's OWN scoring (ppr + superflex) rather than
+read from the shared players_cache, which is global and carries whatever scoring
+the last league sync happened to write. Nothing here writes to that cache.
+
+  GET /api/auction-draft/pool?teams=12&budget=200&ppr=1&qb=1&rb=2&wr=2&te=1&flex=1&...
 """
+import logging
+
 from fastapi import APIRouter, Query
 
+import fantasycalc_client
+
 router = APIRouter(prefix="/api/auction-draft")
+log = logging.getLogger(__name__)
 
 POSITIONS = ("QB", "RB", "WR", "TE", "K", "DEF")
 
-# How often each position fills a FLEX slot across a typical league
-FLEX_SHARE = {"RB": 0.45, "WR": 0.45, "TE": 0.10}
+# How often each position actually fills a given flex slot type. Used to push
+# replacement level deeper for the positions a flex slot competes for.
+FLEX_SHARES = {
+    "flex":        {"RB": 0.45, "WR": 0.45, "TE": 0.10},               # RB/WR/TE
+    "sflex":       {"QB": 0.75, "WR": 0.12, "RB": 0.10, "TE": 0.03},   # QB/RB/WR/TE
+    "wr_rb_flex":  {"RB": 0.50, "WR": 0.50},                           # WR/RB
+    "rec_flex":    {"WR": 0.75, "TE": 0.25},                           # WR/TE
+}
 
 # A new tier starts when the drop from the previous player exceeds this
 TIER_BREAK = 0.08
@@ -30,53 +45,93 @@ def _norm_pos(pos: str) -> str:
     return p
 
 
-@router.get("/pool")
-async def get_auction_pool(
-    teams: int = Query(12, ge=2, le=32),
-    budget: int = Query(200, ge=10, le=1000),
-    qb: int = Query(1, ge=0, le=5),
-    rb: int = Query(2, ge=0, le=10),
-    wr: int = Query(2, ge=0, le=10),
-    te: int = Query(1, ge=0, le=5),
-    flex: int = Query(1, ge=0, le=5),
-    k: int = Query(1, ge=0, le=3),
-    dst: int = Query(1, ge=0, le=3),
-    bench: int = Query(7, ge=0, le=20),
-    mode: str = Query("redraft"),
-):
-    """Player pool with auction dollar values derived from value over replacement."""
+async def _load_values(num_qbs: int, ppr: float) -> list[dict]:
+    """
+    Redraft values for this auction's scoring, straight from FantasyCalc.
+
+    Deliberately does NOT touch players_cache: that table is global and shared
+    with league syncs, so writing this auction's scoring into it would clobber
+    the values every other league is computed from.
+    """
+    try:
+        entries = await fantasycalc_client.get_values(
+            num_qbs=num_qbs, ppr=ppr, is_dynasty=False
+        )
+        out = []
+        for entry in entries:
+            player = entry.get("player", {})
+            sid = str(player.get("sleeperId") or "")
+            pos = _norm_pos(player.get("position", ""))
+            if not sid or pos not in POSITIONS:
+                continue
+            out.append({
+                "sleeper_id": sid,
+                "name": player.get("name", ""),
+                "position": pos,
+                "nfl_team": player.get("nflTeamAbbr", ""),
+                "value": entry.get("value", 0) or 0,
+            })
+        if out:
+            return out
+        log.warning("FantasyCalc returned no usable players; falling back to cache")
+    except Exception as e:
+        log.warning("FantasyCalc fetch failed (%s); falling back to cache", e)
+
+    # Fallback so the tool still opens if FantasyCalc is down mid-draft.
     from cache_manager import get_cached_players
-
-    is_dynasty = mode == "dynasty"
-    val_key = "fc_value" if is_dynasty else "redraft_value"
-
-    starters = {"QB": qb, "RB": rb, "WR": wr, "TE": te, "K": k, "DEF": dst}
-    roster_size = qb + rb + wr + te + flex + k + dst + bench
-
-    # ── Group by position ─────────────────────────────────────────────────────
-    by_pos: dict[str, list] = {p: [] for p in POSITIONS}
+    out = []
     for p in get_cached_players().values():
-        val = p.get(val_key) or 0
-        if not val:
-            continue
+        val = p.get("redraft_value") or 0
         pos = _norm_pos(p.get("position"))
-        if pos not in by_pos:
+        if not val or pos not in POSITIONS:
             continue
-        by_pos[pos].append({
+        out.append({
             "sleeper_id": p["sleeper_id"],
             "name": p["name"],
             "position": pos,
             "nfl_team": p.get("nfl_team", ""),
             "value": val,
-            "pos_rank": p.get("pos_rank") if is_dynasty else p.get("redraft_pos_rank"),
         })
+    return out
 
+
+@router.get("/pool")
+async def get_auction_pool(
+    teams: int = Query(12, ge=2, le=32),
+    budget: int = Query(200, ge=10, le=1000),
+    ppr: float = Query(1.0, ge=0, le=2),
+    qb: int = Query(1, ge=0, le=5),
+    rb: int = Query(2, ge=0, le=10),
+    wr: int = Query(2, ge=0, le=10),
+    te: int = Query(1, ge=0, le=5),
+    flex: int = Query(1, ge=0, le=5),
+    sflex: int = Query(0, ge=0, le=3),
+    wr_rb_flex: int = Query(0, ge=0, le=5),
+    rec_flex: int = Query(0, ge=0, le=5),
+    k: int = Query(1, ge=0, le=3),
+    dst: int = Query(1, ge=0, le=3),
+    bench: int = Query(7, ge=0, le=20),
+):
+    """Player pool with auction dollar values derived from value over replacement."""
+    starters = {"QB": qb, "RB": rb, "WR": wr, "TE": te, "K": k, "DEF": dst}
+    flex_counts = {"flex": flex, "sflex": sflex, "wr_rb_flex": wr_rb_flex, "rec_flex": rec_flex}
+    roster_size = sum(starters.values()) + sum(flex_counts.values()) + bench
+
+    # A superflex slot means QBs are valued as in a 2QB league
+    num_qbs = qb + sflex
+
+    players = await _load_values(num_qbs, ppr)
+
+    # ── Group by position ─────────────────────────────────────────────────────
+    by_pos: dict[str, list] = {p: [] for p in POSITIONS}
+    for p in players:
+        by_pos[p["position"]].append(p)
     for pos in by_pos:
         by_pos[pos].sort(key=lambda x: x["value"], reverse=True)
 
     # ── Replacement level: the last starter at each position ──────────────────
-    # Flex slots are spread across RB/WR/TE, which pushes their replacement
-    # level deeper and correctly raises the value of those positions.
+    # Flex slots are spread across the positions eligible for them, which pushes
+    # those positions' replacement level deeper and correctly raises their value.
     repl: dict[str, float] = {}
     for pos in POSITIONS:
         pool = by_pos[pos]
@@ -84,14 +139,16 @@ async def get_auction_pool(
             repl[pos] = 0
             continue
         n_start = starters.get(pos, 0) * teams
-        n_start += round(FLEX_SHARE.get(pos, 0) * flex * teams)
+        for ftype, count in flex_counts.items():
+            n_start += round(FLEX_SHARES[ftype].get(pos, 0) * count * teams)
         idx = min(max(n_start, 1), len(pool)) - 1
         repl[pos] = pool[idx]["value"]
 
     all_players: list[dict] = []
     for pos in POSITIONS:
-        for pl in by_pos[pos]:
+        for i, pl in enumerate(by_pos[pos], start=1):
             pl["vor"] = round(pl["value"] - repl[pos])
+            pl["pos_rank"] = i
             all_players.append(pl)
 
     # ── Convert VOR to dollars ────────────────────────────────────────────────
@@ -131,11 +188,13 @@ async def get_auction_pool(
         "settings": {
             "teams": teams,
             "budget": budget,
+            "ppr": ppr,
+            "num_qbs": num_qbs,
             "roster_size": roster_size,
             "total_money": total_money,
             "draftable": draftable_n,
             "starters": starters,
-            "flex": flex,
+            "flex_counts": flex_counts,
             "bench": bench,
         },
     }
