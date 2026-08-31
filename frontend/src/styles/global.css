@@ -118,6 +118,36 @@ img { display: block; }
 .recent-league-name { font-size: 0.9rem; font-weight: 500; }
 .recent-league-season { font-size: 0.78rem; color: var(--text-muted); flex-shrink: 0; }
 
+.home-tool-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin: 28px 0 8px;
+}
+@media (max-width: 520px) {
+  .home-tool-cards { grid-template-columns: 1fr; }
+}
+.home-tool-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  text-decoration: none;
+  color: var(--text);
+  transition: border-color 0.15s, background 0.15s;
+}
+.home-tool-card:hover {
+  border-color: var(--accent);
+  background: var(--surface);
+}
+.home-tool-icon { font-size: 1.6rem; }
+.home-tool-name { font-size: 1rem; font-weight: 700; color: var(--text); }
+.home-tool-desc { font-size: 0.8rem; color: var(--text-muted); line-height: 1.45; flex: 1; }
+.home-tool-cta { font-size: 0.8rem; color: var(--accent); font-weight: 600; margin-top: 4px; }
+
 .home-features { }
 .home-features-heading {
   font-size: 0.72rem;
