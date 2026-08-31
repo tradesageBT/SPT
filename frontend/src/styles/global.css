@@ -3283,3 +3283,9 @@ img { display: block; }
 .au-cheat-tabs { flex-wrap: wrap; margin-bottom: 10px; }
 .au-cheat-single { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
 .au-cheat-single .au-cheat-col { max-width: 100%; }
+.au-stat-note {
+  margin-top: 8px;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-style: italic;
+}

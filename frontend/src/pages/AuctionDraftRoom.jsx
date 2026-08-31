@@ -17,6 +17,7 @@ const DEFAULT_TEAM_NAMES = [
 ]
 const DEFAULT_SETTINGS = {
   teams: 12, budget: 200, ppr: 1,
+  passTdPts: 6, rushAttPts: 0.25,
   qb: 1, rb: 2, wr: 3, te: 1,
   // Q/W/R/T is a superflex slot — this is what prices QBs as a 2QB league.
   // IR slots are excluded: they aren't filled during the auction.
@@ -227,6 +228,23 @@ function SetupForm({ onStart }) {
         ))}
       </div>
 
+      <div className="au-setup-grid" style={{ marginTop: 8 }}>
+        <label className="au-field">
+          <span>Points per pass TD</span>
+          <input
+            className="yd-select" type="number" step="0.5" value={s.passTdPts} disabled={locked}
+            onChange={e => setS(prev => ({ ...prev, passTdPts: parseFloat(e.target.value) || 0 }))}
+          />
+        </label>
+        <label className="au-field">
+          <span>Points per carry</span>
+          <input
+            className="yd-select" type="number" step="0.05" value={s.rushAttPts} disabled={locked}
+            onChange={e => setS(prev => ({ ...prev, rushAttPts: parseFloat(e.target.value) || 0 }))}
+          />
+        </label>
+      </div>
+
       <div className="au-setup-label">Roster slots</div>
       <div className="au-setup-grid au-setup-grid-slots">
         {SLOT_FIELDS.map(([key, label]) => (
@@ -326,19 +344,25 @@ const STAT_COLS = {
   TE: [['Tgt', 'rec_tgt'], ['Rec', 'rec'], ['Yds', 'rec_yd'], ['TD', 'rec_td']],
 }
 
-function StatBlock({ player, seasons, ppr }) {
+function StatBlock({ player, seasons, ppr, scoring }) {
   const { proj, last } = player
   if (!proj && !last) {
     return <div className="au-stat-none">No stats or projections available for this player.</div>
   }
   // Match the fantasy-point figure to the league's scoring
-  const ptsKey = ppr === 1 ? 'pts_ppr' : ppr === 0.5 ? 'pts_half_ppr' : 'pts_std'
+  const baseKey = ppr === 1 ? 'pts_ppr' : ppr === 0.5 ? 'pts_half_ppr' : 'pts_std'
+  // pts_league is the backend's restatement under this league's scoring
+  const ptsKey = (proj?.pts_league != null || last?.pts_league != null) ? 'pts_league' : baseKey
   const cols = [['Pts', ptsKey], ['G', 'gp'], ...(STAT_COLS[player.position] || STAT_COLS.WR)]
   const fmt = (src, key) => {
     const v = src?.[key]
     if (v == null) return '—'
     return key.startsWith('pts') ? Math.round(v) : (Number.isInteger(v) ? v : Math.round(v))
   }
+  const scoringNote = ptsKey === 'pts_league'
+    ? `Points restated for this league: ${scoring.passTdPts} pt pass TD${
+        scoring.rushAttPts ? `, ${scoring.rushAttPts} per carry` : ''}`
+    : null
   const rows = [
     [seasons?.actual ?? 'Last', last, false],
     [seasons?.projected ?? 'Proj', proj, true],
@@ -362,11 +386,12 @@ function StatBlock({ player, seasons, ppr }) {
           ))}
         </tbody>
       </table>
+      {scoringNote && <div className="au-stat-note">{scoringNote}</div>}
     </div>
   )
 }
 
-function PlayerDetail({ player, adjPrice, seasons, ppr, onNominate, onClose }) {
+function PlayerDetail({ player, adjPrice, seasons, ppr, scoring, onNominate, onClose }) {
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', onKey)
@@ -427,7 +452,7 @@ function PlayerDetail({ player, adjPrice, seasons, ppr, onNominate, onClose }) {
               )}
             </div>
           )}
-          <StatBlock player={player} seasons={seasons} ppr={ppr} />
+          <StatBlock player={player} seasons={seasons} ppr={ppr} scoring={scoring} />
           <button
             className="btn btn-primary"
             style={{ marginTop: 16, width: '100%' }}
@@ -920,6 +945,7 @@ function AuctionBoard({ settings, onReset }) {
           adjPrice={adj(detail.auction_value)}
           seasons={seasons}
           ppr={settings.ppr}
+          scoring={{ passTdPts: settings.passTdPts ?? 4, rushAttPts: settings.rushAttPts ?? 0 }}
           onNominate={nominate}
           onClose={() => setDetail(null)}
         />

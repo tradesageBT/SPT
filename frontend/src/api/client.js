@@ -68,6 +68,7 @@ export const api = {
       qb: s.qb, rb: s.rb, wr: s.wr, te: s.te,
       flex: s.flex, sflex: s.sflex, wr_rb_flex: s.wr_rb_flex, rec_flex: s.rec_flex,
       k: s.k, dst: s.dst, bench: s.bench,
+      pass_td_pts: s.passTdPts ?? 4, rush_att_pts: s.rushAttPts ?? 0,
     })
     return request(`/auction-draft/pool?${p}`)
   },

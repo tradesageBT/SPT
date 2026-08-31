@@ -179,6 +179,25 @@ async def _sleeper_season(kind: str, season: int) -> dict:
     return data
 
 
+def _league_points(stats: dict, ppr: float, pass_td_pts: float, rush_att_pts: float):
+    """
+    Sleeper's pts_* figures assume 4-point passing TDs and no per-carry bonus.
+    Rather than recompute scoring from scratch (which would need fumbles and
+    2pt conversions we don't pull), adjust its total by only the deltas that
+    differ from that baseline.
+    """
+    if not stats:
+        return None
+    base_key = "pts_ppr" if ppr == 1 else "pts_half_ppr" if ppr == 0.5 else "pts_std"
+    base = stats.get(base_key)
+    if base is None:
+        return None
+    adj = base
+    adj += (stats.get("pass_td") or 0) * (pass_td_pts - 4.0)
+    adj += (stats.get("rush_att") or 0) * rush_att_pts
+    return round(adj, 1)
+
+
 def _norm_pos(pos: str) -> str:
     p = (pos or "").upper().strip()
     if p in ("DST", "D/ST", "DEFENSE"):
@@ -256,6 +275,8 @@ async def get_auction_pool(
     k: int = Query(1, ge=0, le=3),
     dst: int = Query(1, ge=0, le=3),
     bench: int = Query(7, ge=0, le=20),
+    pass_td_pts: float = Query(4.0, ge=0, le=12),
+    rush_att_pts: float = Query(0.0, ge=0, le=2),
 ):
     """Player pool with auction dollar values derived from value over replacement."""
     starters = {"QB": qb, "RB": rb, "WR": wr, "TE": te, "K": k, "DEF": dst}
@@ -348,8 +369,13 @@ async def get_auction_pool(
 
     for p in all_players:
         sid = p["sleeper_id"]
-        p["proj"] = proj.get(sid) or None
-        p["last"] = last.get(sid) or None
+        pr, la = proj.get(sid) or None, last.get(sid) or None
+        # Restate fantasy points under this league's scoring
+        if pr:
+            pr = {**pr, "pts_league": _league_points(pr, ppr, pass_td_pts, rush_att_pts)}
+        if la:
+            la = {**la, "pts_league": _league_points(la, ppr, pass_td_pts, rush_att_pts)}
+        p["proj"], p["last"] = pr, la
         p["meta"] = _meta.get(sid) or None
 
     return {
@@ -361,6 +387,8 @@ async def get_auction_pool(
             "teams": teams,
             "budget": budget,
             "ppr": ppr,
+            "pass_td_pts": pass_td_pts,
+            "rush_att_pts": rush_att_pts,
             "num_qbs": num_qbs,
             "roster_size": roster_size,
             "total_money": total_money,
