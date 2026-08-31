@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from database import init_db, db
-from routers import leagues, teams, trades, espn_draft, yahoo_draft, sleeper_draft
+from routers import leagues, teams, trades, espn_draft, yahoo_draft, sleeper_draft, auction_draft
 import logger
 
 app = FastAPI(title="Smash Pass Trash", version="0.1.0")
@@ -42,6 +42,7 @@ app.include_router(trades.router)
 app.include_router(espn_draft.router)
 app.include_router(yahoo_draft.router)
 app.include_router(sleeper_draft.router)
+app.include_router(auction_draft.router)
 
 
 @app.on_event("startup")

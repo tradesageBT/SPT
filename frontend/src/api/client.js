@@ -49,6 +49,14 @@ export const api = {
   searchRedraftPlayers: (q = '', limit = 20) =>
     request(`/espn-draft/players/search?q=${encodeURIComponent(q)}&limit=${limit}`),
   getSleeperDraftState: (leagueId) => request(`/sleeper-draft/state?league_id=${encodeURIComponent(leagueId)}`),
+  getAuctionPool: (s) => {
+    const p = new URLSearchParams({
+      teams: s.teams, budget: s.budget, qb: s.qb, rb: s.rb, wr: s.wr,
+      te: s.te, flex: s.flex, k: s.k, dst: s.dst, bench: s.bench,
+      mode: s.mode || 'redraft',
+    })
+    return request(`/auction-draft/pool?${p}`)
+  },
   getYahooStatus: () => request('/yahoo-draft/status'),
   getYahooLeagues: () => request('/yahoo-draft/leagues'),
   getYahooDraftState: (leagueKey) => request(`/yahoo-draft/state?league_key=${encodeURIComponent(leagueKey)}`),
