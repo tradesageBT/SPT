@@ -381,7 +381,11 @@ export default function YahooDraftRoom() {
       <div className="rd-topbar">
         <div className="rd-topbar-title">Yahoo Draft Assistant</div>
         <button className="btn btn-secondary btn-sm" onClick={() => {
-          api.disconnectYahoo().then(() => setStatus({ connected: false }))
+          api.disconnectYahoo().then(() => {
+            localStorage.removeItem(STORAGE_KEY)
+            setConfig(null)
+            setStatus({ connected: false })
+          })
         }}>Disconnect</button>
       </div>
       <LeagueSetup onStart={handleStart} />
