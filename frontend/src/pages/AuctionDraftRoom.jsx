@@ -11,8 +11,10 @@ const POSITIONS = ['ALL', 'QB', 'RB', 'WR', 'TE', 'K', 'DEF']
 
 const DEFAULT_SETTINGS = {
   teams: 12, budget: 200, ppr: 1,
-  qb: 1, rb: 2, wr: 2, te: 1,
-  flex: 1, sflex: 0, wr_rb_flex: 0, rec_flex: 0,
+  qb: 1, rb: 2, wr: 3, te: 1,
+  // Q/W/R/T is a superflex slot — this is what prices QBs as a 2QB league.
+  // IR slots are excluded: they aren't filled during the auction.
+  flex: 0, sflex: 1, wr_rb_flex: 0, rec_flex: 0,
   k: 1, dst: 1, bench: 7,
   teamNames: [],
   myTeam: 0,
@@ -507,6 +509,9 @@ export default function AuctionDraftRoom() {
   }
 
   function handleReset() {
+    // Clear the saved config too, otherwise it shadows DEFAULT_SETTINGS on the
+    // next refresh. Purchases live under a separate key and are untouched.
+    localStorage.removeItem(STORAGE_KEY)
     setSettings(null)
   }
 
