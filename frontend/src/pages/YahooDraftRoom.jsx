@@ -337,14 +337,19 @@ function DraftBoard({ config, onReset }) {
 
 export default function YahooDraftRoom() {
   const [status, setStatus] = useState(null)  // null = loading
+  const [oauthError, setOauthError] = useState('')
   const [config, setConfig] = useState(() => {
     try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null') } catch { return null }
   })
 
   useEffect(() => {
     api.getYahooStatus().then(setStatus).catch(() => setStatus({ connected: false }))
-    // Handle post-OAuth redirect
-    if (window.location.search.includes('connected=true')) {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('connected') === 'true') {
+      window.history.replaceState({}, '', '/yahoo-draft')
+    }
+    if (params.get('error')) {
+      setOauthError(`Yahoo authorization failed: ${params.get('error')}. Please try connecting again.`)
       window.history.replaceState({}, '', '/yahoo-draft')
     }
   }, [])
@@ -366,6 +371,7 @@ export default function YahooDraftRoom() {
       <div className="rd-topbar">
         <div className="rd-topbar-title">Yahoo Draft Assistant</div>
       </div>
+      {oauthError && <div className="rd-error" style={{ margin: '0 0 12px' }}>{oauthError}</div>}
       <ConnectScreen />
     </div>
   )

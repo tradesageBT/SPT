@@ -215,7 +215,6 @@ async def yahoo_auth(request: Request):
         "redirect_uri": YAHOO_REDIRECT_URI,
         "response_type": "code",
         "language": "en-us",
-        "scope": "fspt-r",
         "state": sid,
     })
     response = RedirectResponse(f"{YAHOO_AUTH_URL}?{params}")
@@ -224,7 +223,16 @@ async def yahoo_auth(request: Request):
 
 
 @router.get("/callback")
-async def yahoo_callback(code: str = Query(...), state: str = Query("")):
+async def yahoo_callback(
+    code: str = Query(None),
+    state: str = Query(""),
+    error: str = Query(None),
+    error_description: str = Query(None),
+):
+    if error:
+        return RedirectResponse(f"/yahoo-draft?error={error}")
+    if not code:
+        return RedirectResponse("/yahoo-draft?error=no_code")
     if not YAHOO_CLIENT_ID:
         raise HTTPException(status_code=503, detail="Yahoo OAuth not configured.")
     sid = state or str(uuid.uuid4())
