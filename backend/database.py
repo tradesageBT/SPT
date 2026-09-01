@@ -63,7 +63,10 @@ class _Conn:
 
 @contextmanager
 def db():
-    conn = psycopg2.connect(DATABASE_URL)
+    # Without a timeout a DB hiccup blocks on the OS TCP timeout (~2 min). The
+    # auction room endpoints are polled every few seconds by several clients, so
+    # a hang there stalls everyone, not just the caller.
+    conn = psycopg2.connect(DATABASE_URL, connect_timeout=5)
     wrapped = _Conn(conn)
     try:
         yield wrapped

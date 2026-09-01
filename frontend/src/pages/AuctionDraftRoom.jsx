@@ -321,12 +321,21 @@ function positionNeed(byPos, settings, pos) {
     .reduce((n, ft) => n + (settings[ft] || 0), 0)
   if (!flexForPos) return { starterNeed, flexOpen: 0 }
 
-  const totalFlex = FLEX_TYPES.reduce((n, ft) => n + (settings[ft] || 0), 0)
-  const surplus = Object.entries(STARTER_KEYS).reduce(
-    (n, [p, key]) => n + Math.max(0, (byPos[p]?.count || 0) - (settings[key] || 0)),
+  // Count surplus only in positions that can actually fill a flex `pos` competes
+  // for. Pooling every position meant a spare K or DEF — which can never occupy
+  // a flex slot — marked a team's superflex full, so the competition panel said
+  // nobody could outbid you right before they did.
+  // Only flex types this league actually has, or an RB surplus would leak into
+  // a WR/TE-only flex the league never configured.
+  const activeTypes = FLEX_TYPES.filter(
+    ft => (settings[ft] || 0) > 0 && FLEX_ELIGIBLE[ft].includes(pos)
+  )
+  const eligible = new Set(activeTypes.flatMap(ft => FLEX_ELIGIBLE[ft]))
+  const surplus = [...eligible].reduce(
+    (n, p) => n + Math.max(0, (byPos[p]?.count || 0) - (settings[STARTER_KEYS[p]] || 0)),
     0,
   )
-  return { starterNeed, flexOpen: Math.max(0, Math.min(flexForPos, totalFlex - surplus)) }
+  return { starterNeed, flexOpen: Math.max(0, Math.min(flexForPos, flexForPos - surplus)) }
 }
 
 // ── Player detail ─────────────────────────────────────────────────────────────
@@ -664,12 +673,15 @@ function EntryBar({ player, settings, teamState, onSubmit, onCancel }) {
   const [manualPos, setManualPos] = useState('K')
   const priceRef = useRef(null)
 
+  // Keyed on the player's id, NOT the object: the 3s poll rebuilds `nominated`
+  // from fresh JSON every tick, so an object-identity dep reset the price,
+  // team and position every 3 seconds mid-entry.
   useEffect(() => {
     setPrice('')
     setTeam(settings.myTeam)
     setManualPos('K')
     priceRef.current?.focus()
-  }, [player, settings.myTeam])
+  }, [player?.sleeper_id])
 
   function submit() {
     const p = parseInt(price)
@@ -714,7 +726,7 @@ function EntryBar({ player, settings, teamState, onSubmit, onCancel }) {
         }}
       />
       <select className="au-entry-team" value={team} onChange={e => setTeam(parseInt(e.target.value))}>
-        {settings.teamNames.map((n, i) => (
+        {settings.teamNames.slice(0, settings.teams).map((n, i) => (
           <option key={i} value={i}>{n}{i === settings.myTeam ? ' (you)' : ''}</option>
         ))}
       </select>
@@ -732,8 +744,14 @@ function AuctionBoard({ settings, onReset }) {
   const [seasons, setSeasons] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  // Storage is keyed per room: a shared room must never open showing solo mode's
+  // (or a previous room's) picks, which would otherwise render as this room's
+  // and skew every budget until the first poll landed.
+  const buysKey = (settings.roomCode ? `${STORAGE_KEY}_buys_${settings.roomCode}` : `${STORAGE_KEY}_buys`)
   const [purchases, setPurchases] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(STORAGE_KEY + '_buys') || '[]') } catch { return [] }
+    // In a room the server is authoritative — start empty and wait for the poll.
+    if (settings.roomCode) return []
+    try { return JSON.parse(localStorage.getItem(buysKey) || '[]') } catch { return [] }
   })
   // Who is up for bid — shared across the room. Distinct from `detail`, which is
   // just "I tapped a row to look at someone" and never leaves this browser.
@@ -747,24 +765,66 @@ function AuctionBoard({ settings, onReset }) {
 
   const room = settings.roomCode || null
 
+  // Picks that failed to reach the server. Kept OUT of `purchases` so the poll
+  // (which wholesale-replaces it) can't drop them, retried on every tick.
+  const [pending, setPending] = useState([])
+  const pendingRef = useRef([])
+  // Ids this client created, so Undo removes your own pick and not whichever
+  // manager happened to enter last.
+  const myPickIds = useRef([])
+  // Ignore incoming nominations briefly after a local write, so an in-flight
+  // GET issued before the write can't revert or resurrect it.
+  const nominateGuard = useRef(0)
+  // Drop out-of-order poll responses.
+  const pollSeq = useRef(0)
+
   // Always mirror locally, shared or not: if the network drops mid-draft the
   // board keeps working from this copy.
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY + '_buys', JSON.stringify(purchases))
-  }, [purchases])
+    try { localStorage.setItem(buysKey, JSON.stringify(purchases)) } catch { /* quota */ }
+  }, [purchases, buysKey])
+
+  useEffect(() => { pendingRef.current = pending }, [pending])
+
+  // Retry anything that didn't reach the server. Without this a single failed
+  // POST lost the pick entirely on the next poll.
+  useEffect(() => {
+    if (!room || !pending.length) return
+    let cancelled = false
+    const flush = async () => {
+      for (const p of pendingRef.current) {
+        try {
+          await api.addAuctionPick(room, p)
+          if (cancelled) return
+          setPending(prev => prev.filter(x => x._localId !== p._localId))
+        } catch { return }   // still offline; try again next tick
+      }
+    }
+    const t = setInterval(flush, POLL_MS)
+    flush()
+    return () => { cancelled = true; clearInterval(t) }
+  }, [room, pending.length])
 
   // In a shared room the server is the source of truth for picks
   useEffect(() => {
     if (!room) return
     let cancelled = false
     const tick = async () => {
+      const seq = ++pollSeq.current
       try {
         const d = await api.getAuctionRoom(room)
-        if (cancelled) return
+        if (cancelled || seq !== pollSeq.current) return   // a newer poll already landed
         setPurchases(d.picks || [])
-        setNominated(d.nominated || null)
+        // Don't clobber a nomination we just made locally, and don't churn the
+        // object identity when nothing changed (that resets the entry bar).
+        if (Date.now() > nominateGuard.current) {
+          const incoming = d.nominated || null
+          setNominated(prev =>
+            (prev?.sleeper_id ?? null) === (incoming?.sleeper_id ?? null) ? prev : incoming
+          )
+        }
         setSyncedAt(new Date())
-        setSyncErr('')
+        setSyncErr(prevErr => (pendingRef.current.length ? prevErr : ''))
       } catch (e) {
         if (!cancelled) setSyncErr(e.message)
       }
@@ -785,8 +845,15 @@ function AuctionBoard({ settings, onReset }) {
   const size = rosterSize(settings)
 
   // ── Derived team state ──────────────────────────────────────────────────────
+  // Unsent picks count toward budgets immediately — otherwise a dropped
+  // connection would make a team look richer than it is.
+  const allPurchases = useMemo(
+    () => (pending.length ? [...purchases, ...pending] : purchases),
+    [purchases, pending],
+  )
+
   const teamState = useMemo(() => settings.teamNames.map((name, i) => {
-    const bought = purchases.filter(p => p.team === i)
+    const bought = allPurchases.filter(p => p.team === i)
     const spent = bought.reduce((s, p) => s + p.price, 0)
     const remaining = settings.budget - spent
     const slotsLeft = size - bought.length
@@ -800,12 +867,12 @@ function AuctionBoard({ settings, onReset }) {
       byPos[b.position] = e
     }
     return { name, i, bought, spent, remaining, slotsLeft, maxBid, byPos }
-  }), [purchases, settings, size])
+  }), [allPurchases, settings, size])
 
   const me = teamState[settings.myTeam]
 
   // ── Inflation ───────────────────────────────────────────────────────────────
-  const draftedIds = useMemo(() => new Set(purchases.map(p => p.sleeper_id)), [purchases])
+  const draftedIds = useMemo(() => new Set(allPurchases.map(p => p.sleeper_id)), [allPurchases])
   const available = useMemo(
     () => pool.filter(p => !draftedIds.has(p.sleeper_id)),
     [pool, draftedIds],
@@ -838,11 +905,16 @@ function AuctionBoard({ settings, onReset }) {
   async function nominate(player) {
     setNominated(player)
     if (!room) return
+    // Ignore server nominations briefly: a GET issued before this write lands
+    // would otherwise revert it, or resurrect a player who was just bought.
+    nominateGuard.current = Date.now() + POLL_MS * 2
     try {
       await api.setAuctionNomination(room, player)
       setSyncErr('')
     } catch (e) {
       setSyncErr(`Nomination not shared (${e.message}) — visible only to you`)
+    } finally {
+      nominateGuard.current = Date.now() + 500
     }
   }
 
@@ -856,8 +928,19 @@ function AuctionBoard({ settings, onReset }) {
       auction_value: nominated.auction_value || 0,
       price, team,
     }
-    // They're bought — clear the block for everyone
-    nominate(null)
+
+    // Two managers entering the same sale would otherwise debit the buying team
+    // twice. The server rejects duplicates too; this is the fast, local check.
+    if (!pick.sleeper_id.startsWith('manual_') && draftedIds.has(pick.sleeper_id)) {
+      setSyncErr(`${pick.name} is already recorded as drafted`)
+      await nominate(null)
+      setSearch('')
+      return
+    }
+
+    // They're bought — clear the block for everyone. Awaited so an in-flight
+    // poll can't re-open the entry bar for the player just purchased.
+    await nominate(null)
     setSearch('')
 
     if (!room) {
@@ -868,12 +951,16 @@ function AuctionBoard({ settings, onReset }) {
       // The server returns the full list, so there's nothing to merge
       const d = await api.addAuctionPick(room, pick)
       setPurchases(d.picks || [])
+      if (d.duplicate) setSyncErr(`${pick.name} was already entered by someone else`)
+      else setSyncErr('')
+      // Remember our own ids so Undo targets this client's picks
+      const mine = (d.picks || []).find(x => x.sleeper_id === pick.sleeper_id)
+      if (mine) myPickIds.current.push(mine.id)
       setSyncedAt(new Date())
-      setSyncErr('')
     } catch (e) {
-      // Keep the entry rather than lose it; the next successful poll reconciles
-      setPurchases(prev => [...prev, { ...pick, id: `local_${Date.now()}` }])
-      setSyncErr(`Not saved to room (${e.message}) — kept locally`)
+      // Held in `pending`, which the poll never clears, and retried until it lands
+      setPending(prev => [...prev, { ...pick, _localId: `local_${Date.now()}` }])
+      setSyncErr(`Not saved yet (${e.message}) — retrying`)
     }
   }
 
@@ -893,23 +980,33 @@ function AuctionBoard({ settings, onReset }) {
   }
 
   async function undo() {
-    const last = purchases[purchases.length - 1]
-    if (!last) return
-    // Delete by id, not "the last row", so undo stays correct when two people
-    // are entering at once.
-    if (room && typeof last.id === 'number') {
-      try {
-        const d = await api.deleteAuctionPick(room, last.id)
-        setPurchases(d.picks || [])
-        setSyncedAt(new Date())
-        setSyncErr('')
-        return
-      } catch (e) {
-        setSyncErr(`Undo failed (${e.message})`)
-        return
-      }
+    // Drop an unsent pick first — it isn't on the server to delete.
+    if (pending.length) {
+      setPending(prev => prev.slice(0, -1))
+      return
     }
-    setPurchases(prev => prev.slice(0, -1))
+    if (!room) {
+      setPurchases(prev => prev.slice(0, -1))
+      return
+    }
+    // `purchases` is the room's list ordered across ALL managers, so its last
+    // row is usually someone else's pick. Undo only what this client entered.
+    const live = new Set(purchases.map(p => p.id))
+    const mine = myPickIds.current.filter(id => live.has(id))
+    if (!mine.length) {
+      setSyncErr('Nothing of yours to undo — only the manager who entered a pick can remove it')
+      return
+    }
+    const target = mine[mine.length - 1]
+    try {
+      const d = await api.deleteAuctionPick(room, target)
+      setPurchases(d.picks || [])
+      myPickIds.current = myPickIds.current.filter(id => id !== target)
+      setSyncedAt(new Date())
+      setSyncErr(d.deleted ? '' : 'That pick was already removed')
+    } catch (e) {
+      setSyncErr(`Undo failed (${e.message})`)
+    }
   }
 
   async function clearAll() {
@@ -917,16 +1014,16 @@ function AuctionBoard({ settings, onReset }) {
       ? `Clear all ${purchases.length} picks for EVERYONE in room ${room}? This cannot be undone.`
       : 'Clear every purchase and start this auction over?'
     if (!window.confirm(msg)) return
+    setPending([])
+    myPickIds.current = []
     if (!room) { setPurchases([]); return }
     try {
-      let remaining = purchases
-      for (const p of purchases) {
-        if (typeof p.id === 'number') {
-          const d = await api.deleteAuctionPick(room, p.id)
-          remaining = d.picks || []
-        }
-      }
-      setPurchases(remaining)
+      // One request. Deleting 200+ picks one at a time raced the poll and left
+      // the room half-cleared if it failed partway.
+      const d = await api.clearAuctionPicks(room)
+      setPurchases(d.picks || [])
+      setNominated(null)
+      setSyncErr('')
     } catch (e) {
       setSyncErr(`Clear failed (${e.message})`)
     }
@@ -1070,16 +1167,32 @@ function AuctionBoard({ settings, onReset }) {
             <span />
           </div>
           <div className="rd-player-list">
-            {filtered.length === 0 && (
-              search.trim()
-                ? (
-                  <button className="au-add-manual" onClick={addManual}>
-                    <span className="au-add-manual-plus">+</span>
-                    Add “{search.trim()}” — kickers, defenses and unranked players
-                  </button>
+            {filtered.length === 0 && (() => {
+              const q = search.trim()
+              if (!q) return <div className="rd-empty">No players match</div>
+              // `available` excludes drafted players, so a search for someone
+              // already bought would otherwise fall through to the manual-add
+              // path and create a duplicate at the default position.
+              const gone = pool.find(
+                p => !available.some(a => a.sleeper_id === p.sleeper_id)
+                  && p.name.toLowerCase().includes(q.toLowerCase())
+              )
+              if (gone) {
+                const b = allPurchases.find(x => x.sleeper_id === gone.sleeper_id)
+                return (
+                  <div className="rd-empty">
+                    {gone.name} is already drafted
+                    {b ? ` — $${b.price} to ${settings.teamNames[b.team] || `Team ${b.team + 1}`}` : ''}
+                  </div>
                 )
-                : <div className="rd-empty">No players match</div>
-            )}
+              }
+              return (
+                <button className="au-add-manual" onClick={addManual}>
+                  <span className="au-add-manual-plus">+</span>
+                  Add “{q}” — kickers, defenses and unranked players
+                </button>
+              )
+            })()}
             {filtered.slice(0, 200).map(p => (
               <div
                 key={p.sleeper_id}

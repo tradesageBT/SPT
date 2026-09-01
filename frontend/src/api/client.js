@@ -4,7 +4,10 @@ async function request(path) {
   const res = await fetch(`${BASE}${path}`)
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
-    throw new Error(err.detail || 'Request failed')
+    // FastAPI validation errors return `detail` as an array of objects, which
+    // would otherwise stringify to a useless "[object Object]".
+    const d = err.detail
+    throw new Error(typeof d === 'string' ? d : d ? JSON.stringify(d) : 'Request failed')
   }
   return res.json()
 }
@@ -17,7 +20,10 @@ async function send(path, method, body) {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
-    throw new Error(err.detail || 'Request failed')
+    // FastAPI validation errors return `detail` as an array of objects, which
+    // would otherwise stringify to a useless "[object Object]".
+    const d = err.detail
+    throw new Error(typeof d === 'string' ? d : d ? JSON.stringify(d) : 'Request failed')
   }
   return res.json()
 }
@@ -78,6 +84,8 @@ export const api = {
     send(`/auction-draft/room/${encodeURIComponent(code)}/pick`, 'POST', pick),
   deleteAuctionPick: (code, id) =>
     send(`/auction-draft/room/${encodeURIComponent(code)}/pick/${id}`, 'DELETE'),
+  clearAuctionPicks: (code) =>
+    send(`/auction-draft/room/${encodeURIComponent(code)}/picks`, 'DELETE'),
   setAuctionNomination: (code, player) =>
     send(`/auction-draft/room/${encodeURIComponent(code)}/nominate`, 'POST', { player }),
   getYahooStatus: () => request('/yahoo-draft/status'),

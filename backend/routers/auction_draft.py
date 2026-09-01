@@ -51,12 +51,15 @@ TIER_BREAK = 0.08
 #
 # Sleeper keys these on their own player_id and FantasyCalc gives us sleeperId,
 # so this joins directly with no name matching. Cached in memory rather than in
-# Postgres: it needs no migration, and on the Starter tier the service doesn't
-# spin down so the cache survives between requests. Worst case it refetches
-# after a deploy.
+# Postgres: it needs no migration and survives between requests on a warm
+# process. It is lost on redeploy, and on a plan that spins down when idle it is
+# also lost on cold start — in both cases it simply refetches.
 
 SLEEPER_BASE = "https://api.sleeper.com"
 STATS_TTL = 6 * 3600
+# A failure (or an empty parse) is cached only briefly: caching it for the full
+# TTL would blank stats for the rest of a draft off one transient timeout.
+STATS_FAIL_TTL = 60
 
 # Kept deliberately small — this is a glanceable panel, not a stat page.
 STAT_KEYS = (
@@ -87,7 +90,9 @@ _meta_loading = False
 
 
 def _meta_fresh() -> bool:
-    return bool(_meta) and (time.time() - _meta_at) < META_TTL
+    # Deliberately not `bool(_meta) and ...`: a failed load stamps _meta_at too,
+    # so an outage backs off rather than refetching on every request.
+    return _meta_at > 0 and (time.time() - _meta_at) < META_TTL
 
 
 async def _load_meta():
@@ -111,11 +116,13 @@ async def _load_meta():
                     out[str(pid)] = picked
         if out:
             _meta = out
-            _meta_at = time.time()
             log.info("Loaded injury metadata for %d players", len(out))
     except Exception as e:
         log.warning("Sleeper player metadata failed (%s); continuing without", e)
     finally:
+        # Stamped unconditionally: on failure this backs off for the TTL instead
+        # of leaving _meta_fresh() false and refetching 10MB on every request.
+        _meta_at = time.time()
         _meta_loading = False
 
 
@@ -174,8 +181,10 @@ async def _sleeper_season(kind: str, season: int) -> dict:
         log.warning("Sleeper %s for %s failed (%s); continuing without", kind, season, e)
         data = {}
 
-    # Cache failures too, briefly, so a live draft doesn't retry on every load
-    _stats_cache[key] = (time.time(), data)
+    # Successes hold for the full TTL; failures and empty parses expire fast so a
+    # transient Sleeper blip doesn't cost the whole draft.
+    ttl_marker = time.time() if data else (time.time() - STATS_TTL + STATS_FAIL_TTL)
+    _stats_cache[key] = (ttl_marker, data)
     return data
 
 
@@ -408,6 +417,11 @@ async def get_auction_pool(
 # overwriting a shared blob, so neither can clobber the other. Every mutation
 # returns the full authoritative list, which keeps the client from having to
 # merge anything.
+#
+# These handlers are deliberately sync `def`, not `async def`: db() is a blocking
+# psycopg2 connect, and FastAPI runs async handlers on the event loop itself. As
+# `def` they run in the threadpool, so one client's slow query cannot stall
+# everyone else's polling.
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -423,8 +437,22 @@ def _norm_code(code: str) -> str:
     return (code or "").strip().upper()
 
 
+def _as_int(value, field: str, default: int = 0) -> int:
+    """Coerce a JSON value to int, 400ing rather than 500ing on junk.
+
+    Note JSON has no NaN: a NaN price arrives as null, which would silently
+    become a $0 pick, so None is treated as absent and takes the default.
+    """
+    if value is None or value == "":
+        return default
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail=f"Invalid {field}: {value!r}")
+
+
 @router.post("/room")
-async def create_room(body: dict = Body(...)):
+def create_room(body: dict = Body(...)):
     """Create a shared room. Settings are league-wide; each client keeps its own myTeam."""
     settings = body.get("settings", {}) or {}
     with db() as conn:
@@ -446,7 +474,7 @@ async def create_room(body: dict = Body(...)):
 
 
 @router.get("/room/{code}")
-async def get_room(code: str):
+def get_room(code: str):
     code = _norm_code(code)
     with db() as conn:
         room = conn.execute(
@@ -467,7 +495,7 @@ async def get_room(code: str):
 
 
 @router.post("/room/{code}/nominate")
-async def set_nomination(code: str, body: dict = Body(...)):
+def set_nomination(code: str, body: dict = Body(...)):
     """
     Who is currently up for bid, shared with everyone in the room.
 
@@ -489,13 +517,24 @@ async def set_nomination(code: str, body: dict = Body(...)):
 
 
 @router.post("/room/{code}/pick")
-async def add_pick(code: str, body: dict = Body(...)):
+def add_pick(code: str, body: dict = Body(...)):
     code = _norm_code(code)
     with db() as conn:
         if not conn.execute(
             "SELECT code FROM auction_rooms WHERE code = ?", (code,)
         ).fetchone():
             raise HTTPException(status_code=404, detail=f"Room {code} not found.")
+        # Manual entries get a unique client-side id, so only real players are
+        # deduped. Returning the list unchanged makes a double-entry a no-op
+        # rather than an error the second manager has to interpret.
+        sid = str(body.get("sleeper_id") or "")
+        if sid and not sid.startswith("manual_"):
+            dup = conn.execute(
+                "SELECT id FROM auction_picks WHERE room_code = ? AND sleeper_id = ?",
+                (code, sid),
+            ).fetchone()
+            if dup:
+                return {"picks": _picks(conn, code), "duplicate": True}
         conn.execute(
             """
             INSERT INTO auction_picks
@@ -505,27 +544,47 @@ async def add_pick(code: str, body: dict = Body(...)):
             """,
             (
                 code,
-                str(body.get("sleeper_id") or ""),
+                sid,
                 str(body.get("name") or ""),
                 str(body.get("position") or ""),
                 str(body.get("nfl_team") or ""),
-                int(body.get("auction_value") or 0),
-                int(body.get("price") or 0),
-                int(body.get("team") or 0),
+                _as_int(body.get("auction_value"), "auction_value"),
+                _as_int(body.get("price"), "price"),
+                _as_int(body.get("team"), "team"),
                 _now(),
             ),
         )
+        # The sold player is no longer up for bid. Doing this here rather than as
+        # a separate client POST avoids a late clear wiping the next nomination.
+        conn.execute("UPDATE auction_rooms SET nominated = NULL WHERE code = ?", (code,))
         picks = _picks(conn, code)
-    return {"picks": picks}
+    return {"picks": picks, "nominated": None}
 
 
 @router.delete("/room/{code}/pick/{pick_id}")
-async def delete_pick(code: str, pick_id: int):
-    """Undo. Deletes by id rather than 'the last one' so it stays correct with concurrent entry."""
+def delete_pick(code: str, pick_id: int):
+    """Undo one pick by id. The client decides *which* id — it undoes its own."""
     code = _norm_code(code)
     with db() as conn:
-        conn.execute(
-            "DELETE FROM auction_picks WHERE room_code = ? AND id = ?", (code, pick_id)
-        )
+        existed = conn.execute(
+            "SELECT id FROM auction_picks WHERE room_code = ? AND id = ?", (code, pick_id)
+        ).fetchone()
+        if existed:
+            conn.execute(
+                "DELETE FROM auction_picks WHERE room_code = ? AND id = ?", (code, pick_id)
+            )
         picks = _picks(conn, code)
-    return {"picks": picks}
+    # `deleted` lets the client tell "undone" from "already gone" instead of
+    # silently reporting success either way.
+    return {"picks": picks, "deleted": bool(existed)}
+
+
+@router.delete("/room/{code}/picks")
+def clear_picks(code: str):
+    """Clear a room in one statement — deleting 200+ picks one at a time was
+    slow, raced the poll, and left the room half-cleared if it failed partway."""
+    code = _norm_code(code)
+    with db() as conn:
+        conn.execute("DELETE FROM auction_picks WHERE room_code = ?", (code,))
+        conn.execute("UPDATE auction_rooms SET nominated = NULL WHERE code = ?", (code,))
+    return {"picks": [], "nominated": None}
