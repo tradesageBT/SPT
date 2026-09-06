@@ -214,8 +214,17 @@ function AvailablePlayers({ players }) {
                 <span className="rd-col-center rd-col-muted">
                   {p.redraft_pos_rank ? `${p.position}${p.redraft_pos_rank}` : '—'}
                 </span>
-                <span className="rd-col-center" style={{ color: '#01d9ac', fontWeight: 700 }}>
-                  {p.redraft_value ? p.redraft_value.toLocaleString() : '—'}
+                {/* K and DEF have no trade value, so show last season's points
+                    instead of a zero that would read as "worthless". */}
+                <span
+                  className="rd-col-center"
+                  style={p.redraft_value
+                    ? { color: '#01d9ac', fontWeight: 700 }
+                    : { color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.72rem' }}
+                >
+                  {p.redraft_value
+                    ? p.redraft_value.toLocaleString()
+                    : p.last_pts != null ? `${p.last_pts} pts` : 'unranked'}
                 </span>
                 <span className="rd-col-center" style={{ color: (p.vor || 0) >= 0 ? '#01d9ac' : '#e05c5c', fontWeight: 600 }}>
                   {p.vor != null ? (p.vor >= 0 ? '+' : '') + Math.round(p.vor) : '—'}

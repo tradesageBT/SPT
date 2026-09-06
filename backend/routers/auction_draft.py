@@ -13,16 +13,15 @@ the last league sync happened to write. Nothing here writes to that cache.
   GET /api/auction-draft/pool?teams=12&budget=200&ppr=1&qb=1&rb=2&wr=2&te=1&flex=1&...
 """
 import json
-import time
 import random
 import asyncio
 import logging
 from datetime import datetime, timezone
 
-import httpx
 from fastapi import APIRouter, Query, HTTPException, Body
 
 import draft_values
+import sleeper_data
 from draft_values import POSITIONS, FLEX_SHARES, TIER_BREAK
 from database import db
 
@@ -37,145 +36,9 @@ ROOM_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 # the Sleeper draft room so the two can't drift apart.
 
 
-# ── Sleeper season stats + projections ────────────────────────────────────────
-#
-# Sleeper keys these on their own player_id and FantasyCalc gives us sleeperId,
-# so this joins directly with no name matching. Cached in memory rather than in
-# Postgres: it needs no migration and survives between requests on a warm
-# process. It is lost on redeploy, and on a plan that spins down when idle it is
-# also lost on cold start — in both cases it simply refetches.
-
-SLEEPER_BASE = "https://api.sleeper.com"
-STATS_TTL = 6 * 3600
-# A failure (or an empty parse) is cached only briefly: caching it for the full
-# TTL would blank stats for the rest of a draft off one transient timeout.
-STATS_FAIL_TTL = 60
-
-# Kept deliberately small — this is a glanceable panel, not a stat page.
-STAT_KEYS = (
-    "pts_ppr", "pts_half_ppr", "pts_std", "gp", "gms_active",
-    "pass_yd", "pass_td", "pass_int",
-    "rush_att", "rush_yd", "rush_td",
-    "rec", "rec_tgt", "rec_yd", "rec_td",
-)
-
-_stats_cache: dict[str, tuple[float, dict]] = {}
-
-# ── Injury / depth-chart metadata ─────────────────────────────────────────────
-#
-# Lives in Sleeper's /players/nfl, which is a ~10MB download taking 10-30s —
-# cache_manager avoids it for exactly that reason. So it is loaded in the
-# BACKGROUND and never blocks a pool request: the board returns immediately and
-# the injury line appears once the fetch lands. Worst case it isn't there yet.
-
-META_TTL = 6 * 3600
-META_KEYS = (
-    "injury_status", "injury_notes", "practice_participation",
-    "depth_chart_order", "depth_chart_position", "status",
-)
-
-_meta: dict[str, dict] = {}
-_meta_at = 0.0
-_meta_loading = False
-
-
-def _meta_fresh() -> bool:
-    # Deliberately not `bool(_meta) and ...`: a failed load stamps _meta_at too,
-    # so an outage backs off rather than refetching on every request.
-    return _meta_at > 0 and (time.time() - _meta_at) < META_TTL
-
-
-async def _load_meta():
-    global _meta, _meta_at, _meta_loading
-    if _meta_loading:
-        return
-    _meta_loading = True
-    try:
-        import sleeper_client
-        data = await sleeper_client.get_all_players()
-        out: dict[str, dict] = {}
-        if isinstance(data, dict):
-            for pid, p in data.items():
-                if not isinstance(p, dict):
-                    continue
-                picked = {
-                    k: p[k] for k in META_KEYS
-                    if p.get(k) not in (None, "", [])
-                }
-                if picked:
-                    out[str(pid)] = picked
-        if out:
-            _meta = out
-            log.info("Loaded injury metadata for %d players", len(out))
-    except Exception as e:
-        log.warning("Sleeper player metadata failed (%s); continuing without", e)
-    finally:
-        # Stamped unconditionally: on failure this backs off for the TTL instead
-        # of leaving _meta_fresh() false and refetching 10MB on every request.
-        _meta_at = time.time()
-        _meta_loading = False
-
-
-def _current_season() -> int:
-    """NFL season is named for the year it starts; roll over in March."""
-    now = datetime.now(timezone.utc)
-    return now.year if now.month >= 3 else now.year - 1
-
-
-def _normalize_sleeper(payload) -> dict:
-    """
-    Sleeper's shape isn't contractually guaranteed and differs between
-    endpoints/seasons, so accept both a list of entries and a dict keyed by
-    player_id, and tolerate stats being nested under "stats" or inlined.
-    """
-    entries = []
-    if isinstance(payload, list):
-        entries = payload
-    elif isinstance(payload, dict):
-        for pid, val in payload.items():
-            if isinstance(val, dict):
-                val = dict(val)
-                val.setdefault("player_id", pid)
-                entries.append(val)
-
-    out: dict[str, dict] = {}
-    for e in entries:
-        if not isinstance(e, dict):
-            continue
-        pid = e.get("player_id")
-        if pid is None and isinstance(e.get("player"), dict):
-            pid = e["player"].get("player_id")
-        if pid is None:
-            continue
-        stats = e.get("stats") if isinstance(e.get("stats"), dict) else e
-        picked = {k: stats[k] for k in STAT_KEYS if isinstance(stats.get(k), (int, float))}
-        if picked:
-            out[str(pid)] = picked
-    return out
-
-
-async def _sleeper_season(kind: str, season: int) -> dict:
-    """kind: 'projections' or 'stats'. Returns {sleeper_id: {stat: value}}."""
-    key = f"{kind}:{season}"
-    hit = _stats_cache.get(key)
-    if hit and (time.time() - hit[0]) < STATS_TTL:
-        return hit[1]
-
-    url = f"{SLEEPER_BASE}/{kind}/nfl/{season}?season_type=regular"
-    try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            r = await client.get(url)
-        r.raise_for_status()
-        data = _normalize_sleeper(r.json())
-    except Exception as e:
-        log.warning("Sleeper %s for %s failed (%s); continuing without", kind, season, e)
-        data = {}
-
-    # Successes hold for the full TTL; failures and empty parses expire fast so a
-    # transient Sleeper blip doesn't cost the whole draft.
-    ttl_marker = time.time() if data else (time.time() - STATS_TTL + STATS_FAIL_TTL)
-    _stats_cache[key] = (ttl_marker, data)
-    return data
+# Sleeper metadata / stats / projections now live in sleeper_data, shared with
+# the Sleeper draft room so /players/nfl is fetched once rather than per router.
+STAT_KEYS = sleeper_data.STAT_KEYS
 
 
 def _league_points(stats: dict, ppr: float, pass_td_pts: float, rush_att_pts: float):
@@ -230,11 +93,11 @@ async def get_auction_pool(
 
     # Values and Sleeper stats are independent, so fetch them together.
     # return_exceptions keeps a Sleeper outage from failing the whole pool.
-    season = _current_season()
+    season = sleeper_data.current_season()
     players, proj, last = await asyncio.gather(
         _load_values(num_qbs, ppr),
-        _sleeper_season("projections", season),
-        _sleeper_season("stats", season - 1),
+        sleeper_data.season("projections", season),
+        sleeper_data.season("stats", season - 1),
         return_exceptions=True,
     )
     if isinstance(players, Exception):
@@ -306,8 +169,8 @@ async def get_auction_pool(
     all_players.sort(key=lambda x: (x["auction_value"], x["value"]), reverse=True)
 
     # Kick the 10MB metadata fetch off in the background — never awaited here
-    if not _meta_fresh() and not _meta_loading:
-        asyncio.create_task(_load_meta())
+    if not sleeper_data.meta_fresh() and not sleeper_data.meta_loading():
+        asyncio.create_task(sleeper_data.load_meta())
 
     for p in all_players:
         sid = p["sleeper_id"]
@@ -318,13 +181,13 @@ async def get_auction_pool(
         if la:
             la = {**la, "pts_league": _league_points(la, ppr, pass_td_pts, rush_att_pts)}
         p["proj"], p["last"] = pr, la
-        p["meta"] = _meta.get(sid) or None
+        p["meta"] = sleeper_data.get_meta().get(sid) or None
 
     return {
         "players": all_players[:400],
         "seasons": {"projected": season, "actual": season - 1},
         "stats_available": bool(proj) or bool(last),
-        "meta_ready": _meta_fresh(),
+        "meta_ready": sleeper_data.meta_fresh(),
         "settings": {
             "teams": teams,
             "budget": budget,

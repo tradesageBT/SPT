@@ -13,6 +13,7 @@ import httpx
 from fastapi import APIRouter, Query, HTTPException
 
 import draft_values
+import sleeper_data
 
 router = APIRouter(prefix="/api/sleeper-draft")
 SLEEPER = "https://api.sleeper.app/v1"
@@ -128,6 +129,16 @@ async def get_draft_state(league_id: str = Query(DEFAULT_LEAGUE_ID)):
     all_players = draft_values.apply_vor(by_pos, repl)
     all_players = draft_values.apply_tiers(all_players)
 
+    # ── Kickers and defenses ──────────────────────────────────────────────────
+    # FantasyCalc carries neither, so they come from Sleeper's own player data,
+    # ordered by last season's points. Appended AFTER apply_tiers deliberately:
+    # a run of zero-value players run through tiering would make every kicker
+    # its own tier, since (prev - 0) / prev exceeds any break threshold.
+    if not sleeper_data.meta_fresh() and not sleeper_data.meta_loading():
+        asyncio.create_task(sleeper_data.load_meta())
+    last_season = await sleeper_data.season("stats", sleeper_data.current_season() - 1)
+    kdef = sleeper_data.load_kdef(last_season)
+
     available = [
         {
             "player_id": p["sleeper_id"],
@@ -138,11 +149,28 @@ async def get_draft_state(league_id: str = Query(DEFAULT_LEAGUE_ID)):
             "redraft_pos_rank": p.get("pos_rank"),
             "tier": p.get("tier"),
             "vor": p.get("vor"),
+            "last_pts": None,
         }
         for p in all_players
         if str(p["sleeper_id"]) not in drafted_ids
+    ] + [
+        {
+            "player_id": p["sleeper_id"],
+            "name": p["name"],
+            "position": p["position"],
+            "nfl_team": p.get("nfl_team", ""),
+            "redraft_value": 0,
+            "redraft_pos_rank": None,
+            "tier": None,
+            "vor": None,
+            "last_pts": p.get("last_pts"),
+        }
+        for p in kdef
+        if str(p["sleeper_id"]) not in drafted_ids
     ]
-    available.sort(key=lambda x: x["redraft_value"], reverse=True)
+    # Valued players order by value; K/DEF are all zero so they fall to the
+    # bottom and sort among themselves by last season's points.
+    available.sort(key=lambda x: (x["redraft_value"], x["last_pts"] or 0), reverse=True)
 
     # On the clock
     picks_made = len(picks_out)
