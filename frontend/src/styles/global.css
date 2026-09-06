@@ -3310,3 +3310,63 @@ img { display: block; }
 }
 .sd-detected-line { font-size: 0.8rem; font-weight: 600; color: var(--text); }
 .sd-detected-warn { font-size: 0.7rem; color: #e0a45c; }
+
+/* Sleeper draft: upcoming pick strip */
+.sd-strip-wrap { margin-bottom: 10px; }
+.sd-strip-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+.sd-strip-title {
+  font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.05em;
+  font-weight: 700; color: var(--text-muted);
+}
+.sd-strip-sub { font-size: 0.72rem; color: var(--text-muted); }
+.sd-strip {
+  display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px;
+}
+.sd-pick {
+  flex: 0 0 auto;
+  min-width: 84px;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 7px 8px;
+}
+.sd-pick-now { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.sd-pick-mine { background: rgba(1, 217, 172, 0.10); border-color: var(--accent); }
+.sd-pick-no { font-size: 0.6rem; font-weight: 700; color: var(--text-muted); letter-spacing: 0.03em; }
+.sd-pick-team {
+  font-size: 0.68rem; font-weight: 600; color: var(--text);
+  max-width: 76px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sd-pick-mine .sd-pick-team { color: var(--accent); font-weight: 800; }
+.sd-pick-blank { font-size: 0.7rem; color: var(--text-muted); opacity: 0.5; }
+
+/* Roster position counts */
+.sd-counts { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 6px; }
+.sd-counts-label {
+  font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.05em;
+  font-weight: 700; color: var(--text-muted);
+}
+.sd-count { display: inline-flex; align-items: center; gap: 2px; font-size: 0.72rem; font-weight: 700; }
+.sd-counts-empty { font-size: 0.72rem; color: var(--text-muted); }
+
+/* On the clock: best available vs best fit */
+.sd-otc-panel {
+  background: var(--surface2);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+.sd-otc-title { font-size: 0.85rem; font-weight: 800; color: var(--accent); margin-bottom: 6px; }
+.sd-otc-needs { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-bottom: 8px; }
+.sd-need-urgent { position: relative; }
+.sd-need-urgent::after {
+  content: '!'; position: absolute; top: -4px; right: -4px;
+  font-size: 0.55rem; font-weight: 800; color: #e05c5c;
+}
+.sd-otc-picks { display: flex; flex-wrap: wrap; gap: 16px; }
+.sd-otc-pick { display: flex; flex-direction: column; gap: 3px; }
+.sd-otc-name { display: inline-flex; align-items: center; gap: 5px; font-size: 0.84rem; font-weight: 700; }
+.sd-otc-agree { font-size: 0.76rem; color: var(--accent); font-weight: 600; align-self: center; }
+.sd-fit-dot { color: var(--accent); font-size: 0.6rem; flex-shrink: 0; }

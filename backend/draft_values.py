@@ -216,3 +216,90 @@ def apply_tiers(players: list) -> list:
                     tier += 1
             p["tier"] = tier
     return players
+
+
+# ── Roster needs ──────────────────────────────────────────────────────────────
+#
+# "Need" spans starters, flex eligibility AND bench depth, so the board keeps
+# giving guidance deep into a draft rather than going quiet once starters fill.
+
+# How bench spots typically get spent in a redraft league. K/DEF get none —
+# nobody carries a backup kicker.
+BENCH_SHARES = {"QB": 0.10, "RB": 0.40, "WR": 0.40, "TE": 0.10}
+
+
+def roster_targets(starters: dict, flex_counts: dict, bench: int) -> dict:
+    """
+    How many of each position a team should end up with.
+
+    starters + flex allocation + bench allocation. Because FLEX_SHARES and
+    BENCH_SHARES each sum to 1, the targets sum to exactly the number of
+    draftable roster spots.
+    """
+    targets = {pos: float(starters.get(pos, 0) or 0) for pos in POSITIONS}
+    for ftype, count in (flex_counts or {}).items():
+        for pos, share in FLEX_SHARES.get(ftype, {}).items():
+            targets[pos] += share * (count or 0)
+    for pos, share in BENCH_SHARES.items():
+        targets[pos] += share * (bench or 0)
+    return targets
+
+
+def team_needs(counts: dict, targets: dict, starters: dict, roster_size: float | None = None) -> dict:
+    """
+    What a team still needs, most-wanted first.
+
+    Ranked by how far each position is from its target PROPORTIONALLY, not by
+    raw gap. Raw gap always favours whichever position has the largest target —
+    in a 3WR league that pins the answer to "WR" for the entire draft, which
+    tells you nothing about how two teams differ. Proportional gap correctly
+    says QB for the team with no quarterback and TE for the team with no tight
+    end.
+
+    K and DEF are held back until the roster is nearly full: they are required
+    starters from pick one, so without this they'd surface the moment the skill
+    starters fill and suggest drafting a kicker in the middle rounds.
+    """
+    gaps, prop = {}, {}
+    urgent = []
+    owned_total = sum((counts or {}).values())
+    size = roster_size if roster_size is not None else sum(targets.values())
+    spots_left = max(0, size - owned_total)
+    kdef_left = sum(
+        max(0, (targets.get(p, 0) or 0) - (counts.get(p, 0) or 0)) for p in ("K", "DEF")
+    )
+
+    for pos in POSITIONS:
+        owned = counts.get(pos, 0) or 0
+        target = targets.get(pos, 0) or 0
+        gaps[pos] = round(target - owned, 2)
+        score = (gaps[pos] / target) if target > 0 else 0
+        # Defer kickers and defenses until the roster is nearly full
+        if pos in ("K", "DEF") and spots_left > kdef_left + 3:
+            score *= 0.05
+        # Rounded so genuine ties actually tie: the targets carry float noise in
+        # the far decimals, which would otherwise decide the order before the
+        # magnitude tiebreak below ever got consulted.
+        prop[pos] = round(score, 3)
+        if owned < (starters.get(pos, 0) or 0):
+            urgent.append(pos)
+
+    # Proportion first, raw gap as the tiebreak. Early on every position is 100%
+    # unfilled and ties, and there the magnitude is what matters — needing three
+    # receivers is a bigger hole than needing one tight end.
+    ordered = [
+        p for p in sorted(prop, key=lambda p: (prop[p], gaps[p]), reverse=True)
+        if gaps[p] > 0
+    ]
+    return {
+        "gaps": gaps,
+        "ordered": ordered,
+        "top_need": ordered[0] if ordered else None,
+        "urgent": urgent,
+    }
+
+
+def snake_slot(pick_index: int, num_teams: int) -> int:
+    """1-based draft slot for a 0-based overall pick index."""
+    rnd, pos = divmod(pick_index, num_teams)
+    return pos + 1 if rnd % 2 == 0 else num_teams - pos

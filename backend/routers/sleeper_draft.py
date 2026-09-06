@@ -41,7 +41,10 @@ def _on_clock(picks_made: int, num_teams: int) -> int | None:
 
 
 @router.get("/state")
-async def get_draft_state(league_id: str = Query(DEFAULT_LEAGUE_ID)):
+async def get_draft_state(
+    league_id: str = Query(DEFAULT_LEAGUE_ID),
+    my_roster_id: int | None = Query(None),
+):
     # The league doc carries roster_positions and scoring_settings — that is what
     # removes the need for any manual configuration.
     league_raw, drafts_raw, rosters_raw, users_raw = await asyncio.gather(
@@ -129,6 +132,56 @@ async def get_draft_state(league_id: str = Query(DEFAULT_LEAGUE_ID)):
     all_players = draft_values.apply_vor(by_pos, repl)
     all_players = draft_values.apply_tiers(all_players)
 
+    picks_made = len(picks_out)
+
+    # ── Per-team roster state and needs ───────────────────────────────────────
+    # Needs span starters, flex eligibility and bench depth, so the board keeps
+    # advising deep into the draft instead of going quiet once starters fill.
+    targets = draft_values.roster_targets(starters, flex_counts, roster["bench"])
+
+    counts_by_roster: dict[int, dict] = {}
+    for pk in picks_out:
+        rid = pk.get("roster_id")
+        if rid is None:
+            continue
+        pos = draft_values.norm_pos(pk.get("position"))
+        if pos not in draft_values.POSITIONS:
+            continue
+        counts_by_roster.setdefault(rid, {})
+        counts_by_roster[rid][pos] = counts_by_roster[rid].get(pos, 0) + 1
+
+    needs_by_roster = {
+        t["roster_id"]: draft_values.team_needs(
+            counts_by_roster.get(t["roster_id"], {}), targets, starters,
+            roster_size=sum(targets.values()),
+        )
+        for t in teams
+    }
+    for t in teams:
+        rid = t["roster_id"]
+        t["counts"] = counts_by_roster.get(rid, {})
+        t["needs"] = needs_by_roster.get(rid, {})
+
+    # ── Upcoming picks, in order ──────────────────────────────────────────────
+    # Enough to always reach the viewer's next turn; the client trims.
+    upcoming = []
+    if not is_auction:
+        for i in range(picks_made, min(picks_made + 24, num_teams * rounds)):
+            rnd = i // num_teams + 1
+            slot = draft_values.snake_slot(i, num_teams)
+            rid = slot_to_roster.get(str(slot))
+            need = needs_by_roster.get(rid) or {}
+            upcoming.append({
+                "pick_no": i + 1,
+                "round": rnd,
+                "roster_id": rid,
+                "team_name": _team_name(rid),
+                # Round 1 rosters are empty, so a "need" there is meaningless.
+                "top_need": None if rnd == 1 else need.get("top_need"),
+                "urgent": [] if rnd == 1 else need.get("urgent", []),
+                "counts": counts_by_roster.get(rid, {}),
+            })
+
     # ── Kickers and defenses ──────────────────────────────────────────────────
     # FantasyCalc carries neither, so they come from Sleeper's own player data,
     # ordered by last season's points. Appended AFTER apply_tiers deliberately:
@@ -172,8 +225,15 @@ async def get_draft_state(league_id: str = Query(DEFAULT_LEAGUE_ID)):
     # bottom and sort among themselves by last season's points.
     available.sort(key=lambda x: (x["redraft_value"], x["last_pts"] or 0), reverse=True)
 
+    # Flag which players fill a need for the viewer. The ORDER is untouched —
+    # the list stays value-sorted and the client decides how to surface this.
+    my_needs = needs_by_roster.get(my_roster_id) if my_roster_id is not None else None
+    if my_needs:
+        gaps = my_needs.get("gaps", {})
+        for p in available:
+            p["fills_need"] = gaps.get(p["position"], 0) > 0
+
     # On the clock
-    picks_made = len(picks_out)
     otc_slot = None if is_auction or status != "drafting" else _on_clock(picks_made, num_teams)
     otc_roster_id = slot_to_roster.get(str(otc_slot)) if otc_slot else None
     otc_name = _team_name(otc_roster_id) if otc_roster_id else ""
@@ -202,6 +262,9 @@ async def get_draft_state(league_id: str = Query(DEFAULT_LEAGUE_ID)):
         "on_the_clock_roster_id": otc_roster_id,
         "on_the_clock_name": otc_name,
         "teams": teams,
+        "upcoming": upcoming,
+        "my_needs": my_needs,
+        "targets": {k: round(v, 2) for k, v in targets.items()},
         "picks": picks_out[-25:],
         "all_picks": picks_out,
         "available": available,

@@ -67,7 +67,13 @@ export const api = {
     request(`/espn-draft/players/search?q=${encodeURIComponent(q)}&limit=${limit}&mode=${mode}`),
   searchRedraftPlayers: (q = '', limit = 20) =>
     request(`/espn-draft/players/search?q=${encodeURIComponent(q)}&limit=${limit}`),
-  getSleeperDraftState: (leagueId) => request(`/sleeper-draft/state?league_id=${encodeURIComponent(leagueId)}`),
+  getSleeperDraftState: (leagueId, myRosterId) => {
+    const p = new URLSearchParams({ league_id: leagueId })
+    // Optional: setup loads teams before you've picked one. When present the
+    // server flags which available players fill a need for you.
+    if (myRosterId != null) p.set('my_roster_id', myRosterId)
+    return request(`/sleeper-draft/state?${p}`)
+  },
   getAuctionPool: (s) => {
     const p = new URLSearchParams({
       teams: s.teams, budget: s.budget, ppr: s.ppr,

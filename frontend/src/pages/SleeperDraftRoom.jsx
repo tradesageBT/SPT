@@ -156,6 +156,109 @@ function SetupForm({ onStart }) {
   )
 }
 
+
+// ── Upcoming picks ────────────────────────────────────────────────────────────
+// Left-to-right order from the current pick through your next turn, so you can
+// see exactly who is between you and the clock, and what each of them needs.
+
+function PickStrip({ upcoming, myRosterId }) {
+  if (!upcoming?.length) return null
+  // Trim to your next pick (inclusive). If you're not in it, show a couple of rounds.
+  const mineAt = upcoming.findIndex((p, i) => i > 0 && p.roster_id === myRosterId)
+  const shown = mineAt > 0 ? upcoming.slice(0, mineAt + 1) : upcoming.slice(0, 12)
+  const inRound1 = upcoming[0]?.round === 1
+
+  return (
+    <div className="sd-strip-wrap">
+      <div className="sd-strip-head">
+        <span className="sd-strip-title">Upcoming</span>
+        <span className="sd-strip-sub">
+          {inRound1
+            ? 'Needs appear from round 2 — every roster is empty right now'
+            : mineAt > 0
+              ? `${mineAt} pick${mineAt > 1 ? 's' : ''} until you're up`
+              : 'Next picks'}
+        </span>
+      </div>
+      <div className="sd-strip">
+        {shown.map((p, i) => {
+          const isMine = p.roster_id === myRosterId
+          const isNow = i === 0
+          return (
+            <div
+              key={p.pick_no}
+              className={`sd-pick${isNow ? ' sd-pick-now' : ''}${isMine ? ' sd-pick-mine' : ''}`}
+            >
+              <div className="sd-pick-no">{p.round}.{String(((p.pick_no - 1) % 100) + 1).padStart(2, '0')}</div>
+              <div className="sd-pick-team">{isMine ? 'YOU' : p.team_name}</div>
+              {p.top_need
+                ? <PosPill pos={p.top_need} />
+                : <span className="sd-pick-blank">—</span>}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// What the team currently picking already has, so their next move is readable.
+function RosterCounts({ counts, label }) {
+  const order = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF']
+  const any = order.some(p => (counts || {})[p])
+  return (
+    <div className="sd-counts">
+      {label && <span className="sd-counts-label">{label}</span>}
+      {!any
+        ? <span className="sd-counts-empty">no picks yet</span>
+        : order.filter(p => counts[p]).map(p => (
+          <span key={p} className="sd-count"><PosPill pos={p} />{counts[p]}</span>
+        ))
+      }
+    </div>
+  )
+}
+
+// Best available vs best fit, shown only when you're actually on the clock.
+// The main list is never reordered — this sits beside it.
+function OnTheClockPanel({ available, myNeeds }) {
+  const bestAvailable = available[0]
+  // Highest-value player who fills any position you still need.
+  const bestFit = available.find(p => p.fills_need)
+  if (!bestAvailable) return null
+  const same = bestFit && bestFit.player_id === bestAvailable.player_id
+
+  return (
+    <div className="sd-otc-panel">
+      <div className="sd-otc-title">🎯 You're on the clock</div>
+      {myNeeds?.ordered?.length > 0 && (
+        <div className="sd-otc-needs">
+          <span className="sd-counts-label">Still need</span>
+          {myNeeds.ordered.slice(0, 4).map(p => (
+            <span key={p} className={myNeeds.urgent?.includes(p) ? 'sd-need-urgent' : ''}>
+              <PosPill pos={p} />
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="sd-otc-picks">
+        <div className="sd-otc-pick">
+          <span className="sd-counts-label">Best available</span>
+          <span className="sd-otc-name"><PosPill pos={bestAvailable.position} />{bestAvailable.name}</span>
+        </div>
+        {same ? (
+          <div className="sd-otc-agree">Also your best fit — he's the pick</div>
+        ) : bestFit ? (
+          <div className="sd-otc-pick">
+            <span className="sd-counts-label">Best fit</span>
+            <span className="sd-otc-name"><PosPill pos={bestFit.position} />{bestFit.name}</span>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
 // ── Available players ─────────────────────────────────────────────────────────
 
 function AvailablePlayers({ players }) {
@@ -209,6 +312,8 @@ function AvailablePlayers({ players }) {
                 <div className="rd-player-info">
                   <PosPill pos={p.position} />
                   <span className="rd-player-name">{p.name}</span>
+                  {/* Marks a position you still need. Order is never changed by it. */}
+                  {p.fills_need && <span className="sd-fit-dot" title="Fills a need">●</span>}
                   <span className="rd-player-team">{p.nfl_team}</span>
                 </div>
                 <span className="rd-col-center rd-col-muted">
@@ -257,6 +362,13 @@ function Sidebar({ data, myRosterId, teams }) {
             <div className="yd-otc-label">On the clock</div>
             <div className="yd-otc-team">{data.on_the_clock_name || '—'}</div>
             <div className="yd-otc-pick">Pick {data.picks_made + 1} of {data.total_picks}</div>
+            {/* What the team currently picking already has */}
+            {data.on_the_clock_roster_id != null && (
+              <RosterCounts
+                counts={(data.teams || []).find(t => t.roster_id === data.on_the_clock_roster_id)?.counts}
+                label="Has"
+              />
+            )}
           </>
         )}
       </div>
@@ -305,7 +417,7 @@ function DraftBoard({ config, onReset }) {
 
   const poll = useCallback(async () => {
     try {
-      const d = await api.getSleeperDraftState(config.leagueId)
+      const d = await api.getSleeperDraftState(config.leagueId, config.myRosterId)
       setData(d)
       setError('')
     } catch (e) {
@@ -342,6 +454,12 @@ function DraftBoard({ config, onReset }) {
         </div>
         <button className="btn btn-secondary btn-sm" onClick={onReset}>Change League</button>
       </div>
+      <PickStrip upcoming={data?.upcoming} myRosterId={config.myRosterId} />
+
+      {data?.on_the_clock_roster_id === config.myRosterId && (
+        <OnTheClockPanel available={data?.available ?? []} myNeeds={data?.my_needs} />
+      )}
+
       <div className="rd-board-body">
         <AvailablePlayers players={data?.available ?? []} />
         <Sidebar data={data ?? {}} myRosterId={config.myRosterId} teams={data?.teams ?? []} />
