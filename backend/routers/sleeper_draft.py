@@ -1,17 +1,26 @@
 """
 Sleeper Fantasy draft assistant — public API, no auth required.
 
+Scoring and roster settings are read from the league itself rather than typed
+in: Sleeper exposes roster_positions and scoring_settings on GET /league/{id},
+so PPR, superflex and every flex slot are derived automatically.
+
 GET /api/sleeper-draft/state?league_id={id}
 """
 import asyncio
-from collections import defaultdict
 
 import httpx
 from fastapi import APIRouter, Query, HTTPException
 
+import draft_values
+
 router = APIRouter(prefix="/api/sleeper-draft")
 SLEEPER = "https://api.sleeper.app/v1"
 TIMEOUT = 10.0
+
+# The league this assistant is set up for. Still a query param so the room works
+# for any other league, but this is what it defaults to.
+DEFAULT_LEAGUE_ID = "1389372044419809280"
 
 
 async def _get(path: str):
@@ -30,41 +39,12 @@ def _on_clock(picks_made: int, num_teams: int) -> int | None:
     return (pos + 1) if rnd % 2 == 0 else (num_teams - pos)
 
 
-def _vor(players: list, num_teams: int) -> list:
-    pos_vals: dict[str, list] = defaultdict(list)
-    for p in players:
-        v = p.get("redraft_value") or 0
-        if v:
-            pos_vals[p["position"]].append(v)
-    repl: dict[str, int] = {}
-    for pos, vals in pos_vals.items():
-        vals.sort(reverse=True)
-        n = num_teams if pos in ("RB", "WR") else num_teams // 2
-        repl[pos] = vals[n] if len(vals) > n else (vals[-1] if vals else 0)
-    for p in players:
-        v = p.get("redraft_value") or 0
-        p["vor"] = v - repl.get(p["position"], 0)
-    return players
-
-
-def _tiers(players: list) -> list:
-    tier = 1
-    for i, p in enumerate(players):
-        if i > 0:
-            prev = players[i - 1].get("redraft_value") or 1
-            curr = p.get("redraft_value") or 0
-            if prev > 0 and curr > 0 and (prev - curr) / prev > 0.08:
-                tier += 1
-        p["tier"] = tier
-    return players
-
-
 @router.get("/state")
-async def get_draft_state(league_id: str = Query(...)):
-    from cache_manager import get_cached_players
-
-    # Fetch drafts list, rosters, and users in parallel
-    drafts_raw, rosters_raw, users_raw = await asyncio.gather(
+async def get_draft_state(league_id: str = Query(DEFAULT_LEAGUE_ID)):
+    # The league doc carries roster_positions and scoring_settings — that is what
+    # removes the need for any manual configuration.
+    league_raw, drafts_raw, rosters_raw, users_raw = await asyncio.gather(
+        _get(f"league/{league_id}"),
         _get(f"league/{league_id}/drafts"),
         _get(f"league/{league_id}/rosters"),
         _get(f"league/{league_id}/users"),
@@ -127,30 +107,42 @@ async def get_draft_state(league_id: str = Query(...)):
             "amount": meta.get("amount"),
         })
 
-    # Available players from players_cache
-    players_cache = get_cached_players()
-    available = []
-    for p in players_cache.values():
-        if str(p["sleeper_id"]) in drafted_ids:
-            continue
-        rv = p.get("redraft_value") or 0
-        if not rv:
-            continue
-        available.append({
+    # ── Values, using THIS league's scoring ───────────────────────────────────
+    # Previously this read the global players_cache, which carries whatever
+    # (ppr, num_qbs) the last league sync happened to write — so a dynasty
+    # superflex sync mispriced this redraft league, and with no sync at all the
+    # list came back empty. Both are read from the league doc now.
+    roster = draft_values.parse_roster_positions(league_raw.get("roster_positions"))
+    ppr = draft_values.parse_ppr(league_raw.get("scoring_settings"))
+    num_qbs = roster["num_qbs"]
+
+    all_players = await draft_values.load_values(num_qbs=num_qbs, ppr=ppr)
+
+    by_pos = draft_values.group_by_position(all_players)
+    starters = {
+        "QB": roster["qb"], "RB": roster["rb"], "WR": roster["wr"],
+        "TE": roster["te"], "K": roster["k"], "DEF": roster["dst"],
+    }
+    flex_counts = {k: roster[k] for k in draft_values.FLEX_KEYS}
+    repl = draft_values.replacement_levels(by_pos, starters, flex_counts, num_teams)
+    all_players = draft_values.apply_vor(by_pos, repl)
+    all_players = draft_values.apply_tiers(all_players)
+
+    available = [
+        {
             "player_id": p["sleeper_id"],
             "name": p["name"],
             "position": p["position"],
             "nfl_team": p.get("nfl_team", ""),
-            "redraft_value": rv,
-            "fc_value": p.get("fc_value") or 0,
-            "redraft_pos_rank": p.get("redraft_pos_rank"),
-            "tier": None,
-            "vor": None,
-        })
-
+            "redraft_value": p["value"],
+            "redraft_pos_rank": p.get("pos_rank"),
+            "tier": p.get("tier"),
+            "vor": p.get("vor"),
+        }
+        for p in all_players
+        if str(p["sleeper_id"]) not in drafted_ids
+    ]
     available.sort(key=lambda x: x["redraft_value"], reverse=True)
-    available = _vor(available, num_teams)
-    available = _tiers(available)
 
     # On the clock
     picks_made = len(picks_out)
@@ -160,6 +152,19 @@ async def get_draft_state(league_id: str = Query(...)):
 
     return {
         "draft_id": draft_id,
+        "league_name": league_raw.get("name", ""),
+        # Echoed so the UI can show what was auto-detected — the only way to
+        # confirm the parse matches the real league settings.
+        "league_settings": {
+            "ppr": ppr,
+            "num_qbs": num_qbs,
+            "superflex": roster["sflex"] > 0,
+            "starters": starters,
+            "flex": flex_counts,
+            "bench": roster["bench"],
+            "idp": roster["idp"],
+            "unknown_slots": roster["unknown"],
+        },
         "status": status,
         "is_auction": is_auction,
         "picks_made": picks_made,

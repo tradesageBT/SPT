@@ -3289,3 +3289,24 @@ img { display: block; }
   color: var(--text-muted);
   font-style: italic;
 }
+
+/* Sleeper draft: settings auto-detected from the league */
+.sd-detected {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-top: 12px;
+}
+.sd-detected-label {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.sd-detected-line { font-size: 0.8rem; font-weight: 600; color: var(--text); }
+.sd-detected-warn { font-size: 0.7rem; color: #e0a45c; }

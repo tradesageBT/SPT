@@ -22,7 +22,8 @@ from datetime import datetime, timezone
 import httpx
 from fastapi import APIRouter, Query, HTTPException, Body
 
-import fantasycalc_client
+import draft_values
+from draft_values import POSITIONS, FLEX_SHARES, TIER_BREAK
 from database import db
 
 router = APIRouter(prefix="/api/auction-draft")
@@ -32,19 +33,8 @@ log = logging.getLogger(__name__)
 # confused with each other (0/O, 1/I/L).
 ROOM_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
 
-POSITIONS = ("QB", "RB", "WR", "TE", "K", "DEF")
-
-# How often each position actually fills a given flex slot type. Used to push
-# replacement level deeper for the positions a flex slot competes for.
-FLEX_SHARES = {
-    "flex":        {"RB": 0.45, "WR": 0.45, "TE": 0.10},               # RB/WR/TE
-    "sflex":       {"QB": 0.75, "WR": 0.12, "RB": 0.10, "TE": 0.03},   # QB/RB/WR/TE
-    "wr_rb_flex":  {"RB": 0.50, "WR": 0.50},                           # WR/RB
-    "rec_flex":    {"WR": 0.75, "TE": 0.25},                           # WR/TE
-}
-
-# A new tier starts when the drop from the previous player exceeds this
-TIER_BREAK = 0.08
+# POSITIONS / FLEX_SHARES / TIER_BREAK now live in draft_values, shared with
+# the Sleeper draft room so the two can't drift apart.
 
 
 # ── Sleeper season stats + projections ────────────────────────────────────────
@@ -207,65 +197,8 @@ def _league_points(stats: dict, ppr: float, pass_td_pts: float, rush_att_pts: fl
     return round(adj, 1)
 
 
-def _norm_pos(pos: str) -> str:
-    p = (pos or "").upper().strip()
-    if p in ("DST", "D/ST", "DEFENSE"):
-        return "DEF"
-    if p == "PK":
-        return "K"
-    return p
-
-
 async def _load_values(num_qbs: int, ppr: float) -> list[dict]:
-    """
-    Redraft values for this auction's scoring, straight from FantasyCalc.
-
-    Deliberately does NOT touch players_cache: that table is global and shared
-    with league syncs, so writing this auction's scoring into it would clobber
-    the values every other league is computed from.
-    """
-    try:
-        entries = await fantasycalc_client.get_values(
-            num_qbs=num_qbs, ppr=ppr, is_dynasty=False
-        )
-        out = []
-        for entry in entries:
-            player = entry.get("player", {})
-            sid = str(player.get("sleeperId") or "")
-            pos = _norm_pos(player.get("position", ""))
-            if not sid or pos not in POSITIONS:
-                continue
-            out.append({
-                "sleeper_id": sid,
-                "name": player.get("name", ""),
-                "position": pos,
-                "nfl_team": player.get("nflTeamAbbr", ""),
-                "age": player.get("age"),
-                "value": entry.get("value", 0) or 0,
-            })
-        if out:
-            return out
-        log.warning("FantasyCalc returned no usable players; falling back to cache")
-    except Exception as e:
-        log.warning("FantasyCalc fetch failed (%s); falling back to cache", e)
-
-    # Fallback so the tool still opens if FantasyCalc is down mid-draft.
-    from cache_manager import get_cached_players
-    out = []
-    for p in get_cached_players().values():
-        val = p.get("redraft_value") or 0
-        pos = _norm_pos(p.get("position"))
-        if not val or pos not in POSITIONS:
-            continue
-        out.append({
-            "sleeper_id": p["sleeper_id"],
-            "name": p["name"],
-            "position": pos,
-            "nfl_team": p.get("nfl_team", ""),
-            "age": p.get("age"),
-            "value": val,
-        })
-    return out
+    return await draft_values.load_values(num_qbs, ppr)
 
 
 @router.get("/pool")

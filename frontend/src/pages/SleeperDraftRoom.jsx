@@ -2,6 +2,9 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { api } from '../api/client'
 
 const STORAGE_KEY = 'sleeper_draft_config'
+// The league this assistant is set up for. Prefilled, but editable — the
+// backend accepts any league id and derives its settings the same way.
+const DEFAULT_LEAGUE_ID = '1389372044419809280'
 const POLL_MS = 5000
 
 const POS_COLORS = {
@@ -32,10 +35,44 @@ function TierBadge({ tier }) {
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
+// Scoring and roster settings come from the league itself, so this just
+// reports what was detected — the only way to confirm the parse is right.
+function DetectedSettings({ s }) {
+  if (!s) return null
+  const ppr = s.ppr === 1 ? 'Full PPR' : s.ppr === 0.5 ? 'Half PPR' : s.ppr ? `${s.ppr} PPR` : 'Standard'
+  const st = s.starters || {}
+  const slots = [
+    st.QB && `${st.QB}QB`, st.RB && `${st.RB}RB`, st.WR && `${st.WR}WR`, st.TE && `${st.TE}TE`,
+    s.flex?.flex && `${s.flex.flex}FLEX`,
+    s.flex?.sflex && `${s.flex.sflex}SUPERFLEX`,
+    s.flex?.wr_rb_flex && `${s.flex.wr_rb_flex}W/R`,
+    s.flex?.rec_flex && `${s.flex.rec_flex}W/T`,
+    st.K && `${st.K}K`, st.DEF && `${st.DEF}DEF`,
+    s.bench && `${s.bench}BN`,
+  ].filter(Boolean).join(' · ')
+  return (
+    <div className="sd-detected">
+      <span className="sd-detected-label">Detected from your league</span>
+      <span className="sd-detected-line">{ppr} · {slots}</span>
+      {s.idp > 0 && (
+        <span className="sd-detected-warn">
+          {s.idp} IDP slot{s.idp > 1 ? 's' : ''} — those players aren't in the pool
+        </span>
+      )}
+      {s.unknown_slots?.length > 0 && (
+        <span className="sd-detected-warn">
+          Unrecognised slots ignored: {s.unknown_slots.join(', ')}
+        </span>
+      )}
+    </div>
+  )
+}
+
 function SetupForm({ onStart }) {
-  const [leagueId, setLeagueId] = useState('')
+  const [leagueId, setLeagueId] = useState(DEFAULT_LEAGUE_ID)
   const [myRosterId, setMyRosterId] = useState('')
   const [teams, setTeams] = useState([])
+  const [detected, setDetected] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -48,6 +85,7 @@ function SetupForm({ onStart }) {
     try {
       const data = await api.getSleeperDraftState(leagueId.trim())
       setTeams(data.teams || [])
+      setDetected(data.league_settings || null)
     } catch (e) {
       setError(e.message)
     } finally {
@@ -63,9 +101,12 @@ function SetupForm({ onStart }) {
   return (
     <div className="yd-setup-card">
       <div className="yd-setup-title">Sleeper Draft Assistant</div>
-      <p className="yd-setup-sub">Enter your Sleeper league ID to connect.</p>
+      <p className="yd-setup-sub">
+        Scoring and roster settings are read from the league — nothing to configure.
+      </p>
       <p className="yd-setup-hint">
-        Find it in your league URL: sleeper.com/leagues/<strong>[LEAGUE ID]</strong>
+        Prefilled with your league. To use another, find its id in the URL:
+        sleeper.com/leagues/<strong>[LEAGUE ID]</strong>
       </p>
 
       {error && <div className="rd-error">{error}</div>}
@@ -84,6 +125,8 @@ function SetupForm({ onStart }) {
           {loading ? '…' : 'Load'}
         </button>
       </div>
+
+      <DetectedSettings s={detected} />
 
       {teams.length > 0 && (
         <>
