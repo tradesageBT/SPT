@@ -225,6 +225,23 @@ async def get_draft_state(
     # bottom and sort among themselves by last season's points.
     available.sort(key=lambda x: (x["redraft_value"], x["last_pts"] or 0), reverse=True)
 
+    # ── Stats, projections and injury data ────────────────────────────────────
+    # Points are restated under this league's scoring: Sleeper's totals are
+    # computed under standard rules, which award nothing for return yardage.
+    proj = await sleeper_data.season("projections", sleeper_data.current_season())
+    scoring = league_raw.get("scoring_settings") or {}
+    for p in available:
+        pid = str(p["player_id"])
+        pr, la = proj.get(pid) or None, last_season.get(pid) or None
+        if pr:
+            pr = {**pr, "pts_league": draft_values.league_points(
+                pr, ppr, scoring_settings=scoring)}
+        if la:
+            la = {**la, "pts_league": draft_values.league_points(
+                la, ppr, scoring_settings=scoring)}
+        p["proj"], p["last"] = pr, la
+        p["meta"] = sleeper_data.get_meta().get(pid) or None
+
     # Flag which players fill a need for the viewer. The ORDER is untouched —
     # the list stays value-sorted and the client decides how to surface this.
     my_needs = needs_by_roster.get(my_roster_id) if my_roster_id is not None else None
@@ -265,6 +282,13 @@ async def get_draft_state(
         "upcoming": upcoming,
         "my_needs": my_needs,
         "targets": {k: round(v, 2) for k, v in targets.items()},
+        "seasons": {
+            "projected": sleeper_data.current_season(),
+            "actual": sleeper_data.current_season() - 1,
+        },
+        # Non-empty when the league scores return yardage, so the UI can say so
+        # rather than showing a restated number with no explanation.
+        "return_rates": draft_values.return_yard_rates(scoring),
         "picks": picks_out[-25:],
         "all_picks": picks_out,
         "available": available,

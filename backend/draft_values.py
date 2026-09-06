@@ -303,3 +303,66 @@ def snake_slot(pick_index: int, num_teams: int) -> int:
     """1-based draft slot for a 0-based overall pick index."""
     rnd, pos = divmod(pick_index, num_teams)
     return pos + 1 if rnd % 2 == 0 else num_teams - pos
+
+
+# ── Points under a league's scoring ───────────────────────────────────────────
+
+# Return yardage. Deliberately yardage only — a return TOUCHDOWN is already
+# inside Sleeper's points total, so adding kr_td/pr_td would double-count it.
+RETURN_YARD_KEYS = ("kr_yd", "pr_yd")
+
+
+def league_points(
+    stats: dict,
+    ppr: float,
+    pass_td_pts: float = 4.0,
+    rush_att_pts: float = 0.0,
+    scoring_settings: dict | None = None,
+):
+    """
+    Sleeper's own points figure, restated for categories its baseline misses.
+
+    Sleeper's pts_* are computed under STANDARD scoring, so rather than
+    recomputing from scratch — which would need fumbles and 2pt conversions we
+    don't pull — this adjusts by only what differs:
+
+      * passing TDs, where the baseline is 4
+      * per-carry bonus, where the baseline is 0
+      * return yardage, where the baseline is also 0, so it is a pure addition
+
+    `scoring_settings` is the league's own rules and is optional: without it the
+    return adjustment is skipped and the result is unchanged.
+    """
+    if not stats:
+        return None
+    base_key = "pts_ppr" if ppr == 1 else "pts_half_ppr" if ppr == 0.5 else "pts_std"
+    base = stats.get(base_key)
+    if base is None:
+        return None
+
+    adj = base
+    adj += (stats.get("pass_td") or 0) * (pass_td_pts - 4.0)
+    adj += (stats.get("rush_att") or 0) * rush_att_pts
+
+    for key in RETURN_YARD_KEYS:
+        try:
+            rate = float((scoring_settings or {}).get(key, 0) or 0)
+        except (TypeError, ValueError):
+            rate = 0.0
+        if rate:
+            adj += (stats.get(key) or 0) * rate
+
+    return round(adj, 1)
+
+
+def return_yard_rates(scoring_settings: dict | None) -> dict:
+    """The league's per-yard return rates, for captioning a restated figure."""
+    out = {}
+    for key in RETURN_YARD_KEYS:
+        try:
+            rate = float((scoring_settings or {}).get(key, 0) or 0)
+        except (TypeError, ValueError):
+            rate = 0.0
+        if rate:
+            out[key] = rate
+    return out

@@ -31,6 +31,9 @@ STAT_KEYS = (
     "pass_yd", "pass_td", "pass_int",
     "rush_att", "rush_yd", "rush_td",
     "rec", "rec_tgt", "rec_yd", "rec_td",
+    # Return yardage. Standard scoring awards nothing for these, so a league
+    # that scores them needs the raw yards to add on top of Sleeper's total.
+    "kr_yd", "pr_yd",
 )
 
 _stats_cache: dict[str, tuple[float, dict]] = {}

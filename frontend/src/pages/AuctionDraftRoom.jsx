@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { api } from '../api/client'
+import PlayerDetailModal, { InjuryTag } from '../components/PlayerDetailModal'
 
 const STORAGE_KEY = 'auction_draft_state'
 const POLL_MS = 3000
@@ -52,24 +53,6 @@ function PosPill({ pos }) {
   return (
     <span className="rd-pos-pill" style={{ background: c + '22', color: c, borderColor: c + '55' }}>
       {pos || '?'}
-    </span>
-  )
-}
-
-// Short injury tag for the list rows — red for anything that means "not playing"
-const INJ_SHORT = {
-  Questionable: ['Q', '#e0a45c'], Doubtful: ['D', '#e05c5c'], Out: ['OUT', '#e05c5c'],
-  IR: ['IR', '#e05c5c'], PUP: ['PUP', '#e05c5c'], Sus: ['SUS', '#e05c5c'],
-  COV: ['COV', '#e0a45c'], NA: ['NA', '#e05c5c'],
-}
-
-function InjuryTag({ meta }) {
-  const status = meta?.injury_status
-  if (!status) return null
-  const [label, color] = INJ_SHORT[status] || [String(status).slice(0, 3).toUpperCase(), '#e0a45c']
-  return (
-    <span className="au-inj-tag" style={{ color, borderColor: color + '66', background: color + '1a' }}>
-      {label}
     </span>
   )
 }
@@ -344,209 +327,6 @@ function positionNeed(byPos, settings, pos) {
 // global.css:424) rather than a new pattern. A right-hand pane was considered
 // and rejected: .main-content caps at 1100px and .rd-board-body collapses to a
 // single column at 860px, so a third column would be unusable on a phone.
-
-// Columns per position — short headers so a season fits on one line
-const STAT_COLS = {
-  QB: [['PaYd', 'pass_yd'], ['PaTD', 'pass_td'], ['Int', 'pass_int'], ['RuYd', 'rush_yd'], ['RuTD', 'rush_td']],
-  RB: [['Att', 'rush_att'], ['RuYd', 'rush_yd'], ['RuTD', 'rush_td'], ['Rec', 'rec'], ['ReYd', 'rec_yd']],
-  WR: [['Tgt', 'rec_tgt'], ['Rec', 'rec'], ['Yds', 'rec_yd'], ['TD', 'rec_td']],
-  TE: [['Tgt', 'rec_tgt'], ['Rec', 'rec'], ['Yds', 'rec_yd'], ['TD', 'rec_td']],
-}
-
-function StatBlock({ player, seasons, ppr, scoring }) {
-  const { proj, last } = player
-  if (!proj && !last) {
-    return <div className="au-stat-none">No stats or projections available for this player.</div>
-  }
-  // Match the fantasy-point figure to the league's scoring
-  const baseKey = ppr === 1 ? 'pts_ppr' : ppr === 0.5 ? 'pts_half_ppr' : 'pts_std'
-  // pts_league is the backend's restatement under this league's scoring
-  const ptsKey = (proj?.pts_league != null || last?.pts_league != null) ? 'pts_league' : baseKey
-  const cols = [['Pts', ptsKey], ['G', 'gp'], ...(STAT_COLS[player.position] || STAT_COLS.WR)]
-  const fmt = (src, key) => {
-    const v = src?.[key]
-    if (v == null) return '—'
-    return key.startsWith('pts') ? Math.round(v) : (Number.isInteger(v) ? v : Math.round(v))
-  }
-  const scoringNote = ptsKey === 'pts_league'
-    ? `Points restated for this league: ${scoring.passTdPts} pt pass TD${
-        scoring.rushAttPts ? `, ${scoring.rushAttPts} per carry` : ''}`
-    : null
-  const rows = [
-    [seasons?.actual ?? 'Last', last, false],
-    [seasons?.projected ?? 'Proj', proj, true],
-  ]
-  return (
-    // Scrolls rather than squishing — QB and RB carry more columns than a phone fits
-    <div className="au-stat-wrap">
-      <table className="au-stat-table">
-        <thead>
-          <tr>
-            <th className="au-stat-year">Year</th>
-            {cols.map(([label]) => <th key={label}>{label}</th>)}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map(([label, src, isProj]) => (
-            <tr key={label} className={isProj ? 'au-stat-projrow' : ''}>
-              <td className="au-stat-year">{label}{isProj ? ' proj' : ''}</td>
-              {cols.map(([, key]) => <td key={key}>{fmt(src, key)}</td>)}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {scoringNote && <div className="au-stat-note">{scoringNote}</div>}
-    </div>
-  )
-}
-
-function PlayerDetail({ player, adjPrice, seasons, ppr, scoring, onNominate, onClose }) {
-  useEffect(() => {
-    function onKey(e) { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
-
-  const stats = [
-    ['Est $', `$${player.auction_value}`],
-    ['Adjusted $', `$${adjPrice}`],
-    ['Pos rank', player.pos_rank ? `${player.position}${player.pos_rank}` : '—'],
-    ['Tier', player.tier ? `T${player.tier}` : '—'],
-    ['VOR', player.vor > 0 ? `+${player.vor}` : `${player.vor ?? '—'}`],
-  ]
-
-  return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-sheet" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <div>
-            <div className="modal-title">{player.name}</div>
-            <div className="modal-subtitle">
-              {player.position}{player.nfl_team ? ` · ${player.nfl_team}` : ''}
-            </div>
-          </div>
-          <button className="modal-close" onClick={onClose}>✕</button>
-        </div>
-        <div className="modal-body">
-          <div className="au-detail-grid">
-            {stats.map(([label, val]) => (
-              <div key={label} className="au-detail-stat">
-                <span className="au-detail-label">{label}</span>
-                <span className="au-detail-val">{val}</span>
-              </div>
-            ))}
-          </div>
-          {player.meta && (
-            <div className="au-meta-block">
-              {player.meta.injury_status && (
-                <div className="au-meta-row">
-                  <InjuryTag meta={player.meta} />
-                  <span className="au-meta-status">
-                    {player.meta.injury_status}
-                    {player.meta.practice_participation ? ` · ${player.meta.practice_participation}` : ''}
-                  </span>
-                </div>
-              )}
-              {player.meta.injury_notes && (
-                <div className="au-meta-notes">{player.meta.injury_notes}</div>
-              )}
-              {player.meta.depth_chart_order != null && (
-                <div className="au-meta-depth">
-                  Depth chart: <strong>
-                    {player.meta.depth_chart_position || player.position}
-                    {player.meta.depth_chart_order}
-                  </strong>
-                  {player.meta.depth_chart_order === 1 ? ' — starter' : ''}
-                </div>
-              )}
-            </div>
-          )}
-          <StatBlock player={player} seasons={seasons} ppr={ppr} scoring={scoring} />
-          <button
-            className="btn btn-primary"
-            style={{ marginTop: 16, width: '100%' }}
-            onClick={() => { onNominate(player); onClose() }}
-          >
-            Nominate {player.name}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── Competition panel ─────────────────────────────────────────────────────────
-
-function CompetitionPanel({ position, teamState, settings }) {
-  const myMax = teamState[settings.myTeam]?.maxBid ?? 0
-
-  const rows = teamState
-    .map(t => {
-      const { starterNeed, flexOpen } = positionNeed(t.byPos, settings, position)
-      return {
-        ...t,
-        starterNeed,
-        flexOpen,
-        posSpent: t.byPos[position]?.spent || 0,
-        posCount: t.byPos[position]?.count || 0,
-        wants: starterNeed > 0 || flexOpen > 0,
-      }
-    })
-    // Teams that need the spot first, then by who can bid the most
-    .sort((a, b) => (b.wants - a.wants) || (b.maxBid - a.maxBid))
-
-  const threats = rows.filter(r => r.wants && r.i !== settings.myTeam && r.maxBid >= myMax).length
-
-  return (
-    <div className="au-comp">
-      <div className="au-comp-head">
-        <span className="au-comp-title">Competition for <PosPill pos={position} /></span>
-        <span className="au-comp-threats">
-          {threats === 0
-            ? 'No one who needs it can outbid you'
-            : `${threats} team${threats > 1 ? 's' : ''} need it and can match your $${myMax}`}
-        </span>
-      </div>
-      <div className="au-comp-header-row">
-        <span>Team</span>
-        <span className="rd-col-center">Needs</span>
-        <span className="rd-col-center">Has</span>
-        <span className="rd-col-center">Spent</span>
-        <span className="rd-col-center">Budget</span>
-        <span className="rd-col-center">Max</span>
-      </div>
-      <div className="au-comp-rows">
-        {rows.map(r => {
-          const canOutbid = r.wants && r.i !== settings.myTeam && r.maxBid >= myMax
-          return (
-            <div
-              key={r.i}
-              className={
-                'au-comp-row'
-                + (r.i === settings.myTeam ? ' au-comp-me' : '')
-                + (!r.wants ? ' au-comp-filled' : '')
-                + (canOutbid ? ' au-comp-threat' : '')
-              }
-            >
-              <span className="au-comp-name">
-                {r.name}{r.i === settings.myTeam ? ' (you)' : ''}
-              </span>
-              <span className="rd-col-center au-comp-need">
-                {r.starterNeed > 0
-                  ? `${r.starterNeed}`
-                  : r.flexOpen > 0 ? 'flex' : '—'}
-              </span>
-              <span className="rd-col-center au-comp-dim">{r.posCount}</span>
-              <span className="rd-col-center au-comp-dim">${r.posSpent}</span>
-              <span className="rd-col-center">${r.remaining}</span>
-              <span className="rd-col-center au-comp-max">${r.maxBid}</span>
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
 
 // ── Cheat sheet ───────────────────────────────────────────────────────────────
 //
@@ -1037,13 +817,20 @@ function AuctionBoard({ settings, onReset }) {
   return (
     <div className="rd-board">
       {detail && (
-        <PlayerDetail
+        <PlayerDetailModal
           player={detail}
-          adjPrice={adj(detail.auction_value)}
+          stats={[
+            ['Est $', `$${detail.auction_value}`],
+            ['Adjusted $', `$${adj(detail.auction_value)}`],
+            ['Pos rank', detail.pos_rank ? `${detail.position}${detail.pos_rank}` : '—'],
+            ['Tier', detail.tier ? `T${detail.tier}` : '—'],
+            ['VOR', detail.vor > 0 ? `+${detail.vor}` : `${detail.vor ?? '—'}`],
+          ]}
           seasons={seasons}
           ppr={settings.ppr}
-          scoring={{ passTdPts: settings.passTdPts ?? 4, rushAttPts: settings.rushAttPts ?? 0 }}
-          onNominate={nominate}
+          note={`Points restated for this league: ${settings.passTdPts ?? 4} pt pass TD${
+            settings.rushAttPts ? `, ${settings.rushAttPts} per carry` : ''}`}
+          action={{ label: `Nominate ${detail.name}`, onClick: nominate }}
           onClose={() => setDetail(null)}
         />
       )}

@@ -42,22 +42,9 @@ STAT_KEYS = sleeper_data.STAT_KEYS
 
 
 def _league_points(stats: dict, ppr: float, pass_td_pts: float, rush_att_pts: float):
-    """
-    Sleeper's pts_* figures assume 4-point passing TDs and no per-carry bonus.
-    Rather than recompute scoring from scratch (which would need fumbles and
-    2pt conversions we don't pull), adjust its total by only the deltas that
-    differ from that baseline.
-    """
-    if not stats:
-        return None
-    base_key = "pts_ppr" if ppr == 1 else "pts_half_ppr" if ppr == 0.5 else "pts_std"
-    base = stats.get(base_key)
-    if base is None:
-        return None
-    adj = base
-    adj += (stats.get("pass_td") or 0) * (pass_td_pts - 4.0)
-    adj += (stats.get("rush_att") or 0) * rush_att_pts
-    return round(adj, 1)
+    # No scoring_settings here — the auction tool has no access to a league's
+    # rules, so return scoring is skipped and this behaves exactly as before.
+    return draft_values.league_points(stats, ppr, pass_td_pts, rush_att_pts)
 
 
 async def _load_values(num_qbs: int, ppr: float) -> list[dict]:

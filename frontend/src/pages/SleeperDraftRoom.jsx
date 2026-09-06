@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { api } from '../api/client'
+import PlayerDetailModal, { InjuryTag } from '../components/PlayerDetailModal'
 
 const STORAGE_KEY = 'sleeper_draft_config'
 // The league this assistant is set up for. Prefilled, but editable — the
@@ -261,7 +262,7 @@ function OnTheClockPanel({ available, myNeeds }) {
 
 // ── Available players ─────────────────────────────────────────────────────────
 
-function AvailablePlayers({ players }) {
+function AvailablePlayers({ players, onSelect }) {
   const [pos, setPos] = useState('ALL')
   const [search, setSearch] = useState('')
 
@@ -307,7 +308,11 @@ function AvailablePlayers({ players }) {
           return (
             <div key={p.player_id || i}>
               {showBreak && <div className="rd-tier-break">— Tier {p.tier} —</div>}
-              <div className="yd-player-row">
+              <div
+                className="yd-player-row sd-row-clickable"
+                onClick={() => onSelect?.(p)}
+                title={`View ${p.name}`}
+              >
                 <TierBadge tier={p.tier} />
                 <div className="rd-player-info">
                   <PosPill pos={p.position} />
@@ -413,6 +418,7 @@ function DraftBoard({ config, onReset }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
   const [lastPoll, setLastPoll] = useState(null)
+  const [detail, setDetail] = useState(null)
   const timerRef = useRef(null)
 
   const poll = useCallback(async () => {
@@ -454,6 +460,24 @@ function DraftBoard({ config, onReset }) {
         </div>
         <button className="btn btn-secondary btn-sm" onClick={onReset}>Change League</button>
       </div>
+      {detail && (
+        <PlayerDetailModal
+          player={{ ...detail, name: detail.name, nfl_team: detail.nfl_team }}
+          stats={[
+            ['Value', detail.redraft_value ? detail.redraft_value.toLocaleString() : 'unranked'],
+            ['Pos rank', detail.redraft_pos_rank ? `${detail.position}${detail.redraft_pos_rank}` : '—'],
+            ['Tier', detail.tier ? `T${detail.tier}` : '—'],
+            ['VOR', detail.vor != null ? (detail.vor > 0 ? `+${detail.vor}` : `${detail.vor}`) : '—'],
+          ]}
+          seasons={data?.seasons}
+          ppr={data?.league_settings?.ppr ?? 1}
+          note={Object.keys(data?.return_rates || {}).length
+            ? 'Points include return yardage at your league\u2019s rate. Sleeper rarely projects return yards, so expect this to move last season more than the projection.'
+            : null}
+          onClose={() => setDetail(null)}
+        />
+      )}
+
       <PickStrip upcoming={data?.upcoming} myRosterId={config.myRosterId} />
 
       {data?.on_the_clock_roster_id === config.myRosterId && (
@@ -461,7 +485,7 @@ function DraftBoard({ config, onReset }) {
       )}
 
       <div className="rd-board-body">
-        <AvailablePlayers players={data?.available ?? []} />
+        <AvailablePlayers players={data?.available ?? []} onSelect={setDetail} />
         <Sidebar data={data ?? {}} myRosterId={config.myRosterId} teams={data?.teams ?? []} />
       </div>
     </div>

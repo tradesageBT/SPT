@@ -3370,3 +3370,5 @@ img { display: block; }
 .sd-otc-name { display: inline-flex; align-items: center; gap: 5px; font-size: 0.84rem; font-weight: 700; }
 .sd-otc-agree { font-size: 0.76rem; color: var(--accent); font-weight: 600; align-self: center; }
 .sd-fit-dot { color: var(--accent); font-size: 0.6rem; flex-shrink: 0; }
+.sd-row-clickable { cursor: pointer; }
+.sd-row-clickable:hover { background: var(--surface2); }
