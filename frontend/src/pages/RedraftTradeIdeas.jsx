@@ -55,45 +55,49 @@ export default function RedraftTradeIdeas() {
         <Link to={`/redraft/${leagueId}`} className="btn btn-secondary btn-sm">← League</Link>
       </div>
 
-      <div className="trades-header">
+      {/* Plain block, not .trades-header — that's space-between, which would
+          shove the focus line to the opposite edge from the title. */}
+      <div className="rl-page-header">
         <h1 className="page-title">Trade Ideas</h1>
-        {focus && <p className="league-meta">for {focus.display_name}</p>}
+        {focus && <p className="rl-page-sub">for {focus.display_name}</p>}
       </div>
 
-      <div className="trades-controls">
-        <label className="pool-option">
-          <input type="checkbox" checked={includeSmash} onChange={e => setIncludeSmash(e.target.checked)} />
-          Include top players
-        </label>
-        <label className="pool-option">
-          <input type="checkbox" checked={winWinOnly} onChange={e => setWinWinOnly(e.target.checked)} />
-          Win-win only
-        </label>
+      <div className="rl-controls">
+        <div className="rl-control-group">
+          <label className="pool-option">
+            <input type="checkbox" checked={includeSmash} onChange={e => setIncludeSmash(e.target.checked)} />
+            Include top players
+          </label>
+          <label className="pool-option">
+            <input type="checkbox" checked={winWinOnly} onChange={e => setWinWinOnly(e.target.checked)} />
+            Win-win only
+          </label>
+        </div>
         <select
-          className="yd-select"
           value={rosterId}
           onChange={e => {
             const v = e.target.value
             setParams(v ? { roster_id: v } : {})
           }}
-          style={{ maxWidth: 220 }}
         >
           <option value="">All teams</option>
           {teams.map(t => (
             <option key={t.roster_id} value={t.roster_id}>{t.display_name}</option>
           ))}
         </select>
+        <span className="rl-spacer" />
         <button className="btn btn-secondary btn-sm" onClick={sync} disabled={syncing}>
           {syncing ? 'Syncing…' : 'Refresh rosters'}
         </button>
       </div>
 
       {data?.computed_at && (
-        <p className="league-meta" style={{ marginBottom: 10 }}>
+        <p className="rl-note">
           {/* Trades come from a snapshot, unlike the live rankings — say so, or a
               stale idea after a waiver claim looks like a bug. */}
-          Based on rosters as of {new Date(data.computed_at).toLocaleString()}.
-          Hit Refresh after waiver moves.
+          Rosters as of {new Date(data.computed_at).toLocaleString(undefined, {
+            month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+          })} · Refresh after waiver moves
         </p>
       )}
 

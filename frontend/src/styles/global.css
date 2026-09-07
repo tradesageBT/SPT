@@ -3372,3 +3372,45 @@ img { display: block; }
 .sd-fit-dot { color: var(--accent); font-size: 0.6rem; flex-shrink: 0; }
 .sd-row-clickable { cursor: pointer; }
 .sd-row-clickable:hover { background: var(--surface2); }
+
+/* ── Redraft league hub ───────────────────────────────────────────────────── */
+/* Its own control bar: .trades-controls is a right-aligned COLUMN because on the
+   dynasty page it's the right half of a space-between header. Used standalone
+   here, that stacked every control against the right edge. */
+.rl-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin-bottom: 12px;
+}
+.rl-control-group { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.rl-controls select {
+  padding: 7px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 0.82rem;
+  max-width: 190px;
+}
+.rl-controls select:focus { outline: none; border-color: var(--accent); }
+.rl-spacer { flex: 1 1 auto; }
+
+/* A sentence, not a stacked meta line — .league-meta is a flex column at body
+   size and wrapped the roster-date note across two large lines. */
+.rl-note {
+  font-size: 0.76rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+  margin: 0 0 12px;
+}
+.rl-page-header { margin-bottom: 14px; }
+.rl-page-header .page-title { margin-bottom: 2px; }
+.rl-page-sub { font-size: 0.82rem; color: var(--text-muted); margin: 0; }
+
+@media (max-width: 520px) {
+  .rl-controls { gap: 8px 12px; }
+  .rl-controls select { max-width: 100%; flex: 1 1 100%; }
+  .rl-spacer { display: none; }
+}

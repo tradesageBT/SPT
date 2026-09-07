@@ -59,9 +59,9 @@ export default function RedraftLeagueHub() {
         <Link to={`/redraft/${leagueId}/trades`} className="btn btn-secondary">Trade Ideas</Link>
       </div>
 
-      <p className="league-meta" style={{ marginBottom: 10 }}>
-        Ranked by roster value. Positional ranks compare each team's best
-        starters at that position against the rest of the league.
+      <p className="rl-note">
+        Ranked by roster value. Positional ranks compare each team's best starters
+        at that position against the rest of the league.
       </p>
 
       <div className="team-list">
