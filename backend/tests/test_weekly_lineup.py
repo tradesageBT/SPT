@@ -14,7 +14,7 @@ import weekly as weekly_engine
 from routers import weekly as weekly_router
 
 
-LID = "1389372044419809280"
+LID = "1401244151114117120"
 
 ROSTER_POSITIONS = ["QB", "RB", "RB", "WR", "WR", "WR", "TE", "FLEX",
                     "SUPER_FLEX", "K", "DEF"] + ["BN"] * 7

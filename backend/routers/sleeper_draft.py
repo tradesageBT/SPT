@@ -21,7 +21,7 @@ TIMEOUT = 10.0
 
 # The league this assistant is set up for. Still a query param so the room works
 # for any other league, but this is what it defaults to.
-DEFAULT_LEAGUE_ID = "1389372044419809280"
+DEFAULT_LEAGUE_ID = "1401244151114117120"
 
 
 async def _get(path: str):
@@ -31,6 +31,48 @@ async def _get(path: str):
         raise HTTPException(status_code=404, detail=f"Sleeper: not found — {path}")
     r.raise_for_status()
     return r.json()
+
+
+# How hard positional need bends the ranking. Matches the dynasty draft room's
+# existing weighting (frontend DraftRoom.jsx: fc_value * (1 + need * 1.5)) so the
+# two boards don't disagree about what "fit" means.
+NEED_BOOST = 1.5
+
+
+def _best_fit(available: list[dict]) -> str | None:
+    """
+    The pick that best balances value against what this roster still needs.
+
+    Previously the client took `available.find(p => p.fills_need)` — the first
+    player in a VALUE-sorted list carrying a boolean flag. That flag is true
+    whenever a position has any gap at all, and in a superflex league QB keeps a
+    positive gap until the third quarterback while superflex pricing puts QBs at
+    the top of the board. So "best fit" returned a QB nearly every pick and was
+    really just "best available" under another name.
+
+    Ranked on VOR rather than raw value: VOR is replacement-adjusted, so it
+    answers the actual draft question — how much does this player beat what I
+    could still get later at the same position — where raw superflex value
+    structurally favours quarterbacks. Need then scales that, using the
+    proportional score, which decays as the position fills instead of staying
+    flat until it snaps to zero.
+    """
+    candidates = [p for p in available if p.get("fills_need")]
+    if not candidates:
+        return None
+
+    def score(p):
+        # vor is None for K/DEF, and negative below replacement — a player worth
+        # less than the waiver wire should never win on need alone.
+        vor = max(p.get("vor") or 0, 0)
+        return vor * (1 + (p.get("need_weight") or 0) * NEED_BOOST)
+
+    best = max(candidates, key=lambda p: (score(p), p.get("redraft_value") or 0))
+    # Everyone left is below replacement (late draft): fall back to the
+    # value ordering rather than picking arbitrarily among a field of zeroes.
+    if score(best) <= 0:
+        best = candidates[0]
+    return best["player_id"]
 
 
 def _on_clock(picks_made: int, num_teams: int) -> int | None:
@@ -247,10 +289,14 @@ async def get_draft_state(
     # Flag which players fill a need for the viewer. The ORDER is untouched —
     # the list stays value-sorted and the client decides how to surface this.
     my_needs = needs_by_roster.get(my_roster_id) if my_roster_id is not None else None
+    best_fit_id = None
     if my_needs:
         gaps = my_needs.get("gaps", {})
+        prop = my_needs.get("prop", {})
         for p in available:
             p["fills_need"] = gaps.get(p["position"], 0) > 0
+            p["need_weight"] = prop.get(p["position"], 0)
+        best_fit_id = _best_fit(available)
 
     # On the clock
     otc_slot = None if is_auction or status != "drafting" else _on_clock(picks_made, num_teams)
@@ -283,6 +329,10 @@ async def get_draft_state(
         "teams": teams,
         "upcoming": upcoming,
         "my_needs": my_needs,
+        # Computed server-side: the client used to derive this itself by taking
+        # the first value-sorted player with a need flag, which made it a
+        # synonym for best available.
+        "best_fit_id": best_fit_id,
         "targets": {k: round(v, 2) for k, v in targets.items()},
         "seasons": {
             "projected": sleeper_data.current_season(),

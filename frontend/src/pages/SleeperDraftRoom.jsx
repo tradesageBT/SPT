@@ -2,10 +2,13 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { api } from '../api/client'
 import PlayerDetailModal, { InjuryTag } from '../components/PlayerDetailModal'
 
-const STORAGE_KEY = 'sleeper_draft_config'
+// Bumped when the default league changes: the saved config is read on mount and
+// skips the setup form entirely, so a browser holding last season's league would
+// otherwise ignore the new default and open the wrong draft.
+const STORAGE_KEY = 'sleeper_draft_config_v2'
 // The league this assistant is set up for. Prefilled, but editable — the
 // backend accepts any league id and derives its settings the same way.
-const DEFAULT_LEAGUE_ID = '1389372044419809280'
+const DEFAULT_LEAGUE_ID = '1401244151114117120'
 const POLL_MS = 5000
 
 const POS_COLORS = {
@@ -222,10 +225,14 @@ function RosterCounts({ counts, label }) {
 
 // Best available vs best fit, shown only when you're actually on the clock.
 // The main list is never reordered — this sits beside it.
-function OnTheClockPanel({ available, myNeeds }) {
+function OnTheClockPanel({ available, myNeeds, bestFitId }) {
   const bestAvailable = available[0]
-  // Highest-value player who fills any position you still need.
-  const bestFit = available.find(p => p.fills_need)
+  // Computed server-side, weighting VOR by how far each position is from its
+  // target. This used to be `available.find(p => p.fills_need)` — the first
+  // player in a value-sorted list with a boolean need flag — which in a
+  // superflex league returned a QB nearly every pick, because QB keeps a gap
+  // until the third one and superflex pricing puts QBs on top.
+  const bestFit = available.find(p => p.player_id === bestFitId)
   if (!bestAvailable) return null
   const same = bestFit && bestFit.player_id === bestAvailable.player_id
 
@@ -481,7 +488,11 @@ function DraftBoard({ config, onReset }) {
       <PickStrip upcoming={data?.upcoming} myRosterId={config.myRosterId} />
 
       {data?.on_the_clock_roster_id === config.myRosterId && (
-        <OnTheClockPanel available={data?.available ?? []} myNeeds={data?.my_needs} />
+        <OnTheClockPanel
+          available={data?.available ?? []}
+          myNeeds={data?.my_needs}
+          bestFitId={data?.best_fit_id}
+        />
       )}
 
       <div className="rd-board-body">

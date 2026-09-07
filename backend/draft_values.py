@@ -306,6 +306,12 @@ def team_needs(counts: dict, targets: dict, starters: dict, roster_size: float |
     ]
     return {
         "gaps": gaps,
+        # The proportional score behind `ordered`, exposed rather than discarded:
+        # it is the only figure here with MAGNITUDE, so it is what a caller needs
+        # to weight a player's value by need. A raw gap can't do that job — in a
+        # superflex league QB keeps a positive gap until the third quarterback,
+        # which makes every QB look equally needed right up to that point.
+        "prop": prop,
         "ordered": ordered,
         "top_need": ordered[0] if ordered else None,
         "urgent": urgent,
