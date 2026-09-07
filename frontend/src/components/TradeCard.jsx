@@ -80,7 +80,7 @@ function LineupSummary({ breakdown }) {
   return <div className="lineup-summary">{parts}</div>
 }
 
-export default function TradeCard({ trade, leagueId, highlightId }) {
+export default function TradeCard({ trade, isRedraft = false, leagueId, highlightId, basePath = 'league' }) {
   const delta = trade.value_delta
   const fairness = delta < 200 ? '✓ Fair' : delta < 500 ? '~ Close' : '⚠ Lopsided'
   const fairnessClass = delta < 200 ? 'fair' : delta < 500 ? 'close' : 'lopsided'
@@ -89,7 +89,7 @@ export default function TradeCard({ trade, leagueId, highlightId }) {
   const ageA = avgAge(trade.a_gives)
   const ageB = avgAge(trade.b_gives)
   const ageDiff = ageA != null && ageB != null ? Math.abs(ageA - ageB) : 0
-  const showAge = ageDiff >= 0.5
+  const showAge = !isRedraft && ageDiff >= 0.5
   // Which side receives younger? Side that gives the older players gets younger assets
   const aGetsYounger = showAge && ageA > ageB  // A gives older → A receives younger
 
@@ -107,10 +107,10 @@ export default function TradeCard({ trade, leagueId, highlightId }) {
         <div className="trade-side">
           <div className="trade-side-header">
             <div className="trade-team-block">
-              <Link to={`/league/${leagueId}/team/${trade.team_a.roster_id}`} className="trade-team-name">
+              <Link to={`/${basePath}/${leagueId}/team/${trade.team_a.roster_id}`} className="trade-team-name">
                 {trade.team_a.display_name}
               </Link>
-              {trade.team_a.contention_category && (
+              {!isRedraft && trade.team_a.contention_category && (
                 <span className={`trade-contention-badge contention-badge ${contentionClass(trade.team_a.contention_category)}`}>
                   {CONTENTION_SHORT[trade.team_a.contention_category] ?? trade.team_a.contention_category}
                 </span>
@@ -146,10 +146,10 @@ export default function TradeCard({ trade, leagueId, highlightId }) {
         <div className="trade-side">
           <div className="trade-side-header">
             <div className="trade-team-block">
-              <Link to={`/league/${leagueId}/team/${trade.team_b.roster_id}`} className="trade-team-name">
+              <Link to={`/${basePath}/${leagueId}/team/${trade.team_b.roster_id}`} className="trade-team-name">
                 {trade.team_b.display_name}
               </Link>
-              {trade.team_b.contention_category && (
+              {!isRedraft && trade.team_b.contention_category && (
                 <span className={`trade-contention-badge contention-badge ${contentionClass(trade.team_b.contention_category)}`}>
                   {CONTENTION_SHORT[trade.team_b.contention_category] ?? trade.team_b.contention_category}
                 </span>

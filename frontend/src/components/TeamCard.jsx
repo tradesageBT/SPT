@@ -25,7 +25,8 @@ function ConventionBadge({ category, username }) {
   return <span className={`contention-badge ${contentionClass(category)}`}>{category}</span>
 }
 
-export default function TeamCard({ team, rank, maxValue, leagueId, rankMode = 'dynasty', hasSeasonData = false }) {
+export default function TeamCard({ team, rank, maxValue, leagueId, rankMode = 'dynasty', hasSeasonData = false, basePath = 'league' }) {
+  const isRedraft = rankMode === 'redraft'
   const barPct = maxValue ? Math.round((team.total_value / maxValue) * 100) : 0
   const playerPct = team.total_value
     ? Math.round((team.player_value / team.total_value) * 100)
@@ -36,7 +37,7 @@ export default function TeamCard({ team, rank, maxValue, leagueId, rankMode = 'd
   const n = posRank.n || 0
 
   return (
-    <Link to={`/league/${leagueId}/team/${team.roster_id}`} className="team-card">
+    <Link to={`/${basePath}/${leagueId}/team/${team.roster_id}`} className="team-card">
       <div className="team-card-rank">#{rank}</div>
 
       <div className="team-card-info">
@@ -49,12 +50,39 @@ export default function TeamCard({ team, rank, maxValue, leagueId, rankMode = 'd
         )}
         <div>
           <div className="team-name">{team.display_name}</div>
-          <ConventionBadge category={team.contention_category} username={team.display_name} />
+          {!isRedraft && (
+            <ConventionBadge category={team.contention_category} username={team.display_name} />
+          )}
+          {isRedraft && team.strength_tier && (
+            <span className={`contention-badge tier-${team.strength_tier.toLowerCase()}`}>
+              {team.strength_tier}
+            </span>
+          )}
         </div>
       </div>
 
       <div className="team-card-value">
-        {rankMode === 'season' ? (
+        {isRedraft ? (
+          <>
+            <div className="team-card-value-row">
+              <div className="value-total">{fmt(team.total_value)}</div>
+              {(team.wins != null && (team.wins > 0 || team.losses > 0)) && (
+                <span className="team-record">
+                  {team.wins}–{team.losses}{team.ties > 0 ? `–${team.ties}` : ''}
+                </span>
+              )}
+            </div>
+            <div className="value-bar-wrap">
+              <div className="value-bar">
+                <div className="value-bar-fill" style={{ width: `${barPct}%` }} />
+              </div>
+            </div>
+            <div className="value-split">
+              <span className="split-current">Starters {fmt(team.starter_value)}</span>
+              <span className="split-future">Bench {fmt(team.bench_value)}</span>
+            </div>
+          </>
+        ) : rankMode === 'season' ? (
           <>
             {hasSeasonData ? (
               <div className="team-card-value-row">

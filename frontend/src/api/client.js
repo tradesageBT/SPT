@@ -74,6 +74,19 @@ export const api = {
     if (myRosterId != null) p.set('my_roster_id', myRosterId)
     return request(`/sleeper-draft/state?${p}`)
   },
+  getRedraftLeague: (leagueId) => request(`/redraft-league/${encodeURIComponent(leagueId)}`),
+  getRedraftTeam: (leagueId, rosterId) =>
+    request(`/redraft-league/${encodeURIComponent(leagueId)}/teams/${rosterId}`),
+  syncRedraftLeague: (leagueId) =>
+    send(`/redraft-league/${encodeURIComponent(leagueId)}/sync`, 'POST', {}),
+  getRedraftTrades: (leagueId, opts = {}) => {
+    const p = new URLSearchParams()
+    if (opts.rosterId) p.set('roster_id', opts.rosterId)
+    if (opts.includeSmash) p.set('include_smash', 'true')
+    if (opts.expand) p.set('expand', 'true')
+    const qs = p.toString()
+    return request(`/redraft-league/${encodeURIComponent(leagueId)}/trades${qs ? `?${qs}` : ''}`)
+  },
   getAuctionPool: (s) => {
     const p = new URLSearchParams({
       teams: s.teams, budget: s.budget, ppr: s.ppr,

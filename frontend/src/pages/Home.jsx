@@ -2,30 +2,50 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { getRecentLeagues } from '../utils/recentLeagues'
 
+const LEAGUE_MODES = [
+  ['dynasty', 'Dynasty', 'league'],
+  ['redraft', 'Redraft', 'redraft'],
+]
+
 export default function Home() {
   const [leagueId, setLeagueId] = useState('')
+  const [mode, setMode] = useState('dynasty')
   const navigate = useNavigate()
   const recents = getRecentLeagues()
+
+  const basePath = LEAGUE_MODES.find(([m]) => m === mode)[2]
 
   function handleSubmit(e) {
     e.preventDefault()
     const id = leagueId.trim()
-    if (id) navigate(`/league/${id}`)
+    if (id) navigate(`/${basePath}/${id}`)
   }
 
   return (
     <div className="home-container">
-      {/* ── Dynasty League ── */}
+      {/* ── League lookup (dynasty or redraft) ── */}
       <div className="home-hero">
         <h1 className="home-title">
-          Dynasty analysis.<br />
+          {mode === 'redraft' ? 'Redraft analysis.' : 'Dynasty analysis.'}<br />
           <span className="accent">Your league. Your trades.</span>
         </h1>
         <p className="home-sub">
-          Connect your Sleeper dynasty league to rank every roster, surface hidden
-          trade opportunities, and evaluate any deal — powered by live FantasyCalc
-          dynasty values.
+          Connect your Sleeper league to rank every roster, surface hidden trade
+          opportunities, and evaluate any deal — powered by live FantasyCalc
+          values. Dynasty adds pick valuation and contention windows; redraft
+          ranks purely on this season's roster.
         </p>
+
+        <div className="rt-mode-toggle" style={{ marginBottom: 12 }}>
+          {LEAGUE_MODES.map(([m, label]) => (
+            <button
+              key={m}
+              type="button"
+              className={`rt-mode-btn${mode === m ? ' active' : ''}`}
+              onClick={() => setMode(m)}
+            >{label}</button>
+          ))}
+        </div>
 
         <form className="league-form" onSubmit={handleSubmit}>
           <input
@@ -53,9 +73,10 @@ export default function Home() {
                 <button
                   key={l.id}
                   className="recent-league-btn"
-                  onClick={() => navigate(`/league/${l.id}`)}
+                  onClick={() => navigate(`/${(l.mode || 'dynasty') === 'redraft' ? 'redraft' : 'league'}/${l.id}`)}
                 >
                   <span className="recent-league-name">{l.name || l.id}</span>
+                  {(l.mode || 'dynasty') === 'redraft' && <span className="badge">Redraft</span>}
                   {l.season && <span className="recent-league-season">{l.season}</span>}
                 </button>
               ))}

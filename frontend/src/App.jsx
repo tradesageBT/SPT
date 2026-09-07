@@ -11,6 +11,9 @@ import YahooDraftRoom from './pages/YahooDraftRoom'
 import DraftAssistant from './pages/DraftAssistant'
 import SleeperDraftRoom from './pages/SleeperDraftRoom'
 import AuctionDraftRoom from './pages/AuctionDraftRoom'
+import RedraftLeagueHub from './pages/RedraftLeagueHub'
+import RedraftTeamPage from './pages/RedraftTeamPage'
+import RedraftTradeIdeas from './pages/RedraftTradeIdeas'
 
 export default function App() {
   return (
@@ -40,6 +43,9 @@ export default function App() {
           <Route path="/sleeper-draft" element={<SleeperDraftRoom />} />
           <Route path="/auction-draft" element={<AuctionDraftRoom />} />
           <Route path="/yahoo-draft" element={<YahooDraftRoom />} />
+          <Route path="/redraft/:leagueId" element={<RedraftLeagueHub />} />
+          <Route path="/redraft/:leagueId/team/:rosterId" element={<RedraftTeamPage />} />
+          <Route path="/redraft/:leagueId/trades" element={<RedraftTradeIdeas />} />
           <Route path="/redraft-trades" element={<RedraftTrades />} />
         </Routes>
       </main>
