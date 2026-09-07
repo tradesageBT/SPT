@@ -12,6 +12,7 @@ import asyncio
 import logging
 
 import draft_values
+import espn_projections
 import lineup
 import projections
 import sleeper_client
@@ -25,6 +26,11 @@ _MODE_BY_TYPE = {0: "redraft", 1: "keeper", 2: "dynasty"}
 
 # Injury designations that keep a player out of a lineup entirely.
 _OUT_STATUSES = {"OUT", "IR", "PUP", "SUS", "NA", "DNR"}
+
+# How far apart the two sources' positional ranks must be before it is worth
+# pointing at. A one- or two-slot difference is noise between any two ranking
+# sets; a ten-slot one is a real disagreement about the player.
+ESPN_GAP_FLOOR = 8
 
 
 def league_mode(league: dict) -> str:
@@ -215,6 +221,25 @@ async def lineup_report(league_id: str, roster_id: int, week: int | None = None)
     roster = next((r for r in ctx["rosters"] if r.get("roster_id") == roster_id), {})
     owner = ctx["users"].get(roster.get("owner_id")) or {}
 
+    # Second opinion. Rank-only and never on the request path — if ESPN is cold
+    # or thin this comes back not-ok and the page says so.
+    positions = {c["player_id"]: c["position"] for c in candidates}
+    disagree = espn_projections.disagreements(
+        ctx["points"], positions, ctx["season"], ctx["week"],
+        player_ids=[c["player_id"] for c in candidates if c["available"]],
+    )
+    splits = []
+    if disagree["ok"]:
+        for pid, d in disagree["by_player"].items():
+            if abs(d["gap"]) < ESPN_GAP_FLOOR:
+                continue
+            c = by_id.get(pid)
+            if not c:
+                continue
+            splits.append({**d, "player": c,
+                           "favors": "espn" if d["gap"] > 0 else "sleeper"})
+        splits.sort(key=lambda s: -abs(s["gap"]))
+
     notes = []
     if any(not slots.is_projected(t) for t in ctx["slot_tokens"]):
         notes.append("IDP slots are shown but not optimized — neither projection "
@@ -234,7 +259,12 @@ async def lineup_report(league_id: str, roster_id: int, week: int | None = None)
         "team_name": owner.get("display_name") or f"Roster {roster_id}",
         "ppr": ctx["ppr"],
         "min_delta": lineup.MIN_DELTA,
-        "sources_ok": {"sleeper": bool(ctx["proj"])},
+        "sources_ok": {
+            "sleeper": bool(ctx["proj"]),
+            "espn": disagree["ok"],
+            "espn_coverage": disagree["coverage"],
+        },
+        "disagreements": splits[:8],
         "current": {"slots": _embed(current), "total": current_total},
         "optimal": {"slots": _embed(best["assignment"]), "total": best["total"]},
         "delta": round(best["total"] - current_total, 2),

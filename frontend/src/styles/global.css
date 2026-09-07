@@ -3537,3 +3537,16 @@ img { display: block; }
   .wk-league-stat { align-items: flex-start; }
   .wk-league-links { width: 100%; }
 }
+
+.wk-splits { margin-top: 20px; }
+.wk-split {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.82rem;
+}
+.wk-split:last-child { border-bottom: none; }
+.wk-split-rank { font-size: 0.72rem; color: var(--text-muted); flex-shrink: 0; }

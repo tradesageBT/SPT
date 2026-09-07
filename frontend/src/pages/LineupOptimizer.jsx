@@ -173,6 +173,38 @@ export default function LineupOptimizer({ basePath = 'league' }) {
         </div>
       )}
 
+      {data.disagreements?.length > 0 && (
+        <div className="wk-splits">
+          <h2 className="section-title">Where the experts disagree</h2>
+          <p className="rl-note">
+            {/* Ranks, not points: ESPN scores under its own rules, so comparing
+                raw totals would surface our methodology as if it were a
+                difference of opinion. */}
+            Sleeper's and ESPN's positional ranks, compared. These are the calls
+            worth thinking about — everywhere else the two agree.
+          </p>
+          {data.disagreements.map((d) => (
+            <div key={d.player.player_id} className="wk-split">
+              <Player p={d.player} />
+              <span className="wk-split-rank">Sleeper {d.sleeper_label}</span>
+              <span className="wk-split-rank">ESPN {d.espn_label}</span>
+              <span className={`wk-tag ${d.favors === 'espn' ? 'wk-tag-start' : 'wk-tag-dyn'}`}>
+                {d.favors === 'espn' ? 'ESPN higher' : 'Sleeper higher'}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {data.sources_ok?.espn === false && data.sources_ok?.sleeper && (
+        <p className="rl-note">
+          Showing 1 of 2 projection sources — ESPN is unavailable
+          {data.sources_ok.espn_coverage > 0 &&
+            ` (covers only ${Math.round(data.sources_ok.espn_coverage * 100)}% of this roster)`}
+          . Points are unaffected; they always come from Sleeper.
+        </p>
+      )}
+
       {data.notes?.map((n, i) => <p key={i} className="rl-note">{n}</p>)}
     </div>
   )

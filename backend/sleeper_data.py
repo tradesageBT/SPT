@@ -56,6 +56,10 @@ META_KEYS = (
     # `position` alone gets that wrong), and bye_week explains an absent
     # projection rather than leaving it looking like missing data.
     "fantasy_positions", "bye_week",
+    # ESPN's projections are keyed by their own player ids. Sleeper carries the
+    # mapping, so keeping it here means the second opinion costs no extra
+    # download — this 10MB blob is already being fetched.
+    "espn_id",
 )
 
 _meta: dict[str, dict] = {}
