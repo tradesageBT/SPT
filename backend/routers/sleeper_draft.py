@@ -227,7 +227,9 @@ async def get_draft_state(
 
     # ── Stats, projections and injury data ────────────────────────────────────
     # Points are restated under this league's scoring: Sleeper's totals are
-    # computed under standard rules, which award nothing for return yardage.
+    # computed under standard rules, so they miss the league's pass-TD value,
+    # any per-carry bonus, TE premium, and return yardage. `position` is passed
+    # because the TE premium applies to tight ends only.
     proj = await sleeper_data.season("projections", sleeper_data.current_season())
     scoring = league_raw.get("scoring_settings") or {}
     for p in available:
@@ -235,10 +237,10 @@ async def get_draft_state(
         pr, la = proj.get(pid) or None, last_season.get(pid) or None
         if pr:
             pr = {**pr, "pts_league": draft_values.league_points(
-                pr, ppr, scoring_settings=scoring)}
+                pr, ppr, scoring_settings=scoring, position=p["position"])}
         if la:
             la = {**la, "pts_league": draft_values.league_points(
-                la, ppr, scoring_settings=scoring)}
+                la, ppr, scoring_settings=scoring, position=p["position"])}
         p["proj"], p["last"] = pr, la
         p["meta"] = sleeper_data.get_meta().get(pid) or None
 

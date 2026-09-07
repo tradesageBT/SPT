@@ -1,0 +1,5 @@
+# Test-only dependencies. Kept out of requirements.txt so Render's production
+# install stays lean — nothing here is imported by the app at runtime.
+-r requirements.txt
+pytest==8.2.0
+pytest-asyncio==0.23.7

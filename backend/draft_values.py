@@ -9,6 +9,7 @@ import time
 import logging
 
 import fantasycalc_client
+import slots
 
 log = logging.getLogger(__name__)
 
@@ -44,17 +45,13 @@ def norm_pos(pos: str) -> str:
 
 # ── Sleeper roster parsing ────────────────────────────────────────────────────
 
-# Sleeper's roster_positions tokens -> our slot model
-_SLOT_MAP = {
-    "QB": "qb", "RB": "rb", "WR": "wr", "TE": "te", "K": "k",
-    "DEF": "dst", "DST": "dst",
-    "FLEX": "flex", "SUPER_FLEX": "sflex", "REC_FLEX": "rec_flex",
-    "WRRB_FLEX": "wr_rb_flex", "WRRB": "wr_rb_flex",
-}
+# Slot identity lives in slots.py so the same table serves the lineup optimizer.
+# This module still owns slot COUNTS; that one owns names and eligibility.
+_SLOT_MAP = slots.SLOT_MAP
 # Present on rosters but never drafted
-_IGNORED_SLOTS = {"BN", "IR", "TAXI"}
+_IGNORED_SLOTS = slots.NON_LINEUP
 # We have no IDP values, so these are counted only to warn about them
-_IDP_SLOTS = {"DL", "LB", "DB", "IDP_FLEX", "DEF_LINE", "LINEBACKER", "DEF_BACK"}
+_IDP_SLOTS = slots.UNPROJECTED
 
 
 def parse_roster_positions(roster_positions) -> dict:
@@ -328,12 +325,22 @@ def snake_slot(pick_index: int, num_teams: int) -> int:
 RETURN_YARD_KEYS = ("kr_yd", "pr_yd")
 
 
+def _rate(scoring_settings: dict | None, key: str, default: float = 0.0) -> float:
+    """One league scoring rate, total against missing/garbage values."""
+    try:
+        val = (scoring_settings or {}).get(key)
+        return default if val is None else float(val)
+    except (TypeError, ValueError):
+        return default
+
+
 def league_points(
     stats: dict,
     ppr: float,
-    pass_td_pts: float = 4.0,
-    rush_att_pts: float = 0.0,
+    pass_td_pts: float | None = None,
+    rush_att_pts: float | None = None,
     scoring_settings: dict | None = None,
+    position: str | None = None,
 ):
     """
     Sleeper's own points figure, restated for categories its baseline misses.
@@ -344,10 +351,15 @@ def league_points(
 
       * passing TDs, where the baseline is 4
       * per-carry bonus, where the baseline is 0
+      * TE reception premium, where the baseline is 0
       * return yardage, where the baseline is also 0, so it is a pure addition
 
-    `scoring_settings` is the league's own rules and is optional: without it the
-    return adjustment is skipped and the result is unchanged.
+    `pass_td_pts` / `rush_att_pts` default to whatever `scoring_settings` says,
+    falling back to the standard 4.0 / 0.0 when it says nothing. They stay
+    overridable because the auction tool collects them from the user directly,
+    for leagues we have no Sleeper settings for. Callers that pass only
+    `scoring_settings` used to silently get 4.0 / 0.0 and score every QB and RB
+    wrong; now they get the league's real values.
     """
     if not stats:
         return None
@@ -356,15 +368,26 @@ def league_points(
     if base is None:
         return None
 
+    if pass_td_pts is None:
+        pass_td_pts = _rate(scoring_settings, "pass_td", 4.0)
+    if rush_att_pts is None:
+        rush_att_pts = _rate(scoring_settings, "rush_att", 0.0)
+
     adj = base
     adj += (stats.get("pass_td") or 0) * (pass_td_pts - 4.0)
     adj += (stats.get("rush_att") or 0) * rush_att_pts
 
+    # TE premium. Sleeper's pts_ppr is generic PPR, so a TEP league's bonus per
+    # reception is missing entirely. It applies to tight ends only, so it is
+    # skipped unless the caller identifies the player — either via `position` or
+    # a "position" key on the stat row. Sleeper's own stat payloads carry that
+    # key; sleeper_data.normalize() drops it, so those callers must pass it.
+    tep = _rate(scoring_settings, "bonus_rec_te", 0.0)
+    if tep and norm_pos(position or stats.get("position") or "") == "TE":
+        adj += (stats.get("rec") or 0) * tep
+
     for key in RETURN_YARD_KEYS:
-        try:
-            rate = float((scoring_settings or {}).get(key, 0) or 0)
-        except (TypeError, ValueError):
-            rate = 0.0
+        rate = _rate(scoring_settings, key, 0.0)
         if rate:
             adj += (stats.get(key) or 0) * rate
 

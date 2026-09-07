@@ -26,6 +26,7 @@ import draft_values
 import value_engine
 import trade_engine
 import sleeper_client
+import slots
 from database import db
 
 router = APIRouter(prefix="/api/redraft-league")
@@ -38,30 +39,23 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-# Bench-ish slots never appear in the `starters` array
-_NON_LINEUP = {"BN", "IR", "TAXI"}
-_SLOT_LABEL = {
-    "SUPER_FLEX": "SFLEX", "REC_FLEX": "W/T", "WRRB_FLEX": "W/R",
-    "DEF": "DEF", "DST": "DEF",
-}
-
-
 def _lineup(roster: dict, roster_positions: list, by_id: dict) -> list[dict]:
     """
     Starters in the league's own slot order — QB, RB, RB, WR... FLEX, SFLEX.
 
     Sleeper returns `starters` positionally matched to the non-bench entries of
     roster_positions, but compute_team_profile turns it into a set and loses
-    that ordering, so it's rebuilt from the raw roster here.
+    that ordering, so it's rebuilt from the raw roster here. Slot naming comes
+    from slots.py, shared with the weekly lineup optimizer.
     """
-    slots = [p for p in (roster_positions or []) if str(p).upper() not in _NON_LINEUP]
+    tokens = slots.lineup_slots(roster_positions)
     starters = list(roster.get("starters") or [])
     out = []
-    for i, slot in enumerate(slots):
+    for i, token in enumerate(tokens):
         pid = str(starters[i]) if i < len(starters) else ""
         player = by_id.get(pid) if pid and pid != "0" else None
         out.append({
-            "slot": _SLOT_LABEL.get(str(slot).upper(), str(slot).upper()),
+            "slot": slots.slot_label(token),
             "player": player,          # None for an unfilled slot
         })
     return out
@@ -110,10 +104,11 @@ async def _league_state(league_id: str, want_rosters: bool = False):
         raise HTTPException(status_code=404, detail=f"Sleeper league {league_id} not found.")
 
     roster_positions = league.get("roster_positions") or []
-    slots = draft_values.parse_roster_positions(roster_positions)
+    # Named slot_counts, not slots: the `slots` module is imported above.
+    slot_counts = draft_values.parse_roster_positions(roster_positions)
     ppr = draft_values.parse_ppr(league.get("scoring_settings"))
 
-    values = await draft_values.load_values(num_qbs=slots["num_qbs"], ppr=ppr)
+    values = await draft_values.load_values(num_qbs=slot_counts["num_qbs"], ppr=ppr)
     cache = _players_cache(values)
     users_map = {u["user_id"]: u for u in (users or [])}
 
@@ -127,12 +122,13 @@ async def _league_state(league_id: str, want_rosters: bool = False):
 
     settings = {
         "ppr": ppr,
-        "num_qbs": slots["num_qbs"],
-        "superflex": slots["sflex"] > 0,
-        "starters": {"QB": slots["qb"], "RB": slots["rb"], "WR": slots["wr"],
-                     "TE": slots["te"], "K": slots["k"], "DEF": slots["dst"]},
-        "flex": {k: slots[k] for k in draft_values.FLEX_KEYS},
-        "bench": slots["bench"],
+        "num_qbs": slot_counts["num_qbs"],
+        "superflex": slot_counts["sflex"] > 0,
+        "starters": {"QB": slot_counts["qb"], "RB": slot_counts["rb"],
+                     "WR": slot_counts["wr"], "TE": slot_counts["te"],
+                     "K": slot_counts["k"], "DEF": slot_counts["dst"]},
+        "flex": {k: slot_counts[k] for k in draft_values.FLEX_KEYS},
+        "bench": slot_counts["bench"],
         "roster_positions": roster_positions,
     }
     if want_rosters:
