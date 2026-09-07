@@ -8,6 +8,7 @@ read from the league itself, so nothing is configured by hand.
   GET  /api/redraft-league/{league_id}                    live rankings
   GET  /api/redraft-league/{league_id}/teams/{roster_id}  live team detail
   POST /api/redraft-league/{league_id}/sync               snapshot for trades
+  GET  /api/redraft-league/{league_id}/players            rostered players (for search)
   GET  /api/redraft-league/{league_id}/trades             ideas from the snapshot
 
 Rankings compute live because they are cheap. Trade generation is O(T^2 * n^4)
@@ -35,6 +36,35 @@ VALUE_KEY = "redraft_value"
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+# Bench-ish slots never appear in the `starters` array
+_NON_LINEUP = {"BN", "IR", "TAXI"}
+_SLOT_LABEL = {
+    "SUPER_FLEX": "SFLEX", "REC_FLEX": "W/T", "WRRB_FLEX": "W/R",
+    "DEF": "DEF", "DST": "DEF",
+}
+
+
+def _lineup(roster: dict, roster_positions: list, by_id: dict) -> list[dict]:
+    """
+    Starters in the league's own slot order — QB, RB, RB, WR... FLEX, SFLEX.
+
+    Sleeper returns `starters` positionally matched to the non-bench entries of
+    roster_positions, but compute_team_profile turns it into a set and loses
+    that ordering, so it's rebuilt from the raw roster here.
+    """
+    slots = [p for p in (roster_positions or []) if str(p).upper() not in _NON_LINEUP]
+    starters = list(roster.get("starters") or [])
+    out = []
+    for i, slot in enumerate(slots):
+        pid = str(starters[i]) if i < len(starters) else ""
+        player = by_id.get(pid) if pid and pid != "0" else None
+        out.append({
+            "slot": _SLOT_LABEL.get(str(slot).upper(), str(slot).upper()),
+            "player": player,          # None for an unfilled slot
+        })
+    return out
 
 
 def _players_cache(values: list[dict]) -> dict:
@@ -69,7 +99,7 @@ def _players_cache(values: list[dict]) -> dict:
     return cache
 
 
-async def _league_state(league_id: str):
+async def _league_state(league_id: str, want_rosters: bool = False):
     """Fetch the league and compute profiles. Shared by every endpoint here."""
     league, rosters, users = await asyncio.gather(
         sleeper_client.get_league(league_id),
@@ -105,6 +135,8 @@ async def _league_state(league_id: str):
         "bench": slots["bench"],
         "roster_positions": roster_positions,
     }
+    if want_rosters:
+        return league, profiles, settings, (rosters or [])
     return league, profiles, settings
 
 
@@ -124,20 +156,30 @@ async def get_league_hub(league_id: str):
 
 @router.get("/{league_id}/teams/{roster_id}")
 async def get_team(league_id: str, roster_id: int):
-    """One team's detail — roster, positional strength, starters and bench."""
-    league, profiles, settings = await _league_state(league_id)
+    """One team's detail — lineup in slot order, bench, positional strength."""
+    league, profiles, settings, rosters = await _league_state(league_id, want_rosters=True)
     profile = next((p for p in profiles if p["roster_id"] == roster_id), None)
     if not profile:
         raise HTTPException(status_code=404, detail=f"Roster {roster_id} not in this league.")
 
-    players = sorted(profile["players"], key=lambda p: p.get(VALUE_KEY, 0), reverse=True)
+    by_id = {str(p["sleeper_id"]): p for p in profile["players"]}
+    raw = next((r for r in rosters if r.get("roster_id") == roster_id), {})
+    lineup = _lineup(raw, settings.get("roster_positions"), by_id)
+
+    started = {e["player"]["sleeper_id"] for e in lineup if e["player"]}
+    bench = sorted(
+        (p for p in profile["players"] if str(p["sleeper_id"]) not in started),
+        key=lambda p: p.get(VALUE_KEY, 0), reverse=True,
+    )
     return {
         "league_id": league_id,
         "league_name": league.get("name", ""),
         "settings": settings,
         "num_teams": len(profiles),
         **profile,
-        "players": players,
+        "lineup": lineup,
+        "bench": bench,
+        "players": sorted(profile["players"], key=lambda p: p.get(VALUE_KEY, 0), reverse=True),
     }
 
 
@@ -177,12 +219,63 @@ def _load_snapshot(league_id: str):
     return json.loads(row.get("profiles") or "[]"), row.get("computed_at")
 
 
+@router.get("/{league_id}/players")
+def get_players(league_id: str):
+    """
+    Every rostered player, for the trade-idea search box.
+
+    Read from the snapshot rather than live: the trades endpoint generates from
+    the snapshot, so a player who has been traded away since the last sync would
+    otherwise be offered in search and then match nothing.
+    """
+    profiles, _ = _load_snapshot(league_id)
+    seen: set[str] = set()
+    players = []
+    for prof in profiles:
+        for pl in prof.get("players") or []:
+            sid = str(pl.get("sleeper_id") or "")
+            if not sid or sid in seen:
+                continue
+            seen.add(sid)
+            players.append({
+                "sleeper_id": sid,
+                "name": pl.get("name", sid),
+                "position": pl.get("position", ""),
+                "nfl_team": pl.get("nfl_team", ""),
+                "roster_id": prof["roster_id"],
+                "display_name": prof.get("display_name", ""),
+                "redraft_value": pl.get(VALUE_KEY, 0),
+                "is_starter": pl.get("is_starter", False),
+            })
+    return sorted(players, key=lambda x: x["name"])
+
+
+def _categorize_with_forced(profile, thresholds, force_player, force_roster_id):
+    """
+    Same idea as the dynasty router: a forced player must be tradeable even if
+    their own tier says untouchable (smash) or worthless (trash), so move them
+    into `pass` on their own team only.
+    """
+    cats = trade_engine.categorize_players(profile, thresholds)
+    if not force_player or profile["roster_id"] != force_roster_id:
+        return cats
+    sid = force_player["sleeper_id"]
+    cats = {k: [p for p in v if p.get("sleeper_id") != sid] for k, v in cats.items()}
+    cats["pass"] = [force_player] + cats["pass"]
+    return cats
+
+
+def _has_player(trade, sleeper_id: str) -> bool:
+    return any(p.get("sleeper_id") == sleeper_id for p in trade["a_gives"] + trade["b_gives"])
+
+
 @router.get("/{league_id}/trades")
 def get_trades(
     league_id: str,
     roster_id: int | None = Query(None),
     include_smash: bool = Query(False),
     expand: bool = Query(False),
+    force_player_id: str | None = Query(None),
 ):
     """
     Trade ideas from the last snapshot.
@@ -194,25 +287,67 @@ def get_trades(
     if len(profiles) < 2:
         return {"trades": [], "computed_at": computed_at}
 
+    force_player = None
+    force_roster_id = None
+    if force_player_id:
+        for prof in profiles:
+            match = next(
+                (p for p in prof.get("players") or []
+                 if str(p.get("sleeper_id")) == force_player_id), None)
+            if match:
+                force_player, force_roster_id = match, prof["roster_id"]
+                break
+        if not force_player:
+            raise HTTPException(
+                status_code=404,
+                detail="That player isn't on a roster in this league's last sync.",
+            )
+
     # Cutoffs from this league's own distribution — the module constants are
     # calibrated to the dynasty value scale.
     thresholds = trade_engine.derive_thresholds(profiles)
-    cats = {p["roster_id"]: trade_engine.categorize_players(p, thresholds) for p in profiles}
+    cats = {
+        p["roster_id"]: _categorize_with_forced(p, thresholds, force_player, force_roster_id)
+        for p in profiles
+    }
 
     focus = next((p for p in profiles if p["roster_id"] == roster_id), None) if roster_id else None
+    if focus is None and force_player:
+        # Only pairs involving the forced player's team can ever contain them.
+        focus = next(p for p in profiles if p["roster_id"] == force_roster_id)
     pairs = (
-        [(focus, o) for o in profiles if o["roster_id"] != roster_id]
+        [(focus, o) for o in profiles if o["roster_id"] != focus["roster_id"]]
         if focus else
         [(a, b) for i, a in enumerate(profiles) for b in profiles[i + 1:]]
     )
 
-    trades = []
-    for a, b in pairs:
-        trades.extend(trade_engine.generate_trades_between(
-            a, b, cats[a["roster_id"]], cats[b["roster_id"]],
-            include_smash=include_smash,
-            include_picks=False,          # redraft has none
-            expand_mode=expand,
-        ))
+    def _generate(em: bool) -> list[dict]:
+        out = []
+        for a, b in pairs:
+            out.extend(trade_engine.generate_trades_between(
+                a, b, cats[a["roster_id"]], cats[b["roster_id"]],
+                include_smash=include_smash,
+                include_picks=False,          # redraft has none
+                force_mode=bool(force_player),
+                expand_mode=em,
+                force_player_id=force_player_id,
+            ))
+        return out
+
+    trades = _generate(expand)
+    if force_player:
+        trades = [t for t in trades if _has_player(t, force_player_id)]
+        # Escalate once if the standard fairness band came back thin.
+        if len(trades) < 5 and not expand:
+            seen = {tuple(sorted(x["sleeper_id"] for x in t["a_gives"] + t["b_gives"]))
+                    for t in trades}
+            for t in _generate(True):
+                if not _has_player(t, force_player_id):
+                    continue
+                key = tuple(sorted(x["sleeper_id"] for x in t["a_gives"] + t["b_gives"]))
+                if key not in seen:
+                    trades.append(t)
+                    seen.add(key)
+
     trades.sort(key=lambda t: -(t["lineup_delta_a"] + t["lineup_delta_b"]))
     return {"trades": trades[:60], "computed_at": computed_at}

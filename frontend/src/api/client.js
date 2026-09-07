@@ -79,11 +79,14 @@ export const api = {
     request(`/redraft-league/${encodeURIComponent(leagueId)}/teams/${rosterId}`),
   syncRedraftLeague: (leagueId) =>
     send(`/redraft-league/${encodeURIComponent(leagueId)}/sync`, 'POST', {}),
+  getRedraftPlayers: (leagueId) =>
+    request(`/redraft-league/${encodeURIComponent(leagueId)}/players`),
   getRedraftTrades: (leagueId, opts = {}) => {
     const p = new URLSearchParams()
     if (opts.rosterId) p.set('roster_id', opts.rosterId)
     if (opts.includeSmash) p.set('include_smash', 'true')
     if (opts.expand) p.set('expand', 'true')
+    if (opts.forcePlayerId) p.set('force_player_id', opts.forcePlayerId)
     const qs = p.toString()
     return request(`/redraft-league/${encodeURIComponent(leagueId)}/trades${qs ? `?${qs}` : ''}`)
   },

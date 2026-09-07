@@ -18,22 +18,33 @@ export default function RedraftTeamPage() {
   if (error) return <div className="rd-error">{error}</div>
   if (!data) return <div className="rd-loading">Loading team…</div>
 
-  const starters = data.players.filter(p => p.is_starter)
-  const bench = data.players.filter(p => !p.is_starter)
+  // Slot order comes from the server, which rebuilds it from the league's own
+  // roster_positions — QB, RB, RB, WR... FLEX, SFLEX, exactly as Sleeper shows it.
+  const lineup = data.lineup ?? []
+  const bench = data.bench ?? data.players.filter(p => !p.is_starter)
   const starterPct = data.total_value
     ? Math.round((data.starter_value / data.total_value) * 100) : 0
 
-  const Row = ({ p }) => (
+  const Row = ({ p, slot }) => (
     <div className="player-row">
-      <span className="player-pos-badge" style={{ background: POS_COLOR[p.position] || '#666' }}>
-        {p.position}
-      </span>
-      <span className="player-name">{p.name}</span>
-      <span className="player-team">{p.nfl_team}</span>
-      <span className="player-pos-rank">
-        {p.redraft_pos_rank ? `${p.position}${p.redraft_pos_rank}` : '—'}
-      </span>
-      <span className="player-value">{fmt(p.redraft_value)}</span>
+      {slot && <span className="rl-slot">{slot}</span>}
+      {p ? (
+        <>
+          <span className="player-pos-badge" style={{ background: POS_COLOR[p.position] || '#666' }}>
+            {p.position}
+          </span>
+          <span className="player-name">{p.name}</span>
+          <span className="player-team">{p.nfl_team}</span>
+          <span className="player-pos-rank">
+            {p.redraft_pos_rank ? `${p.position}${p.redraft_pos_rank}` : '—'}
+          </span>
+          <span className="player-value">{fmt(p.redraft_value)}</span>
+        </>
+      ) : (
+        // Keep the slot visible rather than collapsing the row — an unfilled
+        // starting spot is the thing you most want to see on this page.
+        <span className="rl-slot-empty">Empty</span>
+      )}
     </div>
   )
 
@@ -80,8 +91,12 @@ export default function RedraftTeamPage() {
 
       <div className="spt-section">
         <div>
-          <h2 className="section-title">Starters ({starters.length})</h2>
-          <div className="player-table">{starters.map(p => <Row key={p.sleeper_id} p={p} />)}</div>
+          <h2 className="section-title">Starting Lineup ({lineup.filter(e => e.player).length}/{lineup.length})</h2>
+          <div className="player-table">
+            {/* Keyed by index, not player id: an empty slot has no id, and two
+                slots of the same name (RB, RB) are distinct rows. */}
+            {lineup.map((e, i) => <Row key={i} slot={e.slot} p={e.player} />)}
+          </div>
         </div>
         <div>
           <h2 className="section-title">Bench ({bench.length})</h2>
