@@ -210,7 +210,19 @@ def compute_team_profile(
     players_cache: dict,
     picks_cache: dict,
     roster_picks: list[dict] | None = None,
+    value_key: str = "fc_value",
+    include_picks: bool = True,
 ) -> dict:
+    """
+    Per-team profile.
+
+    `value_key` selects the value axis — "fc_value" (dynasty) or "redraft_value".
+    It is the single source feeding total/starter/bench value, the positional
+    breakdown, and everything derived from them downstream.
+
+    `include_picks` is False for redraft, where rookie picks don't exist.
+    Defaults keep dynasty behaviour unchanged.
+    """
     owner_id = roster.get("owner_id") or str(roster.get("roster_id", ""))
     user = users_map.get(owner_id, {})
     display_name = user.get("display_name", f"Team {roster['roster_id']}")
@@ -248,7 +260,7 @@ def compute_team_profile(
 
     for pid in player_ids:
         entry = _player_entry(pid, players_cache)
-        value = entry["fc_value"]
+        value = entry[value_key]
         pos = entry["position"]
         age = entry.get("age") or 25.0
 
@@ -284,7 +296,7 @@ def compute_team_profile(
     # Pick values
     pick_value = 0
     enriched_picks: list[dict] = []
-    for pick in picks:
+    for pick in (picks if include_picks else []):
         season = pick.get("season", "")
         rnd = pick.get("round", 1)
         pv = resolve_pick_value(picks_cache, season, rnd)
@@ -343,7 +355,18 @@ def compute_league_profiles(
     picks_cache: dict,
     picks_by_roster: dict | None = None,
     roster_positions: list[str] | None = None,
+    value_key: str = "fc_value",
+    include_picks: bool = True,
 ) -> list[dict]:
+    """
+    League-wide profiles. See compute_team_profile for `value_key` /
+    `include_picks`; defaults keep dynasty behaviour unchanged.
+
+    With include_picks=False the pick passes and the contention pass are both
+    skipped — contention_score is a value-weighted mean of player AGE with no
+    record or points input, so it has no redraft meaning. Redraft callers get
+    strength_tiers() instead.
+    """
     profiles = [
         compute_team_profile(
             r,
@@ -351,6 +374,8 @@ def compute_league_profiles(
             players_cache,
             picks_cache,
             roster_picks=(picks_by_roster or {}).get(r["roster_id"]),
+            value_key=value_key,
+            include_picks=include_picks,
         )
         for r in rosters
     ]
@@ -430,6 +455,18 @@ def compute_league_profiles(
 
     # Tailored contention categories — blend roster age (contention_score) with
     # future draft capital and overall roster strength rather than a flat 3-way split.
+    # Dynasty only: every input (age, pick capital, value rank incl. picks) is a
+    # multi-year concept.
+    if not include_picks:
+        # Null the dynasty-only fields rather than leaving compute_team_profile's
+        # placeholders, so a stale "Treading Water" can't leak into a redraft UI.
+        for profile in profiles:
+            profile["contention_score"] = None
+            profile["contention_category"] = None
+            profile["pick_value"] = 0
+            profile["picks"] = []
+        return sorted(profiles, key=lambda t: t["total_value"], reverse=True)
+
     league_avg_pick_value = sum(p["pick_value"] for p in profiles) / n if n else 0
     by_total_value = sorted(profiles, key=lambda t: t["total_value"], reverse=True)
     value_rank: dict[int, int] = {
@@ -496,3 +533,27 @@ def compute_league_profiles(
         profile["total_value"] = profile.get("player_value", 0) + adj_pick_val
 
     return sorted(profiles, key=lambda t: t["total_value"], reverse=True)
+
+
+def strength_tiers(profiles: list[dict], value_field: str = "starter_value") -> list[dict]:
+    """
+    Redraft's replacement for contention windows.
+
+    Contention is definitionally multi-year — its inputs are roster age and
+    rookie pick capital, neither of which means anything in redraft. This ranks
+    on starting-lineup value instead and splits into thirds, so it works in the
+    preseason with no games played.
+
+    Mutates and returns `profiles`, adding `strength_tier` and `strength_rank`.
+    """
+    ranked = sorted(profiles, key=lambda t: t.get(value_field, 0) or 0, reverse=True)
+    n = len(ranked)
+    if not n:
+        return profiles
+    cut = math.ceil(n / 3)
+    for i, profile in enumerate(ranked):
+        profile["strength_rank"] = i + 1
+        profile["strength_tier"] = (
+            "Contender" if i < cut else "Middle" if i < 2 * cut else "Weak"
+        )
+    return profiles
