@@ -3510,3 +3510,30 @@ img { display: block; }
 .wk-tag-start { background: rgba(1, 217, 172, 0.15); color: var(--accent); }
 .wk-tag-dyn   { background: rgba(92, 184, 224, 0.15); color: #5cb8e0; }
 .wk-adds { flex-shrink: 0; font-size: 0.7rem; color: var(--text-muted); }
+
+/* My Leagues glance rows. Summaries arrive per row, so every state below has to
+   read sensibly on its own — pending, failed, and loaded all coexist. */
+.wk-league-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+.wk-league-main { flex: 1 1 200px; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.wk-league-name { font-weight: 600; color: var(--text); text-decoration: none; }
+.wk-league-name:hover { color: var(--accent); }
+.wk-league-meta { font-size: 0.72rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
+.wk-league-stat { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; flex-shrink: 0; }
+.wk-league-pending { font-size: 0.75rem; color: var(--text-muted); opacity: 0.7; }
+.wk-league-links { display: flex; gap: 6px; flex-shrink: 0; }
+
+@media (max-width: 520px) {
+  .wk-league-row { gap: 8px; }
+  .wk-league-stat { align-items: flex-start; }
+  .wk-league-links { width: 100%; }
+}

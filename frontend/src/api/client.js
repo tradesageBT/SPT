@@ -106,6 +106,11 @@ export const api = {
     if (opts.mode) p.set('mode', opts.mode)
     return request(`/weekly/league/${encodeURIComponent(leagueId)}/waivers?${p}`)
   },
+  getWeeklyLeagueSummary: (leagueId, userId, week) => {
+    const p = new URLSearchParams({ user_id: userId })
+    if (week) p.set('week', week)
+    return request(`/weekly/league/${encodeURIComponent(leagueId)}/summary?${p}`)
+  },
   getAuctionPool: (s) => {
     const p = new URLSearchParams({
       teams: s.teams, budget: s.budget, ppr: s.ppr,

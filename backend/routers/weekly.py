@@ -112,3 +112,23 @@ async def get_waivers(
     if not report:
         raise HTTPException(status_code=404, detail=f"Sleeper league {league_id} not found.")
     return report
+
+
+@router.get("/league/{league_id}/summary")
+async def get_summary(
+    league_id: str,
+    user_id: str | None = Query(None),
+    roster_id: int | None = Query(None),
+    week: int | None = Query(None),
+):
+    """
+    One glanceable row for the My Leagues page. Pass `user_id` and the roster is
+    resolved for you — the league list endpoint deliberately doesn't fetch
+    rosters, so it can return instantly.
+    """
+    if user_id is None and roster_id is None:
+        raise HTTPException(status_code=422, detail="Pass user_id or roster_id.")
+    report = await weekly_engine.league_summary(league_id, user_id, roster_id, week)
+    if not report:
+        raise HTTPException(status_code=404, detail=f"Sleeper league {league_id} not found.")
+    return report

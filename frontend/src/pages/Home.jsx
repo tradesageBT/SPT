@@ -87,6 +87,12 @@ export default function Home() {
 
       {/* ── Tool cards ── */}
       <div className="home-tool-cards">
+        <Link to="/my-leagues" className="home-tool-card">
+          <div className="home-tool-icon">📋</div>
+          <div className="home-tool-name">My Leagues</div>
+          <div className="home-tool-desc">Every league you're in, with what you're leaving on the bench this week. Just your Sleeper username — no password.</div>
+          <div className="home-tool-cta">Open →</div>
+        </Link>
         <Link to="/draft-assistant" className="home-tool-card">
           <div className="home-tool-icon">🎯</div>
           <div className="home-tool-name">Draft Assistant</div>

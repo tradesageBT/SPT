@@ -363,3 +363,70 @@ async def waiver_report(league_id: str, roster_id: int, week: int | None = None,
                        "dynasty_values": bool(dyn) if mode == "dynasty" else None},
         "targets": targets_out,
     }
+
+
+def _roster_for_user(rosters: list, user_id: str) -> int | None:
+    for r in (rosters or []):
+        if str(r.get("owner_id") or "") == str(user_id):
+            return r.get("roster_id")
+    return None
+
+
+async def league_summary(league_id: str, user_id: str | None = None,
+                         roster_id: int | None = None,
+                         week: int | None = None) -> dict:
+    """
+    One glanceable row for the My Leagues page.
+
+    Deliberately per-league rather than one endpoint that fans out over all of
+    them: a single call would make 4N Sleeper requests and block the whole page
+    on the slowest league. The client fires these per row instead, so rows fill
+    in progressively and one slow league degrades one row.
+    """
+    ctx = await league_context(league_id, week)
+    if not ctx:
+        return {}
+
+    if roster_id is None and user_id:
+        roster_id = _roster_for_user(ctx["rosters"], user_id)
+    if roster_id is None:
+        return {"league_id": league_id, "league_name": ctx["league_name"],
+                "mode": ctx["mode"], "week": ctx["week"], "roster_id": None}
+
+    roster = next((r for r in ctx["rosters"] if r.get("roster_id") == roster_id), {})
+    rs = roster.get("settings") or {}
+    meta = sleeper_data.get_meta()
+
+    candidates = [
+        _candidate(pid, ctx["proj"].get(pid), meta.get(pid), ctx["points"].get(pid))
+        for pid in _my_players(ctx, roster_id)
+    ]
+    by_id = {c["player_id"]: c for c in candidates}
+    best = lineup.optimize(candidates, ctx["slot_tokens"])
+    current = _current_assignment(ctx, roster_id, by_id)
+    current_total = round(sum(a["points"] or 0.0 for a in current if a["optimizable"]), 2)
+
+    # For a week already played, Sleeper has the real numbers — say so rather
+    # than showing a projection of the past as if it were a forecast.
+    m = ctx["matchups"].get(roster_id) or {}
+    actual = m.get("points")
+    basis = "actual" if (not ctx["is_current_week"] and actual is not None) else "projected"
+
+    changes = lineup.diff(current, best["assignment"], by_id)
+    return {
+        "league_id": league_id,
+        "league_name": ctx["league_name"],
+        "mode": ctx["mode"],
+        "season": ctx["season"],
+        "week": ctx["week"],
+        "roster_id": roster_id,
+        "record": {"wins": rs.get("wins", 0), "losses": rs.get("losses", 0),
+                   "ties": rs.get("ties", 0)},
+        "points_for": rs.get("fpts"),
+        "current_points": current_total,
+        "optimal_points": best["total"],
+        "bench_points_left": round(best["total"] - current_total, 2),
+        "bench_points_basis": basis,
+        "change_count": len(changes),
+        "top_change": changes[0] if changes else None,
+    }

@@ -16,6 +16,7 @@ import RedraftTeamPage from './pages/RedraftTeamPage'
 import RedraftTradeIdeas from './pages/RedraftTradeIdeas'
 import LineupOptimizer from './pages/LineupOptimizer'
 import WaiverWire from './pages/WaiverWire'
+import MyLeagues from './pages/MyLeagues'
 
 export default function App() {
   return (
@@ -28,6 +29,7 @@ export default function App() {
         </Link>
         <span className="logo-sub">Fantasy Value Engine</span>
         <nav className="site-nav">
+          <Link to="/my-leagues" className="site-nav-link">My Leagues</Link>
           <Link to="/draft-assistant" className="site-nav-link">Draft Assistant</Link>
           <Link to="/redraft-trades" className="site-nav-link">Trade Evaluator</Link>
         </nav>
@@ -36,6 +38,7 @@ export default function App() {
       <main className="main-content">
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/my-leagues" element={<MyLeagues />} />
           <Route path="/league/:leagueId" element={<LeagueDashboard />} />
           <Route path="/league/:leagueId/team/:rosterId" element={<TeamProfile />} />
           <Route path="/league/:leagueId/trades" element={<TradeIdeas />} />
