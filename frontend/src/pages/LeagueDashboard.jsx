@@ -132,6 +132,9 @@ export default function LeagueDashboard() {
           <Link to={`/league/${leagueId}/lineup`} className="btn btn-secondary btn-sm">
             Lineup Optimizer
           </Link>
+          <Link to={`/league/${leagueId}/waivers`} className="btn btn-secondary btn-sm">
+            Waiver Wire
+          </Link>
           <Link to={`/league/${leagueId}/trades`} className="btn btn-secondary">
             Trade Ideas
           </Link>

@@ -238,6 +238,9 @@ export default function TeamProfile() {
         <Link to={`/league/${leagueId}/lineup?roster_id=${rosterId}`} className="btn btn-secondary btn-sm">
           Optimize Lineup
         </Link>
+        <Link to={`/league/${leagueId}/waivers?roster_id=${rosterId}`} className="btn btn-secondary btn-sm">
+          Waivers
+        </Link>
       </div>
 
       <div className="profile-header">

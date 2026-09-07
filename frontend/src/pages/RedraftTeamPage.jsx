@@ -58,6 +58,9 @@ export default function RedraftTeamPage() {
         <Link to={`/redraft/${leagueId}/lineup?roster_id=${rosterId}`} className="btn btn-secondary btn-sm">
           Optimize Lineup
         </Link>
+        <Link to={`/redraft/${leagueId}/waivers?roster_id=${rosterId}`} className="btn btn-secondary btn-sm">
+          Waivers
+        </Link>
       </div>
 
       <div className="profile-header">

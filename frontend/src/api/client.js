@@ -99,6 +99,13 @@ export const api = {
     if (week) p.set('week', week)
     return request(`/weekly/league/${encodeURIComponent(leagueId)}/lineup?${p}`)
   },
+  getWeeklyWaivers: (leagueId, rosterId, opts = {}) => {
+    const p = new URLSearchParams({ roster_id: rosterId })
+    if (opts.week) p.set('week', opts.week)
+    if (opts.limit) p.set('limit', opts.limit)
+    if (opts.mode) p.set('mode', opts.mode)
+    return request(`/weekly/league/${encodeURIComponent(leagueId)}/waivers?${p}`)
+  },
   getAuctionPool: (s) => {
     const p = new URLSearchParams({
       teams: s.teams, budget: s.budget, ppr: s.ppr,

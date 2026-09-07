@@ -15,6 +15,7 @@ import RedraftLeagueHub from './pages/RedraftLeagueHub'
 import RedraftTeamPage from './pages/RedraftTeamPage'
 import RedraftTradeIdeas from './pages/RedraftTradeIdeas'
 import LineupOptimizer from './pages/LineupOptimizer'
+import WaiverWire from './pages/WaiverWire'
 
 export default function App() {
   return (
@@ -51,6 +52,8 @@ export default function App() {
               back-link has to return to the right kind of league hub. */}
           <Route path="/league/:leagueId/lineup" element={<LineupOptimizer basePath="league" />} />
           <Route path="/redraft/:leagueId/lineup" element={<LineupOptimizer basePath="redraft" />} />
+          <Route path="/league/:leagueId/waivers" element={<WaiverWire basePath="league" />} />
+          <Route path="/redraft/:leagueId/waivers" element={<WaiverWire basePath="redraft" />} />
           <Route path="/redraft-trades" element={<RedraftTrades />} />
         </Routes>
       </main>

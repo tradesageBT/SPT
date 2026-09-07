@@ -3496,3 +3496,17 @@ img { display: block; }
   .wk-change-slot { width: 100%; }
   .wk-change-gain { margin-left: 0; }
 }
+
+.wk-tag {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.wk-tag-need  { background: rgba(224, 164, 92, 0.18); color: #e0a45c; }
+.wk-tag-start { background: rgba(1, 217, 172, 0.15); color: var(--accent); }
+.wk-tag-dyn   { background: rgba(92, 184, 224, 0.15); color: #5cb8e0; }
+.wk-adds { flex-shrink: 0; font-size: 0.7rem; color: var(--text-muted); }

@@ -59,6 +59,9 @@ export default function RedraftLeagueHub() {
         <Link to={`/redraft/${leagueId}/lineup`} className="btn btn-secondary btn-sm">
             Lineup Optimizer
           </Link>
+          <Link to={`/redraft/${leagueId}/waivers`} className="btn btn-secondary btn-sm">
+            Waiver Wire
+          </Link>
           <Link to={`/redraft/${leagueId}/trades`} className="btn btn-secondary">Trade Ideas</Link>
       </div>
 

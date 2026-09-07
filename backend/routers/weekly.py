@@ -92,3 +92,23 @@ async def get_lineup(
     if not report:
         raise HTTPException(status_code=404, detail=f"Sleeper league {league_id} not found.")
     return report
+
+
+@router.get("/league/{league_id}/waivers")
+async def get_waivers(
+    league_id: str,
+    roster_id: int = Query(...),
+    week: int | None = Query(None),
+    limit: int = Query(25, ge=1, le=100),
+    mode: str | None = Query(None, pattern="^(dynasty|redraft|keeper)$"),
+):
+    """
+    Who the rest of Sleeper is adding, narrowed to players free in your league.
+
+    `mode` overrides what Sleeper reports the league type to be — worth having
+    because plenty of dynasty leagues are set up as redraft and never corrected.
+    """
+    report = await weekly_engine.waiver_report(league_id, roster_id, week, limit, mode)
+    if not report:
+        raise HTTPException(status_code=404, detail=f"Sleeper league {league_id} not found.")
+    return report

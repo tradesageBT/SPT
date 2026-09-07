@@ -249,3 +249,117 @@ async def lineup_report(league_id: str, roster_id: int, week: int | None = None)
         ],
         "notes": notes,
     }
+
+
+def _dynasty_values() -> dict:
+    """
+    Long-term values from the shared players cache, for the dynasty column.
+
+    Read from cache_manager rather than draft_values.load_values: that one
+    hardcodes is_dynasty=False and caches on (num_qbs, ppr), so asking it for
+    dynasty numbers would silently collide with the redraft entry under the same
+    key. Returns {} if nothing has synced yet — the column just goes blank.
+    """
+    try:
+        import cache_manager
+        return cache_manager.get_cached_players() or {}
+    except Exception as exc:
+        log.warning("dynasty values unavailable (%s); waiver column omitted", exc)
+        return {}
+
+
+async def waiver_report(league_id: str, roster_id: int, week: int | None = None,
+                        limit: int = 25, mode: str | None = None) -> dict:
+    """
+    Trending adds, narrowed to players who are actually free in this league.
+
+    Sleeper's trending list is league-agnostic and dominated by players already
+    rostered in any given league, so it is fetched deep and filtered down rather
+    than shown raw.
+    """
+    ctx = await league_context(league_id, week)
+    if not ctx:
+        return {}
+    mode = mode or ctx["mode"]
+
+    trending = await sleeper_client.get_trending("add", lookback_hours=24, limit=200)
+    taken = rostered_ids(ctx["rosters"])
+    meta = sleeper_data.get_meta()
+
+    # What this roster is short of, using the same needs model as the draft room
+    # so "fills a need" means one thing across the app.
+    slot_counts = draft_values.parse_roster_positions(ctx["roster_positions"])
+    starters = {"QB": slot_counts["qb"], "RB": slot_counts["rb"], "WR": slot_counts["wr"],
+                "TE": slot_counts["te"], "K": slot_counts["k"], "DEF": slot_counts["dst"]}
+    flex_counts = {k: slot_counts[k] for k in draft_values.FLEX_KEYS}
+    targets = draft_values.roster_targets(starters, flex_counts, slot_counts["bench"])
+
+    mine = _my_players(ctx, roster_id)
+    counts: dict[str, int] = {}
+    for pid in mine:
+        pos = (ctx["proj"].get(pid) or {}).get("position") \
+            or draft_values.norm_pos((meta.get(pid) or {}).get("position") or "")
+        if pos:
+            counts[pos] = counts.get(pos, 0) + 1
+    needs = draft_values.team_needs(counts, targets, starters, roster_size=len(mine))
+    gaps = needs.get("gaps", {})
+
+    # Baseline: my best lineup as it stands. A pickup is worth something only if
+    # it beats that.
+    my_candidates = [
+        _candidate(pid, ctx["proj"].get(pid), meta.get(pid), ctx["points"].get(pid))
+        for pid in mine
+    ]
+    baseline = lineup.optimize(my_candidates, ctx["slot_tokens"])["total"]
+
+    dyn = _dynasty_values() if mode == "dynasty" else {}
+
+    targets_out = []
+    for row in trending:
+        pid = str(row.get("player_id") or "")
+        if not pid or pid in taken:
+            continue
+        pr = ctx["proj"].get(pid)
+        m = meta.get(pid)
+        if not pr and not m:
+            continue                      # nothing to show but an opaque id
+        cand = _candidate(pid, pr, m, ctx["points"].get(pid))
+        if cand["position"] not in draft_values.POSITIONS:
+            continue                      # IDP and coaches aren't actionable here
+
+        with_them = lineup.optimize(my_candidates + [cand], ctx["slot_tokens"])["total"]
+        gain = round(with_them - baseline, 2)
+        dv = dyn.get(pid) or {}
+        targets_out.append({
+            "player_id": pid,
+            "name": cand["name"],
+            "position": cand["position"],
+            "nfl_team": cand["nfl_team"],
+            "opponent": cand["opponent"],
+            "injury_status": cand["injury_status"],
+            "adds_24h": row.get("count") or 0,
+            "proj_points": round(cand["points"], 2) if cand["projected"] else None,
+            "would_start": gain > 0,
+            "lineup_gain": gain,
+            # Labelled separately from weekly production — in a dynasty league a
+            # streamer and a stash are different decisions.
+            "dynasty_value": dv.get("fc_value") if mode == "dynasty" else None,
+            "dynasty_pos_rank": dv.get("pos_rank") if mode == "dynasty" else None,
+            "fills_need": gaps.get(cand["position"], 0) > 0,
+        })
+        if len(targets_out) >= limit:
+            break
+
+    return {
+        "league_id": league_id,
+        "league_name": ctx["league_name"],
+        "mode": mode,
+        "season": ctx["season"],
+        "week": ctx["week"],
+        "roster_id": roster_id,
+        "needs": needs,
+        "baseline_points": baseline,
+        "sources_ok": {"sleeper": bool(ctx["proj"]), "trending": bool(trending),
+                       "dynasty_values": bool(dyn) if mode == "dynasty" else None},
+        "targets": targets_out,
+    }
