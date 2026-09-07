@@ -17,10 +17,32 @@ SKILL_POS       = {"QB", "RB", "WR", "TE"}
 # Smash / Pass / Trash categorization
 # ---------------------------------------------------------------------------
 
-def categorize_players(profile: dict) -> dict:
+def derive_thresholds(profiles: list[dict]) -> dict:
+    """
+    Smash/pass cutoffs taken from the league's own rostered values.
+
+    The module constants are calibrated to the dynasty value scale. Rather than
+    hardcoding a second set for redraft, derive them from the distribution so
+    they hold whatever the scale is. Percentiles chosen to land near the
+    dynasty constants on a dynasty league.
+    """
+    vals = sorted(
+        p["fc_value"] for prof in profiles for p in prof.get("players", [])
+        if p.get("fc_value", 0) > 0
+    )
+    if not vals:
+        return {"smash": SMASH_VALUE, "pass": PASS_VALUE}
+    at = lambda q: vals[min(len(vals) - 1, int(q * (len(vals) - 1)))]
+    return {"smash": at(0.90), "pass": at(0.55)}
+
+
+def categorize_players(profile: dict, thresholds: dict | None = None) -> dict:
     smash, passable, trash = [], [], []
 
     players = profile["players"]  # include taxi and IR
+    # Defaults are the dynasty-calibrated constants, so dynasty is unchanged.
+    smash_cut = (thresholds or {}).get("smash", SMASH_VALUE)
+    pass_cut = (thresholds or {}).get("pass", PASS_VALUE)
 
     sorted_by_value = sorted(players, key=lambda x: x["fc_value"], reverse=True)
     top_two_ids = {p["sleeper_id"] for p in sorted_by_value[:2]}
@@ -30,9 +52,9 @@ def categorize_players(profile: dict) -> dict:
         is_top = p["sleeper_id"] in top_two_ids
         entry = {**p, "is_top": is_top}
 
-        if is_top or v >= SMASH_VALUE:
+        if is_top or v >= smash_cut:
             smash.append(entry)
-        elif v >= PASS_VALUE:
+        elif v >= pass_cut:
             passable.append(entry)
         else:
             trash.append(entry)
@@ -208,14 +230,6 @@ def _is_fair(v_a: int, v_b: int, pct: float = FAIRNESS_PCT) -> bool:
     return abs(v_a - v_b) / max(v_a, v_b, 1) <= pct
 
 
-def _surplus_positions(profile: dict) -> list[str]:
-    return [pos for pos, pct in profile.get("positional_surplus", {}).items() if pct > 10]
-
-
-def _deficit_positions(profile: dict) -> list[str]:
-    return [pos for pos, pct in profile.get("positional_surplus", {}).items() if pct < -10]
-
-
 # ---------------------------------------------------------------------------
 # Core trade generator
 # ---------------------------------------------------------------------------
@@ -232,11 +246,6 @@ def generate_trades_between(
     force_player_id: str | None = None,
 ) -> list[dict]:
     trades = []
-
-    surplus_a = set(_surplus_positions(team_a))
-    deficit_a = set(_deficit_positions(team_a))
-    surplus_b = set(_surplus_positions(team_b))
-    deficit_b = set(_deficit_positions(team_b))
 
     tradeable_a = list(cat_a["pass"])
     tradeable_b = list(cat_b["pass"])
@@ -348,8 +357,8 @@ def generate_trades_between(
 
     # --- Pick for player (rebuilder ↔ win-now; skip when picks already in pool) ---
     if not include_picks and not effective_force:
-        a_rebuild = team_a.get("contention_score", 0.5) < 0.4
-        b_rebuild = team_b.get("contention_score", 0.5) < 0.4
+        a_rebuild = (team_a.get("contention_score") or 0.5) < 0.4
+        b_rebuild = (team_b.get("contention_score") or 0.5) < 0.4
 
         if a_rebuild and not b_rebuild:
             for pick in sorted(team_a.get("picks", []), key=lambda x: x["fc_value"], reverse=True)[:3]:
@@ -418,8 +427,9 @@ def generate_all_trades(
     include_picks: bool = False,
     force_mode: bool = False,
     expand_mode: bool = False,
+    thresholds: dict | None = None,
 ) -> list[dict]:
-    cats = {p["roster_id"]: categorize_players(p) for p in profiles}
+    cats = {p["roster_id"]: categorize_players(p, thresholds) for p in profiles}
     all_trades = []
     for a, b in combinations(profiles, 2):
         all_trades.extend(
