@@ -51,6 +51,11 @@ META_KEYS = (
     "injury_status", "injury_notes", "practice_participation",
     "depth_chart_order", "depth_chart_position", "status",
     "position", "team", "full_name", "first_name", "last_name", "active",
+    # For the weekly lineup optimizer: fantasy_positions is what actually
+    # decides slot eligibility (a WR carrying RB eligibility is real, and
+    # `position` alone gets that wrong), and bye_week explains an absent
+    # projection rather than leaving it looking like missing data.
+    "fantasy_positions", "bye_week",
 )
 
 _meta: dict[str, dict] = {}

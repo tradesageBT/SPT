@@ -235,6 +235,9 @@ export default function TeamProfile() {
         <Link to={`/league/${leagueId}/trades?roster_id=${rosterId}`} className="btn btn-accent btn-sm">
           Trade Ideas for This Team
         </Link>
+        <Link to={`/league/${leagueId}/lineup?roster_id=${rosterId}`} className="btn btn-secondary btn-sm">
+          Optimize Lineup
+        </Link>
       </div>
 
       <div className="profile-header">

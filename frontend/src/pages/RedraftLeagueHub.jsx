@@ -56,7 +56,10 @@ export default function RedraftLeagueHub() {
       </div>
 
       <div className="dashboard-actions">
-        <Link to={`/redraft/${leagueId}/trades`} className="btn btn-secondary">Trade Ideas</Link>
+        <Link to={`/redraft/${leagueId}/lineup`} className="btn btn-secondary btn-sm">
+            Lineup Optimizer
+          </Link>
+          <Link to={`/redraft/${leagueId}/trades`} className="btn btn-secondary">Trade Ideas</Link>
       </div>
 
       <p className="rl-note">

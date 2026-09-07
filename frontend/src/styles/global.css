@@ -3427,3 +3427,72 @@ img { display: block; }
   .rl-controls select { max-width: 100%; flex: 1 1 100%; }
   .rl-spacer { display: none; }
 }
+
+/* ── Weekly (lineup optimizer, waivers) ───────────────────────────────────── */
+/* One prefix for both weekly pages rather than two: the slot row, player row
+   and totals block are shared, and a stylesheet this size with no tooling
+   won't catch the duplication if they drift apart. */
+.wk-weekbar { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 14px; }
+.wk-week {
+  min-width: 30px;
+  padding: 5px 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.wk-week:hover { color: var(--text); }
+.wk-week.active { background: var(--accent); border-color: var(--accent); color: #0d1018; }
+
+.wk-totals { display: flex; gap: 22px; flex-wrap: wrap; }
+.wk-totals > div { display: flex; flex-direction: column; gap: 2px; }
+.wk-total-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); }
+.wk-total { font-size: 1.35rem; font-weight: 700; }
+.wk-total-best { color: var(--accent); }
+.wk-total-gain { color: #e0a45c; }
+
+.wk-player { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
+.wk-name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wk-team { font-size: 0.72rem; color: var(--text-muted); flex-shrink: 0; }
+.wk-muted { opacity: 0.55; }
+.wk-empty { flex: 1; color: var(--text-muted); font-style: italic; opacity: 0.6; }
+.wk-out { color: var(--danger, #e05c5c); font-size: 0.72rem; font-weight: 600; }
+/* IDP slots: displayed so the lineup looks complete, but never optimized. */
+.wk-locked { opacity: 0.5; }
+
+.wk-callout { padding: 12px 14px; border-radius: 8px; font-size: 0.85rem; margin-bottom: 16px; }
+.wk-callout-good { background: rgba(1, 217, 172, 0.08); border: 1px solid rgba(1, 217, 172, 0.3); color: var(--text); }
+
+.wk-changes { margin-bottom: 18px; }
+.wk-change {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.82rem;
+}
+.wk-change:last-child { border-bottom: none; }
+.wk-change-slot {
+  flex-shrink: 0;
+  width: 46px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.wk-change-in, .wk-change-out { display: flex; align-items: center; gap: 6px; flex: 1 1 200px; min-width: 0; }
+.wk-change-in { color: var(--accent); }
+.wk-change-out { color: var(--text-muted); }
+.wk-change-gain { margin-left: auto; color: #e0a45c; font-weight: 700; flex-shrink: 0; }
+
+@media (max-width: 520px) {
+  .wk-totals { gap: 14px; }
+  .wk-total { font-size: 1.1rem; }
+  .wk-change-slot { width: 100%; }
+  .wk-change-gain { margin-left: 0; }
+}

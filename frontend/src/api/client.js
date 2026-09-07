@@ -90,6 +90,15 @@ export const api = {
     const qs = p.toString()
     return request(`/redraft-league/${encodeURIComponent(leagueId)}/trades${qs ? `?${qs}` : ''}`)
   },
+  getWeeklyState: () => request('/weekly/state'),
+  getSleeperUser: (username) => request(`/weekly/user/${encodeURIComponent(username)}`),
+  getSleeperUserLeagues: (userId, season) =>
+    request(`/weekly/user/${encodeURIComponent(userId)}/leagues${season ? `?season=${season}` : ''}`),
+  getWeeklyLineup: (leagueId, rosterId, week) => {
+    const p = new URLSearchParams({ roster_id: rosterId })
+    if (week) p.set('week', week)
+    return request(`/weekly/league/${encodeURIComponent(leagueId)}/lineup?${p}`)
+  },
   getAuctionPool: (s) => {
     const p = new URLSearchParams({
       teams: s.teams, budget: s.budget, ppr: s.ppr,
