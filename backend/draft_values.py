@@ -5,6 +5,7 @@ Extracted from the auction router so the Sleeper draft room uses the same
 replacement-level model rather than its own cruder one. Everything here is pure
 except `load_values`, which does one FantasyCalc fetch.
 """
+import time
 import logging
 
 import fantasycalc_client
@@ -25,6 +26,11 @@ FLEX_KEYS = tuple(FLEX_SHARES)
 
 # A new tier starts when the drop from the previous player exceeds this
 TIER_BREAK = 0.08
+
+# Values move slowly, and the league hub computes live on every page load, so
+# without this each load was a FantasyCalc round trip.
+VALUES_TTL = 30 * 60
+_values_cache: dict[tuple, tuple[float, list]] = {}
 
 
 def norm_pos(pos: str) -> str:
@@ -107,10 +113,19 @@ async def load_values(num_qbs: int, ppr: float) -> list[dict]:
     """
     Redraft values for a specific league's scoring, straight from FantasyCalc.
 
+    Cached per (num_qbs, ppr) — different leagues want different scoring, and
+    the league hub recomputes live on every load.
+
     Deliberately does NOT touch players_cache: that table is global and shared
     with league syncs, so writing one league's scoring into it would clobber the
     values every other league is computed from.
     """
+    key = (num_qbs, ppr)
+    hit = _values_cache.get(key)
+    if hit and (time.time() - hit[0]) < VALUES_TTL:
+        # Copy: callers mutate entries (vor, tier, pos_rank, fc_value aliasing)
+        return [dict(p) for p in hit[1]]
+
     try:
         entries = await fantasycalc_client.get_values(
             num_qbs=num_qbs, ppr=ppr, is_dynasty=False
@@ -131,6 +146,7 @@ async def load_values(num_qbs: int, ppr: float) -> list[dict]:
                 "value": entry.get("value", 0) or 0,
             })
         if out:
+            _values_cache[key] = (time.time(), [dict(p) for p in out])
             return out
         log.warning("FantasyCalc returned no usable players; falling back to cache")
     except Exception as e:

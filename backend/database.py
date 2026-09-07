@@ -193,6 +193,16 @@ def init_db():
 
                 CREATE INDEX IF NOT EXISTS auction_picks_room_idx ON auction_picks(room_code);
 
+                -- Redraft league snapshots. A separate table rather than a mode
+                -- column on `teams`, so no dynasty query can ever pick these up.
+                CREATE TABLE IF NOT EXISTS redraft_snapshots (
+                    league_id       TEXT PRIMARY KEY,
+                    league_name     TEXT,
+                    profiles        TEXT,
+                    settings        TEXT,
+                    computed_at     TEXT
+                );
+
                 ALTER TABLE auction_rooms ADD COLUMN IF NOT EXISTS nominated TEXT;
             """)
     except Exception as exc:
