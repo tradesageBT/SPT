@@ -318,10 +318,62 @@ def team_needs(counts: dict, targets: dict, starters: dict, roster_size: float |
     }
 
 
-def snake_slot(pick_index: int, num_teams: int) -> int:
-    """1-based draft slot for a 0-based overall pick index."""
-    rnd, pos = divmod(pick_index, num_teams)
-    return pos + 1 if rnd % 2 == 0 else num_teams - pos
+def snake_slot(pick_index: int, num_teams: int, reversal_round: int = 0) -> int:
+    """
+    1-based draft slot for a 0-based overall pick index.
+
+    `reversal_round` is Sleeper's own setting: 0 for a plain snake, or the round
+    at which the direction flips. Third round reversal (the common case) means
+    round 3 runs backwards like round 2 did, so the team that picked last in
+    round 2 doesn't also pick first in round 3 — which is the double the option
+    exists to remove. From there the snake alternates as usual, one phase out of
+    step with a plain snake:
+
+        round   1     2     3     4     5
+        snake   1>N   N>1   1>N   N>1   1>N
+        3RR     1>N   N>1   N>1   1>N   N>1
+
+    Generalised rather than hardcoding 3, because Sleeper allows any round.
+    """
+    rnd, pos = divmod(pick_index, num_teams)          # rnd is 0-based
+    reverse = rnd % 2 == 1
+    if reversal_round and (rnd + 1) >= reversal_round:
+        reverse = not reverse
+    return num_teams - pos if reverse else pos + 1
+
+
+def infer_reversal_round(observed, num_teams: int, declared: int = 0,
+                         max_round: int = 30) -> tuple[int, bool]:
+    """
+    Fit the pick-order model to picks that have actually happened.
+
+    `observed` is [(pick_no, draft_slot)] from Sleeper's own pick objects — the
+    true slot for every pick already made, whatever ordering rule is in force.
+    Returns (reversal_round, verified).
+
+    Sleeper's declared `reversal_round` is the hypothesis, not the last word: it
+    is checked against reality first, and only if it fails do we search. That
+    way a league whose draft doesn't match the setting — or a setting we've
+    misread — still gets the right team on the clock, because the picks
+    themselves are unambiguous once the reversal round has started.
+    """
+    pairs = [(int(no), int(slot)) for no, slot in observed
+             if no is not None and slot is not None]
+    if not pairs:
+        return declared, False                        # nothing to check against
+
+    def fits(candidate: int) -> bool:
+        return all(snake_slot(no - 1, num_teams, candidate) == slot
+                   for no, slot in pairs)
+
+    if fits(declared):
+        return declared, True
+    for candidate in [0] + list(range(2, max_round + 1)):
+        if candidate != declared and fits(candidate):
+            return candidate, True
+    # No rule reproduces these picks — keep Sleeper's word and let the caller
+    # surface that the order is unverified rather than assert a wrong answer.
+    return declared, False
 
 
 # ── Points under a league's scoring ───────────────────────────────────────────

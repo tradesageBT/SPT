@@ -193,7 +193,9 @@ function PickStrip({ upcoming, myRosterId }) {
               key={p.pick_no}
               className={`sd-pick${isNow ? ' sd-pick-now' : ''}${isMine ? ' sd-pick-mine' : ''}`}
             >
-              <div className="sd-pick-no">{p.round}.{String(((p.pick_no - 1) % 100) + 1).padStart(2, '0')}</div>
+              {/* pick_in_round comes from the server, which knows num_teams. This was
+                    `(pick_no - 1) % 100`, which only matched in round one. */}
+                <div className="sd-pick-no">{p.round}.{String(p.pick_in_round ?? p.pick_no).padStart(2, '0')}</div>
               <div className="sd-pick-team">{isMine ? 'YOU' : p.team_name}</div>
               {p.top_need
                 ? <PosPill pos={p.top_need} />

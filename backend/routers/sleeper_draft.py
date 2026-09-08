@@ -75,13 +75,6 @@ def _best_fit(available: list[dict]) -> str | None:
     return best["player_id"]
 
 
-def _on_clock(picks_made: int, num_teams: int) -> int | None:
-    """Return 1-based draft slot for the next pick (snake)."""
-    rnd = picks_made // num_teams
-    pos = picks_made % num_teams
-    return (pos + 1) if rnd % 2 == 0 else (num_teams - pos)
-
-
 @router.get("/state")
 async def get_draft_state(
     league_id: str = Query(DEFAULT_LEAGUE_ID),
@@ -112,6 +105,9 @@ async def get_draft_state(
     settings = draft_detail.get("settings", {})
     num_teams = int(settings.get("teams", 12))
     rounds = int(settings.get("rounds", 15))
+    # 0 for a plain snake, or the round the order flips at. Third round reversal
+    # is common and changes who is on the clock from pick 2*teams+1 onward.
+    declared_reversal = int(settings.get("reversal_round") or 0)
     is_auction = draft_detail.get("type", "snake") == "auction"
     status = draft_detail.get("status", "pre_draft")
 
@@ -151,6 +147,9 @@ async def get_draft_state(
             "roster_id": roster_id,
             "team_name": _team_name(roster_id),
             "amount": meta.get("amount"),
+            # Sleeper's own slot for this pick. Kept because it is the only
+            # unambiguous record of the real draft order.
+            "draft_slot": pk.get("draft_slot"),
         })
 
     # ── Values, using THIS league's scoring ───────────────────────────────────
@@ -175,6 +174,16 @@ async def get_draft_state(
     all_players = draft_values.apply_tiers(all_players)
 
     picks_made = len(picks_out)
+
+    # Fit the pick-order model to reality. Sleeper's declared reversal_round is
+    # the hypothesis; the draft_slot on every completed pick is the evidence. A
+    # league whose draft doesn't match its setting still gets the right team on
+    # the clock, because the picks themselves are unambiguous once the reversal
+    # round has started.
+    reversal_round, order_verified = draft_values.infer_reversal_round(
+        [(pk["pick_no"], pk["draft_slot"]) for pk in picks_out],
+        num_teams, declared_reversal, max_round=max(rounds, 2),
+    )
 
     # ── Per-team roster state and needs ───────────────────────────────────────
     # Needs span starters, flex eligibility and bench depth, so the board keeps
@@ -210,11 +219,12 @@ async def get_draft_state(
     if not is_auction:
         for i in range(picks_made, min(picks_made + 24, num_teams * rounds)):
             rnd = i // num_teams + 1
-            slot = draft_values.snake_slot(i, num_teams)
+            slot = draft_values.snake_slot(i, num_teams, reversal_round)
             rid = slot_to_roster.get(str(slot))
             need = needs_by_roster.get(rid) or {}
             upcoming.append({
                 "pick_no": i + 1,
+                "pick_in_round": i % num_teams + 1,
                 "round": rnd,
                 "roster_id": rid,
                 "team_name": _team_name(rid),
@@ -299,7 +309,8 @@ async def get_draft_state(
         best_fit_id = _best_fit(available)
 
     # On the clock
-    otc_slot = None if is_auction or status != "drafting" else _on_clock(picks_made, num_teams)
+    otc_slot = (None if is_auction or status != "drafting"
+                else draft_values.snake_slot(picks_made, num_teams, reversal_round))
     otc_roster_id = slot_to_roster.get(str(otc_slot)) if otc_slot else None
     otc_name = _team_name(otc_roster_id) if otc_roster_id else ""
 
@@ -326,6 +337,10 @@ async def get_draft_state(
         "rounds": rounds,
         "on_the_clock_roster_id": otc_roster_id,
         "on_the_clock_name": otc_name,
+        "reversal_round": reversal_round,
+        # False when no ordering rule reproduces the picks so far — the board is
+        # then showing a best guess, and should say so.
+        "order_verified": order_verified,
         "teams": teams,
         "upcoming": upcoming,
         "my_needs": my_needs,
