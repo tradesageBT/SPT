@@ -2,6 +2,7 @@
 Computes per-team value profiles from Sleeper roster data + cached FC values.
 """
 import math
+import pick_curve
 from cache_manager import resolve_pick_value
 
 SKILL_POSITIONS = ["QB", "RB", "WR", "TE"]
@@ -467,23 +468,6 @@ def compute_league_profiles(
             profile["picks"] = []
         return sorted(profiles, key=lambda t: t["total_value"], reverse=True)
 
-    league_avg_pick_value = sum(p["pick_value"] for p in profiles) / n if n else 0
-    by_total_value = sorted(profiles, key=lambda t: t["total_value"], reverse=True)
-    value_rank: dict[int, int] = {
-        p["roster_id"]: rank for rank, p in enumerate(by_total_value, start=1)
-    }
-    top_cut = math.ceil(n / 3) if n else 0
-
-    for profile in profiles:
-        pick_ratio = (
-            profile["pick_value"] / league_avg_pick_value if league_avg_pick_value > 0 else 1.0
-        )
-        rank = value_rank[profile["roster_id"]]
-        top_third = rank <= top_cut
-        profile["contention_category"] = _classify_contention(
-            profile["contention_score"], pick_ratio, top_third
-        )
-
     # Estimate projected pick slot from actual standings when games have been played,
     # otherwise use redraft starter value (1-year value of starters) as a pre-season proxy —
     # this reflects who will win games THIS year, not long-term dynasty strength.
@@ -501,7 +485,22 @@ def compute_league_profiles(
     }
     num_teams = len(profiles)
 
+    # Price each pick off its projected slot, on one continuous curve across all
+    # rounds. The previous version scaled each round around its own base value,
+    # which let a 2.01 price above a 1.12 — see pick_curve for why that could
+    # never be fixed by tuning the spread.
+    # {season: {round: value}} — FantasyCalc prices each draft year separately, so
+    # a 2027 1st and a 2029 1st sit on different curves. Built once, not per pick.
+    anchors_by_season: dict[str, dict] = {}
+    all_rounds: dict[int, float] = {}
+    for row in picks_cache.values():
+        rnd = row.get("round")
+        if not rnd:
+            continue
+        anchors_by_season.setdefault(str(row.get("season")), {})[int(rnd)] = row["fc_value"]
+        all_rounds.setdefault(int(rnd), row["fc_value"])
     for profile in profiles:
+        adj_pick_val = 0
         for pick in profile["picks"]:
             orig_id = pick.get("original_roster_id")
             rank = roster_rank.get(orig_id) if orig_id else None
@@ -510,27 +509,35 @@ def compute_league_profiles(
                 lo = max(1, rank - 1)
                 hi = min(num_teams, rank + 1)
                 pick["projected_slot"] = f"{rnd}.{lo:02d}–{rnd}.{hi:02d}"
-
-    # Adjust pick fc_value based on projected draft position (earlier picks worth more)
-    mid_slot = (num_teams + 1) / 2  # e.g. 6.5 for 12-team league
-    for profile in profiles:
-        adj_pick_val = 0
-        for pick in profile["picks"]:
-            orig_id = pick.get("original_roster_id")
-            rank = roster_rank.get(orig_id) if orig_id else None
-            base_val = pick.get("fc_value", 0)
-            if rank is not None and base_val:
-                rnd = pick["round"]
-                lo = max(1, rank - 1)
-                hi = min(num_teams, rank + 1)
-                mid_pos = (lo + hi) / 2
-                # Spread: ~65% premium for 1st pick vs last in R1, shrinks each round
-                k = max(0.20, 0.65 - (rnd - 1) * 0.15)
-                adj = 1.0 + k * (mid_slot - mid_pos) / mid_slot
-                pick["fc_value"] = max(1, round(base_val * adj))
+                # The label and the price come from the same midpoint, so the
+                # range shown is always the range that was charged for.
+                season_anchors = anchors_by_season.get(str(pick.get("season"))) or all_rounds
+                priced = pick_curve.value_at(season_anchors, rnd, (lo + hi) / 2, num_teams)
+                if priced:
+                    pick["fc_value"] = priced
             adj_pick_val += pick.get("fc_value", 0)
         profile["pick_value"] = adj_pick_val
         profile["total_value"] = profile.get("player_value", 0) + adj_pick_val
+
+    # Contention reads pick capital, so it has to run AFTER pricing. It used to
+    # run before, comparing each team's unadjusted capital against an unadjusted
+    # league average while the UI displayed the adjusted numbers.
+    league_avg_pick_value = sum(p["pick_value"] for p in profiles) / n if n else 0
+    by_total_value = sorted(profiles, key=lambda t: t["total_value"], reverse=True)
+    value_rank: dict[int, int] = {
+        p["roster_id"]: rank for rank, p in enumerate(by_total_value, start=1)
+    }
+    top_cut = math.ceil(n / 3) if n else 0
+
+    for profile in profiles:
+        pick_ratio = (
+            profile["pick_value"] / league_avg_pick_value if league_avg_pick_value > 0 else 1.0
+        )
+        rank = value_rank[profile["roster_id"]]
+        top_third = rank <= top_cut
+        profile["contention_category"] = _classify_contention(
+            profile["contention_score"], pick_ratio, top_third
+        )
 
     return sorted(profiles, key=lambda t: t["total_value"], reverse=True)
 

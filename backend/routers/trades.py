@@ -425,6 +425,16 @@ async def get_recent_transactions(league_id: str):
     roster_names    = {p["roster_id"]: p["display_name"] for p in profiles}
     roster_profiles = {p["roster_id"]: p for p in profiles}
 
+    # Priced picks, keyed by (season, round, original roster). The feed used to
+    # call resolve_pick_value, which is the flat per-round number — so the same
+    # 2027 2nd read one way here and another in the trade evaluator. These are
+    # the slot-priced values the rest of the app shows.
+    priced_picks = {
+        (str(pk.get("season")), int(pk.get("round", 0)), pk.get("original_roster_id")): pk["fc_value"]
+        for prof in profiles for pk in (prof.get("picks") or [])
+        if pk.get("fc_value")
+    }
+
     txn_results = await asyncio.gather(*[
         sleeper_client.get_transactions(league_id, week)
         for week in range(0, 23)
@@ -497,7 +507,12 @@ async def get_recent_transactions(league_id: str):
             })
             rnd = int(pick.get("round", 1))
             season = str(pick.get("season", ""))
-            pick_val = cache_manager.resolve_pick_value(picks_cache, season, rnd)
+            # Falls back to the flat round value for a pick no roster still
+            # holds — a pick already used, or from a season we no longer track.
+            pick_val = priced_picks.get(
+                (season, rnd, pick.get("roster_id")),
+                cache_manager.resolve_pick_value(picks_cache, season, rnd),
+            )
             pick_name = f"{season} {_ROUND_LABEL.get(rnd, f'Rd {rnd}')}"
             pick_info = {
                 "name": pick_name,
