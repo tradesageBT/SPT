@@ -539,6 +539,40 @@ async def get_espn_draft_state(
     }
 
 
+_ROUND_SUFFIX = {1: "1st", 2: "2nd", 3: "3rd"}
+
+
+@router.get("/picks")
+async def list_dynasty_picks():
+    """
+    Rookie picks as tradeable assets for the standalone trade evaluator.
+
+    Lives beside /players/search because it serves the same page — that
+    evaluator has no league attached, so unlike the in-league one it cannot
+    project a draft slot. These are FantasyCalc's flat per-round values, which
+    is the honest number when nobody's standings are known.
+    """
+    from cache_manager import get_cached_picks
+    out = []
+    for row in get_cached_picks().values():
+        season, rnd = row.get("season"), row.get("round")
+        value = row.get("fc_value") or 0
+        if not season or not rnd or not value:
+            continue
+        rnd = int(rnd)
+        out.append({
+            "sleeper_id": f"pick_{season}_{rnd}",
+            "name": f"{season} {_ROUND_SUFFIX.get(rnd, f'{rnd}th')}",
+            "position": "PK",
+            "nfl_team": "",
+            "fc_value": value,
+            # Picks have no redraft value — the evaluator hides them in that mode.
+            "redraft_value": 0,
+        })
+    out.sort(key=lambda p: (int(p["sleeper_id"].split("_")[1]), p["name"]))
+    return out
+
+
 @router.get("/players/search")
 async def search_redraft_players(q: str = Query(""), limit: int = Query(20), mode: str = Query("redraft")):
     """Search player cache by name — used by the trade evaluator. mode=redraft|dynasty."""

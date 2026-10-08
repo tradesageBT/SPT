@@ -65,6 +65,7 @@ export const api = {
   },
   searchPlayers: (q = '', limit = 20, mode = 'redraft') =>
     request(`/espn-draft/players/search?q=${encodeURIComponent(q)}&limit=${limit}&mode=${mode}`),
+  getDynastyPicks: () => request('/espn-draft/picks'),
   searchRedraftPlayers: (q = '', limit = 20) =>
     request(`/espn-draft/players/search?q=${encodeURIComponent(q)}&limit=${limit}`),
   getSleeperDraftState: (leagueId, myRosterId) => {

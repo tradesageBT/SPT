@@ -3550,3 +3550,49 @@ img { display: block; }
 }
 .wk-split:last-child { border-bottom: none; }
 .wk-split-rank { font-size: 0.72rem; color: var(--text-muted); flex-shrink: 0; }
+
+/* Rookie picks in the standalone trade evaluator. Mirrors the in-league
+   evaluator's .eval-pick-* block; kept under the rt- prefix because that page
+   owns its own layout. */
+.rt-pick-wrap { position: relative; margin-top: 8px; }
+.rt-add-pick {
+  width: 100%;
+  padding: 8px;
+  background: none;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.rt-add-pick:hover { color: var(--text); border-color: var(--accent); }
+.rt-pick-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 260px;
+  overflow-y: auto;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  z-index: 50;
+  box-shadow: var(--shadow);
+}
+.rt-pick-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 0.82rem;
+  cursor: pointer;
+  text-align: left;
+}
+.rt-pick-option:hover { background: var(--border); }
+.rt-pick-label { flex: 1; }
+.rt-pick-val { color: var(--accent); font-weight: 600; }

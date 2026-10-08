@@ -3,6 +3,7 @@ import { api } from '../api/client'
 
 const POS_COLORS = {
   QB: '#e05c5c', RB: '#5cb8e0', WR: '#01d9ac', TE: '#e0a45c', K: '#8b90b0', DEF: '#666c8a',
+  PK: '#888',
 }
 
 function PosPill({ pos }) {
@@ -98,6 +99,35 @@ function PlayerSearch({ onAdd, exclude = [], mode }) {
   )
 }
 
+function PickPicker({ picks, onAdd, exclude = [] }) {
+  const [open, setOpen] = useState(false)
+  const available = picks.filter(p => !exclude.includes(p.sleeper_id))
+  if (available.length === 0) return null
+
+  return (
+    <div className="rt-pick-wrap">
+      <button className="rt-add-pick" onClick={() => setOpen(v => !v)}>
+        + Add Pick {open ? '\u25B2' : '\u25BC'}
+      </button>
+      {open && (
+        <div className="rt-pick-dropdown">
+          {available.map(p => (
+            <button
+              key={p.sleeper_id}
+              className="rt-pick-option"
+              onClick={() => { onAdd(p); setOpen(false) }}
+            >
+              <span className="rt-pick-label">{p.name}</span>
+              <span className="rt-pick-val">{p.fc_value?.toLocaleString()}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+
 function TradeSlot({ label, players, onRemove, totalValue }) {
   return (
     <div className="rt-slot">
@@ -111,7 +141,11 @@ function TradeSlot({ label, players, onRemove, totalValue }) {
           <PosPill pos={p.position} />
           <div className="rt-player-info">
             <span className="rt-player-name">{p.name}</span>
-            <span className="rt-player-meta">{p.nfl_team} · {p.position}{p.pos_rank ?? ''}</span>
+            <span className="rt-player-meta">
+              {p.position === 'PK'
+                ? 'Rookie pick · flat round value'
+                : `${p.nfl_team} \u00B7 ${p.position}${p.pos_rank ?? ''}`}
+            </span>
           </div>
           <span className="rt-player-val">{p._val?.toLocaleString()}</span>
           <button className="rt-remove" onClick={() => onRemove(p.sleeper_id)}>✕</button>
@@ -184,6 +218,15 @@ export default function TradeEvaluator() {
   const [mode, setMode] = useState('redraft')
   const [sideA, setSideA] = useState([])
   const [sideB, setSideB] = useState([])
+  const [picks, setPicks] = useState([])
+
+  // Rookie picks only exist in dynasty. Unlike the in-league evaluator these
+  // carry FantasyCalc's flat per-round value — with no league attached there are
+  // no standings to project a draft slot from.
+  useEffect(() => {
+    if (mode !== 'dynasty') { setPicks([]); return }
+    api.getDynastyPicks().then(setPicks).catch(() => setPicks([]))
+  }, [mode])
 
   // Attach current value when mode changes so totals stay in sync
   const enriched = (list) => list.map(p => ({ ...p, _val: playerValue(p, mode) }))
@@ -203,6 +246,14 @@ export default function TradeEvaluator() {
   function removeA(id) { setSideA(prev => prev.filter(p => p.sleeper_id !== id)) }
   function removeB(id) { setSideB(prev => prev.filter(p => p.sleeper_id !== id)) }
   function reset() { setSideA([]); setSideB([]) }
+
+  // Picks are worth nothing in redraft, so drop them rather than show 0 pts.
+  useEffect(() => {
+    if (mode === 'redraft') {
+      setSideA(prev => prev.filter(p => p.position !== 'PK'))
+      setSideB(prev => prev.filter(p => p.position !== 'PK'))
+    }
+  }, [mode])
 
   const diff = totalB - totalA
   const diffLabel = diff === 0 ? 'Even' : diff > 0 ? `+${diff.toLocaleString()} for you` : `${diff.toLocaleString()} for you`
@@ -224,6 +275,7 @@ export default function TradeEvaluator() {
             <div className="rt-side">
               <TradeSlot label="You Give" players={enrichedA} onRemove={removeA} totalValue={totalA} />
               <PlayerSearch onAdd={addA} exclude={allExclude} mode={mode} />
+              <PickPicker picks={picks} onAdd={addA} exclude={allExclude} />
             </div>
 
             <div className="rt-divider">
@@ -241,6 +293,7 @@ export default function TradeEvaluator() {
             <div className="rt-side">
               <TradeSlot label="You Get" players={enrichedB} onRemove={removeB} totalValue={totalB} />
               <PlayerSearch onAdd={addB} exclude={allExclude} mode={mode} />
+              <PickPicker picks={picks} onAdd={addB} exclude={allExclude} />
             </div>
           </div>
 
