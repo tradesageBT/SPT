@@ -99,9 +99,12 @@ function PlayerSearch({ onAdd, exclude = [], mode }) {
   )
 }
 
-function PickPicker({ picks, onAdd, exclude = [] }) {
+// No `exclude` here, unlike PlayerSearch: you can own several 2029 2nds in a
+// dynasty league — your own plus any you've traded for — so the same pick has
+// to be addable more than once.
+function PickPicker({ picks, onAdd }) {
   const [open, setOpen] = useState(false)
-  const available = picks.filter(p => !exclude.includes(p.sleeper_id))
+  const available = picks
   if (available.length === 0) return null
 
   return (
@@ -137,7 +140,7 @@ function TradeSlot({ label, players, onRemove, totalValue }) {
       </div>
       {players.length === 0 && <div className="rd-empty-sm">Add players below</div>}
       {players.map(p => (
-        <div key={p.sleeper_id} className="rt-player-row">
+        <div key={p.uid} className="rt-player-row">
           <PosPill pos={p.position} />
           <div className="rt-player-info">
             <span className="rt-player-name">{p.name}</span>
@@ -148,7 +151,7 @@ function TradeSlot({ label, players, onRemove, totalValue }) {
             </span>
           </div>
           <span className="rt-player-val">{p._val?.toLocaleString()}</span>
-          <button className="rt-remove" onClick={() => onRemove(p.sleeper_id)}>✕</button>
+          <button className="rt-remove" onClick={() => onRemove(p.uid)}>✕</button>
         </div>
       ))}
     </div>
@@ -237,14 +240,30 @@ export default function TradeEvaluator() {
   const totalB = enrichedB.reduce((s, p) => s + p._val, 0)
   const fairness = tradeFairness(totalA, totalB)
 
-  const excludeA = sideA.map(p => p.sleeper_id)
-  const excludeB = sideB.map(p => p.sleeper_id)
-  const allExclude = [...excludeA, ...excludeB]
+  const allExclude = [...sideA, ...sideB]
+    .filter(p => p.position !== 'PK')
+    .map(p => p.sleeper_id)
 
-  function addA(p) { setSideA(prev => prev.find(x => x.sleeper_id === p.sleeper_id) ? prev : [...prev, p]) }
-  function addB(p) { setSideB(prev => prev.find(x => x.sleeper_id === p.sleeper_id) ? prev : [...prev, p]) }
-  function removeA(id) { setSideA(prev => prev.filter(p => p.sleeper_id !== id)) }
-  function removeB(id) { setSideB(prev => prev.filter(p => p.sleeper_id !== id)) }
+  // Every asset carries a `uid` so duplicates can coexist and be removed one
+  // at a time. For a player it's just their id — the same player can't be in a
+  // trade twice — but a pick gets a fresh one each time it's added.
+  const seq = useRef(0)
+  function withUid(p) {
+    if (p.position !== 'PK') return { ...p, uid: p.sleeper_id }
+    seq.current += 1
+    return { ...p, uid: `${p.sleeper_id}#${seq.current}` }
+  }
+  function add(setter) {
+    return (p) => setter(prev => (
+      p.position !== 'PK' && prev.some(x => x.sleeper_id === p.sleeper_id)
+        ? prev
+        : [...prev, withUid(p)]
+    ))
+  }
+  const addA = add(setSideA)
+  const addB = add(setSideB)
+  function removeA(uid) { setSideA(prev => prev.filter(p => p.uid !== uid)) }
+  function removeB(uid) { setSideB(prev => prev.filter(p => p.uid !== uid)) }
   function reset() { setSideA([]); setSideB([]) }
 
   // Picks are worth nothing in redraft, so drop them rather than show 0 pts.
@@ -275,7 +294,7 @@ export default function TradeEvaluator() {
             <div className="rt-side">
               <TradeSlot label="You Give" players={enrichedA} onRemove={removeA} totalValue={totalA} />
               <PlayerSearch onAdd={addA} exclude={allExclude} mode={mode} />
-              <PickPicker picks={picks} onAdd={addA} exclude={allExclude} />
+              <PickPicker picks={picks} onAdd={addA} />
             </div>
 
             <div className="rt-divider">
@@ -293,7 +312,7 @@ export default function TradeEvaluator() {
             <div className="rt-side">
               <TradeSlot label="You Get" players={enrichedB} onRemove={removeB} totalValue={totalB} />
               <PlayerSearch onAdd={addB} exclude={allExclude} mode={mode} />
-              <PickPicker picks={picks} onAdd={addB} exclude={allExclude} />
+              <PickPicker picks={picks} onAdd={addB} />
             </div>
           </div>
 
