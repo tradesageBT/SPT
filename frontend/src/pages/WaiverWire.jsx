@@ -95,24 +95,26 @@ export default function WaiverWire({ basePath = 'league' }) {
       ) : (
         <div className="player-table">
           {targets.map((t) => (
-            <div key={t.player_id} className="player-row">
+            <div key={t.player_id} className="wk-waiver-row">
               <PosPill pos={t.position} />
               <span className="wk-name">{t.name}</span>
               {t.nfl_team && <span className="wk-team">{t.nfl_team}</span>}
-              <InjuryTag meta={{ injury_status: t.injury_status }} />
-              {t.fills_need && <span className="wk-tag wk-tag-need">need</span>}
-              {t.would_start && (
-                <span className="wk-tag wk-tag-start">+{fmt(t.lineup_gain)} to lineup</span>
-              )}
-              {isDynasty && t.dynasty_value != null && (
-                <span className="wk-tag wk-tag-dyn">
-                  dynasty {t.dynasty_value.toLocaleString()}
-                </span>
-              )}
-              <span className="wk-adds" title="Added across Sleeper in 24h">
-                {adds(t.adds_24h)} adds
-              </span>
               <span className="player-value">{fmt(t.proj_points)}</span>
+              <div className="wk-waiver-tags">
+                <InjuryTag meta={{ injury_status: t.injury_status }} />
+                {t.fills_need && <span className="wk-tag wk-tag-need">need</span>}
+                {t.would_start && (
+                  <span className="wk-tag wk-tag-start">+{fmt(t.lineup_gain)} to lineup</span>
+                )}
+                {isDynasty && t.dynasty_value != null && (
+                  <span className="wk-tag wk-tag-dyn">
+                    dynasty {t.dynasty_value.toLocaleString()}
+                  </span>
+                )}
+                <span className="wk-adds" title="Added across Sleeper in 24h">
+                  {adds(t.adds_24h)} adds
+                </span>
+              </div>
             </div>
           ))}
         </div>

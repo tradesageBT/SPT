@@ -467,6 +467,9 @@ async def get_recent_transactions(league_id: str):
         for pid, to_rid in adds.items():
             from_rid = drops.get(str(pid))
             if from_rid is None:
+                # Can't attribute both ends, so the asset is left out entirely
+                # rather than debited to one side. Skewing one team's net is
+                # worse than understating the size of the deal.
                 continue
             from_rid = int(from_rid)
             to_rid_int = int(to_rid)
@@ -498,7 +501,11 @@ async def get_recent_transactions(league_id: str):
         for pick in picks:
             from_rid = pick.get("previous_owner_id")
             to_rid = pick.get("owner_id")
-            if from_rid is None:
+            # Both ends required, matching the player path above. Previously
+            # only `from_rid` was checked, so a pick with no owner was added to
+            # the giver's `gave` with no offsetting credit to anyone — which
+            # skewed that team's net_value, their grade, and the trade's delta.
+            if from_rid is None or to_rid is None:
                 continue
             from_rid = int(from_rid)
             sides.setdefault(from_rid, {
@@ -520,19 +527,18 @@ async def get_recent_transactions(league_id: str):
                 "fc_value": pick_val,
             }
             sides[from_rid]["gave"].append(pick_info)
-            if to_rid is not None:
-                to_rid_int = int(to_rid)
-                received_val[to_rid_int] = received_val.get(to_rid_int, 0) + pick_val
-                received_assets.setdefault(to_rid_int, []).append({
-                    "position": "PK",
-                    "fc_value": pick_val,
-                    "age": None,
-                })
-                received_full.setdefault(to_rid_int, []).append(pick_info)
-                if pick_val > best_piece_val:
-                    best_piece_val = pick_val
-                    best_piece_rid = to_rid_int
-                    best_piece_name = pick_name
+            to_rid_int = int(to_rid)
+            received_val[to_rid_int] = received_val.get(to_rid_int, 0) + pick_val
+            received_assets.setdefault(to_rid_int, []).append({
+                "position": "PK",
+                "fc_value": pick_val,
+                "age": None,
+            })
+            received_full.setdefault(to_rid_int, []).append(pick_info)
+            if pick_val > best_piece_val:
+                best_piece_val = pick_val
+                best_piece_rid = to_rid_int
+                best_piece_name = pick_name
 
         if len(sides) < 2:
             continue

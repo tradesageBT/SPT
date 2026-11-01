@@ -1,6 +1,8 @@
 import { useState } from 'react'
 
 const fmt = (n) => n?.toLocaleString() ?? '—'
+// Signed, so a team's row reads as their outcome rather than a bare total.
+const fmtNet = (n) => (n > 0 ? `+${fmt(n)}` : fmt(n))
 const POS_COLOR = { QB: '#e05c5c', RB: '#5cb8e0', WR: '#01d9ac', TE: '#e0a45c', PK: '#888' }
 
 export default function TradeFeed({ trades, loading, error, teams }) {
@@ -62,12 +64,19 @@ export default function TradeFeed({ trades, loading, error, teams }) {
                           {side.grade}
                         </span>
                       )}
-                      {side.total_value > 0 && (
-                        <span className="trade-feed-side-total">{fmt(side.total_value)}</span>
+                      {/* The signed net, not a one-sided total. The old value
+                          here was what the team GAVE, sitting beside a grade
+                          computed from what they RECEIVED — two directions in
+                          one row, with nothing saying which was which. */}
+                      {side.net_value != null && side.net_value !== 0 && (
+                        <span className={`trade-feed-side-total${side.net_value > 0 ? ' net-up' : ' net-down'}`}>
+                          {fmtNet(side.net_value)}
+                        </span>
                       )}
                     </div>
+                    <span className="trade-feed-side-label">Received</span>
                     <div className="trade-feed-assets">
-                      {side.gave.map((a, k) => (
+                      {(side.received ?? []).map((a, k) => (
                         <div key={k} className="trade-feed-asset">
                           <span
                             className="recent-trade-pos"
@@ -81,6 +90,9 @@ export default function TradeFeed({ trades, loading, error, teams }) {
                           )}
                         </div>
                       ))}
+                      {(side.received ?? []).length === 0 && (
+                        <div className="trade-feed-asset trade-feed-asset-none">nothing</div>
+                      )}
                     </div>
                   </div>
                 ))}

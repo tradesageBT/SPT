@@ -33,27 +33,53 @@ a { color: inherit; text-decoration: none; }
 img { display: block; }
 
 /* ── Layout ─────────────────────────────────────────────────────────────── */
-.app { display: flex; flex-direction: column; min-height: 100vh; }
-.main-content { flex: 1; max-width: 1100px; margin: 0 auto; padding: 24px 16px 64px; width: 100%; }
+/* #root had no rule at all, so nothing constrained the tree to the viewport. */
+#root { width: 100%; min-width: 0; }
+.app { display: flex; flex-direction: column; min-height: 100vh; min-width: 0; }
+.main-content { flex: 1; max-width: 1100px; margin: 0 auto; padding: 20px 16px 64px; width: 100%; }
+
+/* Deliberately NO `overflow-x: clip` on html/body. It would hide sideways
+   scroll from the user and from the screenshot harness's scrollWidth check at
+   the same time, turning a loud failure into a silent one. Overflow gets fixed
+   at the source instead. */
 
 /* ── Header ─────────────────────────────────────────────────────────────── */
+/* Mobile first. This header used to be a single nowrap flex row with fixed
+   gaps and no min-width:0 — ~585px of min-content against a 390px phone, which
+   pushed the whole document sideways on every route. */
 .site-header {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 0 24px;
-  height: 56px;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 10px 16px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
+  /* `top` alone pins vertically only, so the bar slid sideways with the page. */
+  left: 0;
   z-index: 100;
 }
-.logo { display: flex; gap: 4px; font-weight: 700; font-size: 1.1rem; letter-spacing: 0.05em; }
+.logo {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  font-weight: 700;
+  font-size: 1.1rem;
+  letter-spacing: 0.05em;
+}
 .logo-smash { color: var(--smash); }
 .logo-pass  { color: var(--pass); }
 .logo-trash { color: var(--trash); }
-.logo-sub   { color: var(--text-muted); font-size: 0.78rem; }
+/* The tagline is the first thing to go — it is the least load-bearing 125px
+   in the header. */
+.logo-sub   { display: none; color: var(--text-muted); font-size: 0.78rem; }
+
+@media (min-width: 760px) {
+  .site-header { flex-wrap: nowrap; gap: 16px; height: 56px; padding: 0 24px; }
+  .logo-sub { display: block; }
+}
 
 /* ── Buttons ─────────────────────────────────────────────────────────────── */
 .btn {
@@ -963,7 +989,9 @@ img { display: block; }
   border-radius: 8px;
   overflow-y: auto;
   max-height: 320px;
-  z-index: 100;
+  /* Was 100, an exact tie with .site-header that this won on source
+     order, so it painted over the sticky bar. Dropdowns sit below. */
+  z-index: 50;
   box-shadow: 0 8px 24px rgba(0,0,0,0.5);
 }
 .eval-suggestion {
@@ -1007,7 +1035,9 @@ img { display: block; }
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
-  z-index: 100;
+  /* Was 100, an exact tie with .site-header that this won on source
+     order, so it painted over the sticky bar. Dropdowns sit below. */
+  z-index: 50;
   box-shadow: 0 8px 24px rgba(0,0,0,0.5);
 }
 .eval-pick-option {
@@ -2561,9 +2591,40 @@ img { display: block; }
 }
 
 /* ── Site Nav ────────────────────────────────────────────────────────────── */
-.site-nav { display: flex; align-items: center; gap: 8px; margin-left: auto; }
-.site-nav-link { font-size: 0.78rem; font-weight: 600; color: var(--text-muted); padding: 4px 10px; border-radius: var(--radius-sm); border: 1px solid transparent; transition: color 0.15s, border-color 0.15s; }
+/* On a phone the nav takes its own full-width row under the logo and the three
+   links share it evenly. The horizontal scroll is a last resort for a future
+   fourth link — it keeps the overflow inside the nav instead of letting it
+   reach the document. */
+.site-nav {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.site-nav::-webkit-scrollbar { display: none; }
+.site-nav-link {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: center;
+  white-space: nowrap;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: var(--surface2);
+  transition: color 0.15s, border-color 0.15s;
+}
 .site-nav-link:hover { color: var(--accent); border-color: var(--accent); }
+
+@media (min-width: 760px) {
+  .site-nav { width: auto; margin-left: auto; gap: 8px; overflow-x: visible; }
+  .site-nav-link { flex: 0 0 auto; padding: 4px 10px; background: none; }
+}
 
 /* ── Redraft Trade Evaluator ─────────────────────────────────────────────── */
 .rt-page { display: flex; flex-direction: column; gap: 24px; }
@@ -3596,3 +3657,46 @@ img { display: block; }
 .rt-pick-option:hover { background: var(--border); }
 .rt-pick-label { flex: 1; }
 .rt-pick-val { color: var(--accent); font-weight: 600; }
+
+/* Waiver rows carry up to five chips beside the player, which cannot fit a
+   phone on one line. Identity and points hold the first line; the chips wrap
+   onto their own. */
+.wk-waiver-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.82rem;
+}
+.wk-waiver-row:last-child { border-bottom: none; }
+.wk-waiver-row .wk-name { flex: 1 1 auto; min-width: 0; font-weight: 500; }
+.wk-waiver-row .player-value { flex-shrink: 0; margin-left: auto; }
+.wk-waiver-tags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1 0 100%;
+}
+@media (min-width: 640px) {
+  .wk-waiver-tags { flex: 0 1 auto; order: -1; }
+  .wk-waiver-row .player-value { margin-left: 0; }
+}
+
+/* Trade feed: each block is what that team RECEIVED, which is the direction
+   the grade and the net already point in. Previously it listed what they gave
+   with no label, so a team name + an A + a list read as their haul. */
+.trade-feed-side-label {
+  display: block;
+  margin: 2px 0 4px;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.trade-feed-side-total.net-up { color: var(--accent); }
+.trade-feed-side-total.net-down { color: var(--danger); }
+.trade-feed-asset-none { color: var(--text-muted); font-style: italic; opacity: 0.6; }
